@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Clock, Eye, HardDrive, PlayCircle, Settings, Sparkles } from 'lucide-react';
+import { ArrowLeft, Clock, Download, Eye, HardDrive, Loader2, PlayCircle, Settings, Sparkles } from 'lucide-react';
 import { Navbar } from '../components/Navbar';
 import { CopyableId } from '../components/CopyableId';
 import { Modal } from '../components/Modal';
@@ -10,7 +10,7 @@ import { Button, IconButton, LinkButton } from '../components/ui/Button';
 import { Chip } from '../components/ui/Chip';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Input, Label, FieldError } from '../components/ui/Input';
-import { api, ApiError } from '../lib/api';
+import { api, ApiError, downloadSceneFile } from '../lib/api';
 import { formatBytes, formatDate } from '../lib/format';
 import type { ProjectDetail, ProjectScene } from '../lib/types';
 
@@ -65,6 +65,7 @@ export function SceneDashboardPage() {
             <SceneHeroHeader
               projectId={projectId}
               sceneId={sceneId}
+              developerId={project.developerId}
               scene={scene}
               onOpenSettings={() => setIsSettingsOpen(true)}
             />
@@ -92,14 +93,31 @@ export function SceneDashboardPage() {
 function SceneHeroHeader({
   projectId,
   sceneId,
+  developerId,
   scene,
   onOpenSettings,
 }: {
   projectId: string;
   sceneId: string;
+  developerId: string;
   scene: ProjectScene;
   onOpenSettings: () => void;
 }) {
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  const onDownload = async () => {
+    setDownloadError(null);
+    setIsDownloading(true);
+    try {
+      await downloadSceneFile(developerId, sceneId, scene.displayName ?? scene.sceneId);
+    } catch (err) {
+      setDownloadError(err instanceof ApiError ? err.message : 'Failed to download scene file.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   return (
     <div className="mb-8 rounded-2xl border border-white/10 bg-block-navy p-7">
       <div className="flex flex-wrap items-start justify-between gap-6">
@@ -127,20 +145,33 @@ function SceneHeroHeader({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-          <IconButton
-            variant="inverse"
-            size="lg"
-            title="Scene settings"
-            aria-label="Scene settings"
-            onClick={onOpenSettings}
-          >
-            <Settings className="h-4 w-4" />
-          </IconButton>
-          <LinkButton to={`/projects/${projectId}/scenes/${encodeURIComponent(sceneId)}/view`} size="md">
-            <Eye className="h-4 w-4" />
-            View model
-          </LinkButton>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <div className="flex items-center gap-2">
+            <IconButton
+              variant="inverse"
+              size="lg"
+              title="Download .glb"
+              aria-label="Download .glb"
+              disabled={isDownloading}
+              onClick={onDownload}
+            >
+              {isDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            </IconButton>
+            <IconButton
+              variant="inverse"
+              size="lg"
+              title="Scene settings"
+              aria-label="Scene settings"
+              onClick={onOpenSettings}
+            >
+              <Settings className="h-4 w-4" />
+            </IconButton>
+            <LinkButton to={`/projects/${projectId}/scenes/${encodeURIComponent(sceneId)}/view`} size="md">
+              <Eye className="h-4 w-4" />
+              View model
+            </LinkButton>
+          </div>
+          {downloadError && <p className="text-xs text-danger">{downloadError}</p>}
         </div>
       </div>
     </div>
