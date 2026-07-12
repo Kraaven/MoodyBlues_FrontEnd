@@ -1,5 +1,57 @@
 @import "tailwindcss";
 
+/*
+  Design tokens -- a dark, technical translation of DESIGN.md's editorial system.
+  DESIGN.md documents a light pastel-block marketing site; this is a dark 3D-scene
+  dashboard/inspector, so the *system* (monochrome core, one scarce accent, pill
+  CTAs, mono taxonomy labels, hairline elevation) is preserved while the literal
+  palette is inverted and the pastel blocks become small-surface accents rather
+  than full-page panels.
+*/
+@theme {
+  --font-sans: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Canvas & surfaces */
+  --color-canvas: #09090b;
+  --color-canvas-raised: #0e0e11;
+  --color-surface: #131317;
+  --color-surface-soft: #1a1a1f;
+  --color-surface-hover: #21212a;
+
+  /* Ink */
+  --color-ink: #f5f5f7;
+  --color-ink-muted: #9a9aa6;
+  --color-ink-faint: #63636e;
+
+  /* Hairlines (the default elevation device -- no shadows) */
+  --color-hairline: rgba(255, 255, 255, 0.08);
+  --color-hairline-strong: rgba(255, 255, 255, 0.14);
+
+  /* Signature scarce accent: "Moody Blue" */
+  --color-accent: #5b7cfa;
+  --color-accent-strong: #7f9aff;
+  --color-accent-soft: rgba(91, 124, 250, 0.14);
+  --color-accent-ink: #eef1ff;
+
+  /* Block colors -- used as single hero surfaces or status-chip tints, never full pages */
+  --color-block-navy: #1f1d3d;
+  --color-block-navy-soft: #292656;
+  --color-block-lilac: #c5b0f4;
+  --color-block-lime: #dceeb1;
+  --color-block-coral: #f3c9b6;
+  --color-block-mint: #c8e6cd;
+  --color-magenta: #ff3d8b;
+
+  /* Semantic */
+  --color-success: #7ee08a;
+  --color-success-soft: rgba(126, 224, 138, 0.14);
+  --color-warning: #f3ab6f;
+  --color-warning-soft: rgba(243, 171, 111, 0.14);
+  --color-danger: #f87171;
+  --color-danger-soft: rgba(248, 113, 113, 0.14);
+}
+
 :root {
   color-scheme: dark;
 }
@@ -12,13 +64,20 @@ body,
 
 body {
   margin: 0;
-  background: #0b0b0f;
-  color: #e6e6ef;
-  font-family: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-feature-settings: 'kern' 1;
+  -webkit-font-smoothing: antialiased;
 }
 
 * {
   box-sizing: border-box;
+}
+
+.font-mono-tabular {
+  font-family: var(--font-mono);
+  font-feature-settings: 'tnum' 1;
 }
 
 ::-webkit-scrollbar {
@@ -31,10 +90,10 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2a2a35;
+  background: var(--color-surface-hover);
   border-radius: 6px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a3a48;
+  background: var(--color-hairline-strong);
 }

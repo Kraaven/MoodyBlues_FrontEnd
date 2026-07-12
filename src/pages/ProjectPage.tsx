@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Box } from 'lucide-react';
+import { ArrowLeft, Box, Info } from 'lucide-react';
 import { Navbar } from '../components/Navbar';
 import { CopyableId } from '../components/CopyableId';
-import { SceneRow } from '../components/SceneRow';
+import { SceneCard } from '../components/SceneCard';
+import { PageHeader } from '../components/ui/PageHeader';
+import { EmptyState } from '../components/ui/EmptyState';
+import { FieldError } from '../components/ui/Input';
 import { api, ApiError } from '../lib/api';
 import type { ProjectDetail } from '../lib/types';
 
@@ -34,43 +37,46 @@ export function ProjectPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0b0b0f]">
+    <div className="min-h-screen bg-canvas">
       <Navbar />
 
       <main className="mx-auto max-w-4xl px-6 py-10">
-        <Link to="/dashboard" className="mb-6 flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white">
+        <Link
+          to="/dashboard"
+          className="mb-6 inline-flex items-center gap-1.5 text-sm text-ink-muted transition hover:text-ink"
+        >
           <ArrowLeft className="h-4 w-4" />
           Back to dashboard
         </Link>
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && <FieldError>{error}</FieldError>}
 
         {project && (
           <>
-            <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-semibold text-white">{project.name}</h1>
-                <p className="mt-1 text-sm text-zinc-400">
-                  Paste this Developer ID into your Unity client's config so it uploads scenes here.
-                </p>
-              </div>
+            <PageHeader eyebrow="Project" title={project.name} />
+
+            <div className="mb-8 flex flex-wrap items-center gap-3 rounded-2xl border border-block-lilac/25 bg-block-lilac/[0.06] px-4 py-3.5">
+              <Info className="h-4 w-4 shrink-0 text-block-lilac" />
+              <p className="flex-1 text-sm text-ink-muted">
+                Paste this Developer ID into your Unity client&apos;s config so it uploads scenes here.
+              </p>
               <CopyableId value={project.developerId} label="Developer ID" />
             </div>
 
-            <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-zinc-500">Scenes</h2>
+            <h2 className="mb-3 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-faint">
+              Scenes ({project.scenes.length})
+            </h2>
 
             {project.scenes.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
-                <Box className="mx-auto mb-3 h-8 w-8 text-zinc-600" />
-                <p className="text-zinc-400">
-                  No scenes uploaded yet. Once your Unity client handshakes with this Developer ID, uploaded scenes
-                  will show up here.
-                </p>
-              </div>
+              <EmptyState
+                icon={Box}
+                title="No scenes uploaded yet"
+                description="Once your Unity client handshakes with this Developer ID, uploaded scenes will show up here."
+              />
             ) : (
               <div className="space-y-2">
                 {project.scenes.map((scene) => (
-                  <SceneRow key={scene.sceneId} projectId={project.id} scene={scene} onRename={onRename} />
+                  <SceneCard key={scene.sceneId} projectId={project.id} scene={scene} onRename={onRename} />
                 ))}
               </div>
             )}

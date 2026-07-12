@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Sparkles } from 'lucide-react';
+import { AuthLayout } from '../components/AuthLayout';
+import { Button } from '../components/ui/Button';
+import { Input, Label, FieldError } from '../components/ui/Input';
 import { useAuth } from '../auth/useAuth';
 import { ApiError } from '../lib/api';
 
@@ -28,63 +30,49 @@ export function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#0b0b0f] px-4">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 flex flex-col items-center gap-2 text-center">
-          <Sparkles className="h-8 w-8 text-violet-400" />
-          <h1 className="text-2xl font-semibold text-white">Welcome back</h1>
-          <p className="text-sm text-zinc-400">Sign in to manage your projects and scenes.</p>
+    <AuthLayout>
+      <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-faint">Sign in</p>
+      <h2 className="mb-8 text-2xl font-medium text-ink">Welcome back</h2>
+
+      <form onSubmit={onSubmit} className="space-y-4">
+        <div>
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            required
+            autoFocus
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+          />
         </div>
 
-        <form onSubmit={onSubmit} className="space-y-4 rounded-xl border border-white/10 bg-[#131317] p-6">
-          <div>
-            <label className="mb-1.5 block text-sm text-zinc-300" htmlFor="email">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-violet-400/60"
-              placeholder="you@example.com"
-            />
-          </div>
+        <div>
+          <Label htmlFor="password">Password</Label>
+          <Input
+            id="password"
+            type="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+          />
+        </div>
 
-          <div>
-            <label className="mb-1.5 block text-sm text-zinc-300" htmlFor="password">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-violet-400/60"
-              placeholder="••••••••"
-            />
-          </div>
+        {error && <FieldError>{error}</FieldError>}
 
-          {error && <p className="text-sm text-red-400">{error}</p>}
+        <Button type="submit" disabled={isSubmitting} className="w-full">
+          {isSubmitting ? 'Signing in...' : 'Sign in'}
+        </Button>
+      </form>
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full rounded-md bg-violet-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-violet-400 disabled:opacity-50"
-          >
-            {isSubmitting ? 'Signing in...' : 'Sign in'}
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-zinc-500">
-          No account yet?{' '}
-          <Link to="/register" className="text-violet-400 hover:text-violet-300">
-            Create one
-          </Link>
-        </p>
-      </div>
-    </div>
+      <p className="mt-6 text-center text-sm text-ink-muted">
+        No account yet?{' '}
+        <Link to="/register" className="text-accent-strong hover:underline">
+          Create one
+        </Link>
+      </p>
+    </AuthLayout>
   );
 }

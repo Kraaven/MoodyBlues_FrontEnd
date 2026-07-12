@@ -4,6 +4,7 @@ import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ProjectPage } from './pages/ProjectPage';
+import { SceneDashboardPage } from './pages/SceneDashboardPage';
 import { ViewerPage } from './pages/ViewerPage';
 
 function App() {
@@ -15,6 +16,7 @@ function App() {
       <Route element={<ProtectedRoute />}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/projects/:projectId" element={<ProjectPage />} />
+        <Route path="/projects/:projectId/scenes/:sceneId" element={<SceneDashboardPage />} />
         <Route path="/projects/:projectId/scenes/:sceneId/view" element={<ViewerPage />} />
       </Route>
 

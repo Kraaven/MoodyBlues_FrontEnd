@@ -48,16 +48,16 @@ function TextureThumbnail({ texture }: { texture: THREE.Texture }) {
   const height = (texture.image as { height?: number })?.height;
 
   return (
-    <div className="rounded-md border border-white/10 bg-black/20 p-2">
-      <div className="mb-2 flex h-24 items-center justify-center overflow-hidden rounded bg-[#1a1a20]">
+    <div className="rounded-lg border border-hairline bg-canvas-raised/60 p-2">
+      <div className="mb-2 flex h-24 items-center justify-center overflow-hidden rounded-md bg-surface-soft">
         {drawFailed ? (
-          <ImageOff className="h-6 w-6 text-zinc-600" />
+          <ImageOff className="h-6 w-6 text-ink-faint" />
         ) : (
           <canvas ref={canvasRef} width={96} height={96} className="h-full w-full object-contain" />
         )}
       </div>
-      <p className="truncate text-xs font-medium text-zinc-200">{texture.name || '(unnamed texture)'}</p>
-      <p className="text-[10px] text-zinc-500">
+      <p className="truncate text-xs font-medium text-ink">{texture.name || '(unnamed texture)'}</p>
+      <p className="text-[10px] text-ink-faint">
         {width && height ? `${width}x${height}` : 'unknown size'}
         {texture.format in FORMAT_NAMES ? ` - ${FORMAT_NAMES[texture.format]}` : ''}
       </p>
@@ -69,7 +69,7 @@ export function TexturesPanel() {
   const textures = useViewerStore((s) => s.textures);
 
   if (textures.length === 0) {
-    return <p className="text-center text-sm text-zinc-500">No textures found.</p>;
+    return <p className="text-center text-sm text-ink-muted">No textures found.</p>;
   }
 
   return (

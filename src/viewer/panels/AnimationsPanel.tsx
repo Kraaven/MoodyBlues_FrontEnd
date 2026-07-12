@@ -1,5 +1,6 @@
 import { Pause, Play } from 'lucide-react';
 import { useViewerStore } from '../viewerStore';
+import { SectionLabel } from './Row';
 
 function formatTime(t: number): string {
   return `${t.toFixed(2)}s`;
@@ -17,13 +18,13 @@ export function AnimationsPanel() {
   const requestSeek = useViewerStore((s) => s.requestSeek);
 
   if (clips.length === 0) {
-    return <p className="text-center text-sm text-zinc-500">This model has no animations.</p>;
+    return <p className="text-center text-sm text-ink-muted">This model has no animations.</p>;
   }
 
   return (
     <div className="space-y-3">
       <div>
-        <p className="mb-1.5 text-[10px] uppercase tracking-wide text-zinc-600">Clips ({clips.length})</p>
+        <SectionLabel>Clips ({clips.length})</SectionLabel>
         <div className="space-y-1">
           {clips.map((clip, index) => (
             <button
@@ -31,27 +32,27 @@ export function AnimationsPanel() {
               type="button"
               onClick={() => setClipIndex(index)}
               className={`block w-full truncate rounded-md px-2 py-1.5 text-left text-xs transition ${
-                index === currentClipIndex ? 'bg-violet-500/20 text-violet-200' : 'text-zinc-300 hover:bg-white/5'
+                index === currentClipIndex ? 'bg-accent-soft text-accent-ink' : 'text-ink-muted hover:bg-white/5'
               }`}
             >
               {clip.name || `Clip ${index + 1}`}
-              <span className="ml-1.5 text-[10px] text-zinc-500">{formatTime(clip.duration)}</span>
+              <span className="ml-1.5 text-[10px] text-ink-faint">{formatTime(clip.duration)}</span>
             </button>
           ))}
         </div>
       </div>
 
-      <div className="rounded-md border border-white/10 bg-black/20 p-3">
+      <div className="rounded-lg border border-hairline bg-canvas-raised/60 p-3">
         <div className="mb-2 flex items-center justify-between">
           <button
             type="button"
             onClick={() => (isPlaying ? pause() : play())}
-            className="flex items-center gap-1.5 rounded-md bg-violet-500 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-violet-400"
+            className="flex items-center gap-1.5 rounded-full bg-ink px-3 py-1.5 text-xs font-medium text-canvas transition hover:opacity-90"
           >
             {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
             {isPlaying ? 'Pause' : 'Play'}
           </button>
-          <span className="text-[10px] text-zinc-500">
+          <span className="font-mono text-[10px] text-ink-faint">
             {formatTime(currentTime)} / {formatTime(duration)}
           </span>
         </div>
@@ -63,7 +64,7 @@ export function AnimationsPanel() {
           step={0.01}
           value={Math.min(currentTime, duration || 0)}
           onChange={(e) => requestSeek(Number(e.target.value))}
-          className="w-full accent-violet-400"
+          className="w-full accent-accent"
         />
       </div>
     </div>

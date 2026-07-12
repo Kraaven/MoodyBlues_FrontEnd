@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import * as THREE from 'three';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
-export type PanelId = 'hierarchy' | 'materials' | 'textures' | 'geometry' | 'animations' | 'settings';
+export type PanelId = 'hierarchy' | 'inspector' | 'materials' | 'textures' | 'animations' | 'statistics';
 
 export interface MeshInfo {
   uuid: string;
@@ -15,12 +15,17 @@ interface ViewerState {
   gltf: GLTF | null;
   isLoading: boolean;
   error: string | null;
+  fileSizeBytes: number | null;
 
   selectedUuid: string | null;
   activePanel: PanelId;
   wireframe: boolean;
   showSkeleton: boolean;
   showGrid: boolean;
+  cameraResetToken: number;
+
+  simplifyHierarchy: boolean;
+  highlightedMaterialUuid: string | null;
 
   materials: THREE.Material[];
   textures: THREE.Texture[];
@@ -37,11 +42,15 @@ interface ViewerState {
   setGltf: (gltf: GLTF | null) => void;
   setLoading: (isLoading: boolean) => void;
   setError: (error: string | null) => void;
+  setFileSizeBytes: (bytes: number | null) => void;
   selectNode: (uuid: string | null) => void;
   setActivePanel: (panel: PanelId) => void;
   toggleWireframe: () => void;
   toggleSkeleton: () => void;
   toggleGrid: () => void;
+  requestCameraReset: () => void;
+  toggleSimplifyHierarchy: () => void;
+  setHighlightedMaterial: (uuid: string | null) => void;
 
   setInspection: (data: { materials: THREE.Material[]; textures: THREE.Texture[]; meshes: MeshInfo[]; skinnedMeshCount: number }) => void;
 
@@ -60,12 +69,17 @@ const initialState = {
   gltf: null,
   isLoading: false,
   error: null,
+  fileSizeBytes: null,
 
   selectedUuid: null,
   activePanel: 'hierarchy' as PanelId,
   wireframe: false,
   showSkeleton: false,
   showGrid: true,
+  cameraResetToken: 0,
+
+  simplifyHierarchy: true,
+  highlightedMaterialUuid: null,
 
   materials: [],
   textures: [],
@@ -86,11 +100,15 @@ export const useViewerStore = create<ViewerState>((set) => ({
   setGltf: (gltf) => set({ gltf }),
   setLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error }),
-  selectNode: (uuid) => set({ selectedUuid: uuid }),
+  setFileSizeBytes: (fileSizeBytes) => set({ fileSizeBytes }),
+  selectNode: (uuid) => set({ selectedUuid: uuid, activePanel: uuid ? 'inspector' : 'hierarchy' }),
   setActivePanel: (activePanel) => set({ activePanel }),
   toggleWireframe: () => set((s) => ({ wireframe: !s.wireframe })),
   toggleSkeleton: () => set((s) => ({ showSkeleton: !s.showSkeleton })),
   toggleGrid: () => set((s) => ({ showGrid: !s.showGrid })),
+  requestCameraReset: () => set((s) => ({ cameraResetToken: s.cameraResetToken + 1 })),
+  toggleSimplifyHierarchy: () => set((s) => ({ simplifyHierarchy: !s.simplifyHierarchy })),
+  setHighlightedMaterial: (highlightedMaterialUuid) => set({ highlightedMaterialUuid }),
 
   setInspection: ({ materials, textures, meshes, skinnedMeshCount }) => set({ materials, textures, meshes, skinnedMeshCount }),
 

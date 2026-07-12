@@ -20,6 +20,7 @@ export function SceneLoader({ developerId, sceneId }: { developerId: string; sce
         const loader = createGltfLoader(gl);
         const parsed = await parseGlb(loader, buffer);
         if (!cancelled) {
+          useViewerStore.getState().setFileSizeBytes(buffer.byteLength);
           useViewerStore.getState().setGltf(parsed);
         }
       } catch (err) {

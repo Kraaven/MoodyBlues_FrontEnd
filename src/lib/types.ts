@@ -17,10 +17,14 @@ export interface ProjectSummary {
   sceneCount: number;
 }
 
+export type SceneProcessingStatus = 'Pending' | 'Processing' | 'Ready' | 'Failed';
+
 export interface ProjectScene {
   sceneId: string;
   displayName: string | null;
   updatedAtUtc: string;
+  sizeBytes: number;
+  processingStatus: SceneProcessingStatus;
 }
 
 export interface ProjectDetail {
