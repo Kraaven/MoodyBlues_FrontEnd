@@ -6,14 +6,27 @@ export interface InspectionData {
   textures: THREE.Texture[];
   meshes: MeshInfo[];
   skinnedMeshCount: number;
+  staticCount: number;
+  trackedCount: number;
+  hiddenCount: number;
 }
 
-/** Walks a loaded glTF scene graph once, collecting the unique materials/textures/meshes it uses. */
+function getFlag(userData: Record<string, unknown>, key: string): unknown {
+  for (const [k, v] of Object.entries(userData)) {
+    if (k.toLowerCase() === key.toLowerCase()) return v;
+  }
+  return undefined;
+}
+
+/** Walks a loaded glTF scene graph once, collecting unique materials/textures/meshes and runtime flags. */
 export function inspectScene(root: THREE.Object3D): InspectionData {
   const materials = new Map<string, THREE.Material>();
   const textures = new Map<string, THREE.Texture>();
   const meshes: MeshInfo[] = [];
   let skinnedMeshCount = 0;
+  let staticCount = 0;
+  let trackedCount = 0;
+  let hiddenCount = 0;
 
   const textureKeys = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap', 'bumpMap', 'displacementMap', 'clearcoatMap', 'clearcoatNormalMap', 'transmissionMap', 'thicknessMap', 'sheenColorMap', 'specularMap'] as const;
 
@@ -21,6 +34,11 @@ export function inspectScene(root: THREE.Object3D): InspectionData {
     if ((object as THREE.SkinnedMesh).isSkinnedMesh) {
       skinnedMeshCount += 1;
     }
+
+    const userData = (object.userData ?? {}) as Record<string, unknown>;
+    if (getFlag(userData, 'isStatic')) staticCount += 1;
+    if (getFlag(userData, 'objectId') !== undefined) trackedCount += 1;
+    if (getFlag(userData, 'isHidden')) hiddenCount += 1;
 
     if ((object as THREE.Mesh).isMesh) {
       const mesh = object as THREE.Mesh;
@@ -46,5 +64,8 @@ export function inspectScene(root: THREE.Object3D): InspectionData {
     textures: [...textures.values()],
     meshes,
     skinnedMeshCount,
+    staticCount,
+    trackedCount,
+    hiddenCount,
   };
 }

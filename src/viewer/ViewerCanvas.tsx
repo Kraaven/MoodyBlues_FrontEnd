@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Grid, OrbitControls } from '@react-three/drei';
 import { SceneLoader } from './SceneLoader';
-import { ViewerToolbar } from './ViewerToolbar';
 import { useViewerStore } from './viewerStore';
 
 export function ViewerCanvas({ developerId, sceneId }: { developerId: string; sceneId: string }) {
@@ -29,8 +28,6 @@ export function ViewerCanvas({ developerId, sceneId }: { developerId: string; sc
 
         <OrbitControls ref={controlsRef} makeDefault enableDamping dampingFactor={0.08} />
       </Canvas>
-
-      <ViewerToolbar />
     </div>
   );
 }

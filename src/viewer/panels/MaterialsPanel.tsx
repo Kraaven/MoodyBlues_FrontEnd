@@ -2,9 +2,19 @@ import { useState } from 'react';
 import * as THREE from 'three';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useViewerStore } from '../viewerStore';
-import { Row, SectionLabel } from './Row';
+import { Row } from './Row';
 
-const MAP_SLOTS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap', 'bumpMap', 'displacementMap'] as const;
+const MAP_SLOTS = [
+  { key: 'map', label: 'Base color' },
+  { key: 'normalMap', label: 'Normal' },
+  { key: 'roughnessMap', label: 'Roughness' },
+  { key: 'metalnessMap', label: 'Metallic' },
+  { key: 'aoMap', label: 'AO' },
+  { key: 'emissiveMap', label: 'Emissive' },
+  { key: 'alphaMap', label: 'Alpha' },
+  { key: 'bumpMap', label: 'Bump' },
+  { key: 'displacementMap', label: 'Displacement' },
+] as const;
 
 function MaterialSwatch({ material }: { material: THREE.Material }) {
   const m = material as unknown as Record<string, unknown>;
@@ -22,25 +32,60 @@ function MaterialSwatch({ material }: { material: THREE.Material }) {
 
 function MaterialDetails({ material }: { material: THREE.Material }) {
   const m = material as unknown as Record<string, unknown>;
-  const maps = MAP_SLOTS.filter((slot) => Boolean(m[slot]));
+  const color = m.color instanceof THREE.Color ? `#${(m.color as THREE.Color).getHexString()}` : null;
+  const emissive = m.emissive instanceof THREE.Color ? `#${(m.emissive as THREE.Color).getHexString()}` : null;
+  const mapsWithTex = MAP_SLOTS.filter(({ key }) => Boolean(m[key]));
 
   return (
     <div className="space-y-2 border-t border-hairline p-2.5">
-      <div>
-        <SectionLabel>Properties</SectionLabel>
+      <div className="rounded-lg border border-hairline/50 bg-surface-soft/40 p-2 space-y-0.5">
         <Row label="Type" value={material.type} />
-        {m.color instanceof THREE.Color && <Row label="Color" value={`#${(m.color as THREE.Color).getHexString()}`} />}
-        {typeof m.metalness === 'number' && <Row label="Metalness" value={m.metalness.toFixed(2)} />}
-        {typeof m.roughness === 'number' && <Row label="Roughness" value={m.roughness.toFixed(2)} />}
-        {m.emissive instanceof THREE.Color && <Row label="Emissive" value={`#${(m.emissive as THREE.Color).getHexString()}`} />}
+        {color && <Row label="Base color" value={color} />}
+        {typeof m.metalness === 'number' && <Row label="Metalness" value={(m.metalness as number).toFixed(3)} />}
+        {typeof m.roughness === 'number' && <Row label="Roughness" value={(m.roughness as number).toFixed(3)} />}
+        {emissive && <Row label="Emissive" value={emissive} />}
         <Row label="Opacity" value={material.opacity.toFixed(2)} />
         <Row label="Transparent" value={String(material.transparent)} />
-        <Row label="Side" value={material.side === THREE.DoubleSide ? 'Double' : material.side === THREE.BackSide ? 'Back' : 'Front'} />
+        <Row
+          label="Side"
+          value={material.side === THREE.DoubleSide ? 'Double' : material.side === THREE.BackSide ? 'Back' : 'Front'}
+        />
       </div>
-      <div>
-        <SectionLabel>Maps</SectionLabel>
-        <p className="text-xs text-ink">{maps.length > 0 ? maps.join(', ') : 'none'}</p>
-      </div>
+
+      {mapsWithTex.length > 0 && (
+        <div className="rounded-lg border border-hairline/50 bg-surface-soft/40 p-2">
+          <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-ink-faint">
+            Texture maps ({mapsWithTex.length})
+          </p>
+          <div className="space-y-0.5">
+            {mapsWithTex.map(({ key, label }) => {
+              const tex = m[key] as THREE.Texture;
+              const w = (tex.image as { width?: number })?.width;
+              const h = (tex.image as { height?: number })?.height;
+              return (
+                <Row
+                  key={key}
+                  label={label}
+                  value={w && h ? `${w}\u00D7${h}` : tex.name || 'present'}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {material.userData && Object.keys(material.userData).length > 0 && (
+        <div className="rounded-lg border border-hairline/50 bg-surface-soft/40 p-2">
+          <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-ink-faint">Extensions</p>
+          <div className="flex flex-wrap gap-1">
+            {Object.keys(material.userData).map((ext) => (
+              <span key={ext} className="rounded-full border border-accent/30 bg-accent-soft px-2 py-0.5 text-[10px] text-accent-strong">
+                {ext}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -53,7 +98,7 @@ export function MaterialsPanel() {
   const [expandedUuid, setExpandedUuid] = useState<string | null>(materials[0]?.uuid ?? null);
 
   if (materials.length === 0) {
-    return <p className="text-center text-sm text-ink-muted">No materials found.</p>;
+    return <p className="text-center text-sm text-ink-muted py-4">No materials found.</p>;
   }
 
   const usageCount = (materialUuid: string) =>
@@ -62,11 +107,20 @@ export function MaterialsPanel() {
       return mats.some((mat) => mat?.uuid === materialUuid);
     }).length;
 
+  const totalUsedBy = materials.reduce((sum, mat) => sum + usageCount(mat.uuid), 0);
+
   return (
     <div className="space-y-1.5">
-      <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-ink-faint">
-        {materials.length} material{materials.length === 1 ? '' : 's'} -- click to highlight in viewport
-      </p>
+      <div className="mb-2 flex items-center gap-2">
+        <p className="font-mono text-[10px] uppercase tracking-wide text-ink-faint">
+          {materials.length} material{materials.length === 1 ? '' : 's'}
+        </p>
+        <span className="text-[10px] text-ink-faint/60">&middot;</span>
+        <span className="text-[10px] text-ink-faint/60">
+          {totalUsedBy} assignment{totalUsedBy === 1 ? '' : 's'} across {meshes.length} mesh{meshes.length === 1 ? '' : 'es'}
+        </span>
+      </div>
+
       {materials.map((material) => {
         const isOpen = expandedUuid === material.uuid;
         const isHighlighted = highlightedMaterialUuid === material.uuid;

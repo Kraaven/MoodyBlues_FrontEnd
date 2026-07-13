@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type * as THREE from 'three';
-import { ChevronDown, ChevronRight, Search, Box, Bone, Camera, Lightbulb, Layers, Folder } from 'lucide-react';
+import { ChevronDown, ChevronRight, Search, Box, Bone, Camera, Lightbulb, Layers, Folder, Eye, EyeOff } from 'lucide-react';
 import { useViewerStore } from '../viewerStore';
 
 function nodeMatches(object: THREE.Object3D, query: string): boolean {
@@ -23,15 +23,27 @@ function nodeIcon(object: THREE.Object3D) {
   return <Folder className={cls} style={{ color: 'var(--color-icon-group)' }} />;
 }
 
+function childCountLabel(object: THREE.Object3D): string | null {
+  if ((object as THREE.Mesh).isMesh) return null;
+  if ((object as THREE.Bone).isBone) return null;
+  const count = object.children.length;
+  if (count === 0) return null;
+  return `${count}`;
+}
+
 function TreeNode({ object, depth, query }: { object: THREE.Object3D; depth: number; query: string }) {
   const [expanded, setExpanded] = useState(depth < 2);
   const selectedUuid = useViewerStore((s) => s.selectedUuid);
   const selectNode = useViewerStore((s) => s.selectNode);
+  const hiddenNodes = useViewerStore((s) => s.hiddenNodes);
+  const toggleNodeHidden = useViewerStore((s) => s.toggleNodeHidden);
 
   const children = object.children.filter((child) => nodeMatches(child, query));
   const hasChildren = children.length > 0;
   const isSelected = selectedUuid === object.uuid;
+  const isHidden = Boolean(hiddenNodes[object.uuid]);
   const label = object.name || `(${object.type})`;
+  const badge = childCountLabel(object);
 
   if (!nodeMatches(object, query)) {
     return null;
@@ -42,7 +54,7 @@ function TreeNode({ object, depth, query }: { object: THREE.Object3D; depth: num
       <div
         onClick={() => selectNode(isSelected ? null : object.uuid)}
         style={{ paddingLeft: depth * 16 + 4 }}
-        className={`flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-0.5 text-xs transition ${
+        className={`group flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-0.5 text-xs transition ${
           isSelected ? 'bg-accent-soft text-accent-ink' : 'text-ink-muted hover:bg-white/5 hover:text-ink'
         }`}
       >
@@ -57,7 +69,25 @@ function TreeNode({ object, depth, query }: { object: THREE.Object3D; depth: num
           {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
         </button>
         {nodeIcon(object)}
-        <span className="truncate">{label}</span>
+        <span className={`min-w-0 flex-1 truncate ${isHidden ? 'line-through opacity-50' : ''}`}>
+          {label}
+        </span>
+        {badge && (
+          <span className="ml-auto shrink-0 rounded-full bg-white/5 px-1.5 py-px text-[10px] leading-none text-ink-faint">
+            {badge}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleNodeHidden(object.uuid);
+          }}
+          title={isHidden ? 'Show in viewport' : 'Hide in viewport'}
+          className="shrink-0 rounded p-0.5 text-ink-faint opacity-0 transition hover:text-ink group-hover:opacity-100"
+        >
+          {isHidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+        </button>
       </div>
 
       {expanded && hasChildren && (
@@ -73,6 +103,7 @@ function TreeNode({ object, depth, query }: { object: THREE.Object3D; depth: num
 
 export function HierarchyPanel() {
   const gltf = useViewerStore((s) => s.gltf);
+  const meshes = useViewerStore((s) => s.meshes);
   const [search, setSearch] = useState('');
   const query = search.trim().toLowerCase();
 
@@ -80,7 +111,7 @@ export function HierarchyPanel() {
 
   return (
     <div>
-      <div className="mb-2.5 flex items-center gap-2 rounded-md border border-hairline bg-surface-soft px-2 py-1.5">
+      <div className="mb-2 flex items-center gap-2 rounded-md border border-hairline bg-surface-soft px-2 py-1.5">
         <Search className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
         <input
           value={search}
@@ -88,6 +119,12 @@ export function HierarchyPanel() {
           placeholder="Search nodes..."
           className="w-full bg-transparent text-xs text-ink outline-none placeholder:text-ink-faint"
         />
+      </div>
+
+      <div className="mb-2 flex items-center gap-2 text-[10px] text-ink-faint">
+        <span>{meshes.length} mesh{meshes.length === 1 ? '' : 'es'}</span>
+        <span>&middot;</span>
+        <span>{rootChildren.length} root node{rootChildren.length === 1 ? '' : 's'}</span>
       </div>
 
       <div className="space-y-px">

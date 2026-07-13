@@ -1,13 +1,35 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Download, Loader2 } from 'lucide-react';
+import { ArrowLeft, Download, Loader2, X } from 'lucide-react';
 import { ViewerCanvas } from '../viewer/ViewerCanvas';
-import { SceneTreePanel } from '../viewer/panels/SceneTreePanel';
-import { DetailsPanel } from '../viewer/panels/DetailsPanel';
+import { ViewerDock } from '../viewer/ViewerDock';
+import { HierarchyPanel } from '../viewer/panels/HierarchyPanel';
+import { InspectorPanel } from '../viewer/panels/InspectorPanel';
+import { MaterialsPanel } from '../viewer/panels/MaterialsPanel';
+import { SceneStatsPanel } from '../viewer/panels/SceneStatsPanel';
 import { useViewerStore } from '../viewer/viewerStore';
+import { usePanelResize } from '../viewer/usePanelResize';
 import { IconButton } from '../components/ui/Button';
 import { api, ApiError, downloadSceneFile } from '../lib/api';
 import type { ProjectDetail } from '../lib/types';
+import type { RightPanelTab } from '../viewer/viewerStore';
+
+const RIGHT_PANEL_LABELS: Record<RightPanelTab, string> = {
+  inspector: 'Inspector',
+  materials: 'Materials',
+  stats: 'Scene Stats',
+};
+
+function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => void }) {
+  return (
+    <div
+      onMouseDown={onMouseDown}
+      className="group relative w-1 shrink-0 cursor-col-resize bg-hairline transition hover:bg-accent/60"
+    >
+      <div className="absolute inset-y-0 -left-1 -right-1" />
+    </div>
+  );
+}
 
 export function ViewerPage() {
   const { projectId, sceneId } = useParams<{ projectId: string; sceneId: string }>();
@@ -18,6 +40,13 @@ export function ViewerPage() {
 
   const isLoading = useViewerStore((s) => s.isLoading);
   const viewerError = useViewerStore((s) => s.error);
+  const gltf = useViewerStore((s) => s.gltf);
+  const leftPanelOpen = useViewerStore((s) => s.leftPanelOpen);
+  const rightPanelTab = useViewerStore((s) => s.rightPanelTab);
+  const setRightPanelTab = useViewerStore((s) => s.setRightPanelTab);
+
+  const leftResize = usePanelResize('left', 220, 420, 280);
+  const rightResize = usePanelResize('right', 260, 480, 320);
 
   useEffect(() => {
     if (!projectId) return;
@@ -90,9 +119,63 @@ export function ViewerPage() {
       {downloadError && <p className="px-4 py-2 text-sm text-danger">{downloadError}</p>}
 
       <div className="flex flex-1 overflow-hidden">
-        <SceneTreePanel />
+        <ViewerDock side="left" />
+
+        {gltf && leftPanelOpen && (
+          <>
+            <div
+              className="flex shrink-0 flex-col border-r border-hairline bg-canvas-raised"
+              style={{ width: leftResize.width }}
+            >
+              <div className="flex h-8 shrink-0 items-center justify-between border-b border-hairline px-3">
+                <span className="font-mono text-[10px] uppercase tracking-wide text-ink-faint">Hierarchy</span>
+                <button
+                  type="button"
+                  onClick={useViewerStore.getState().toggleLeftPanel}
+                  className="rounded p-0.5 text-ink-faint transition hover:text-ink"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2">
+                <HierarchyPanel />
+              </div>
+            </div>
+            <ResizeHandle onMouseDown={leftResize.onMouseDown} />
+          </>
+        )}
+
         {project && <ViewerCanvas developerId={project.developerId} sceneId={sceneId} />}
-        <DetailsPanel />
+
+        {gltf && rightPanelTab && (
+          <>
+            <ResizeHandle onMouseDown={rightResize.onMouseDown} />
+            <div
+              className="flex shrink-0 flex-col border-l border-hairline bg-canvas-raised"
+              style={{ width: rightResize.width }}
+            >
+              <div className="flex h-8 shrink-0 items-center justify-between border-b border-hairline px-3">
+                <span className="font-mono text-[10px] uppercase tracking-wide text-ink-faint">
+                  {RIGHT_PANEL_LABELS[rightPanelTab]}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setRightPanelTab(null)}
+                  className="rounded p-0.5 text-ink-faint transition hover:text-ink"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2">
+                {rightPanelTab === 'inspector' && <InspectorPanel />}
+                {rightPanelTab === 'materials' && <MaterialsPanel />}
+                {rightPanelTab === 'stats' && <SceneStatsPanel />}
+              </div>
+            </div>
+          </>
+        )}
+
+        <ViewerDock side="right" />
       </div>
     </div>
   );

@@ -37,6 +37,7 @@ export function ModelRoot({ gltf }: { gltf: GLTF }) {
   const showSkeleton = useViewerStore((s) => s.showSkeleton);
   const selectedUuid = useViewerStore((s) => s.selectedUuid);
   const highlightedMaterialUuid = useViewerStore((s) => s.highlightedMaterialUuid);
+  const hiddenNodes = useViewerStore((s) => s.hiddenNodes);
 
   useEffect(() => {
     scene.add(gltf.scene);
@@ -193,6 +194,22 @@ export function ModelRoot({ gltf }: { gltf: GLTF }) {
       skeletonHelpersRef.current = [];
     };
   }, [gltf, showSkeleton, scene]);
+
+  useEffect(() => {
+    gltf.scene.traverse((object) => {
+      const userData = object.userData as Record<string, unknown>;
+      const wasPrehidden = Boolean(getFlag(userData, 'isHidden'));
+      const isToggledHidden = Boolean(hiddenNodes[object.uuid]);
+
+      if (isToggledHidden) {
+        object.visible = false;
+      } else if (wasPrehidden) {
+        object.visible = false;
+      } else {
+        object.visible = true;
+      }
+    });
+  }, [hiddenNodes, gltf.scene]);
 
   useEffect(() => {
     if (gizmoGroupRef.current) {
