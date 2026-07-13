@@ -24,7 +24,6 @@ interface ViewerState {
   showGrid: boolean;
   cameraResetToken: number;
 
-  simplifyHierarchy: boolean;
   highlightedMaterialUuid: string | null;
 
   materials: THREE.Material[];
@@ -49,7 +48,6 @@ interface ViewerState {
   toggleSkeleton: () => void;
   toggleGrid: () => void;
   requestCameraReset: () => void;
-  toggleSimplifyHierarchy: () => void;
   setHighlightedMaterial: (uuid: string | null) => void;
 
   setInspection: (data: { materials: THREE.Material[]; textures: THREE.Texture[]; meshes: MeshInfo[]; skinnedMeshCount: number }) => void;
@@ -78,7 +76,6 @@ const initialState = {
   showGrid: true,
   cameraResetToken: 0,
 
-  simplifyHierarchy: true,
   highlightedMaterialUuid: null,
 
   materials: [],
@@ -107,7 +104,6 @@ export const useViewerStore = create<ViewerState>((set) => ({
   toggleSkeleton: () => set((s) => ({ showSkeleton: !s.showSkeleton })),
   toggleGrid: () => set((s) => ({ showGrid: !s.showGrid })),
   requestCameraReset: () => set((s) => ({ cameraResetToken: s.cameraResetToken + 1 })),
-  toggleSimplifyHierarchy: () => set((s) => ({ simplifyHierarchy: !s.simplifyHierarchy })),
   setHighlightedMaterial: (highlightedMaterialUuid) => set({ highlightedMaterialUuid }),
 
   setInspection: ({ materials, textures, meshes, skinnedMeshCount }) => set({ materials, textures, meshes, skinnedMeshCount }),

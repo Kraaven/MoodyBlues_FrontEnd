@@ -23,7 +23,7 @@ export function ViewerCanvas({ developerId, sceneId }: { developerId: string; sc
         <directionalLight position={[5, 8, 5]} intensity={1.4} castShadow />
         <directionalLight position={[-5, -2, -5]} intensity={0.4} />
 
-        {showGrid && <Grid args={[20, 20]} cellColor="#20202a" sectionColor="#33333f" fadeDistance={25} infiniteGrid />}
+        {showGrid && <Grid args={[20, 20]} cellColor="#2A2A30" sectionColor="#3A3A40" fadeDistance={25} infiniteGrid />}
 
         <SceneLoader developerId={developerId} sceneId={sceneId} />
 

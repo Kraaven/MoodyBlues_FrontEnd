@@ -5,12 +5,12 @@ import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { useViewerStore } from './viewerStore';
 import { inspectScene } from './gltfInspection';
 
-const SELECTION_COLOR = '#f3ab6f';
-const WIREFRAME_COLOR = '#5b7cfa';
-const MATERIAL_HIGHLIGHT_COLOR = '#dceeb1';
+const SELECTION_COLOR = '#F4B675';
+const WIREFRAME_COLOR = '#5B7CFA';
+const MATERIAL_HIGHLIGHT_COLOR = '#DCEB1';
 const CLICK_DRAG_THRESHOLD_PX = 4;
-const GIZMO_MIN_LENGTH = 0.2;
-const GIZMO_MAX_LENGTH = 5;
+const GIZMO_MIN_LENGTH = 0.06;
+const GIZMO_MAX_LENGTH = 0.8;
 
 export function ModelRoot({ gltf }: { gltf: GLTF }) {
   const { scene, gl, camera } = useThree();
@@ -197,12 +197,12 @@ export function ModelRoot({ gltf }: { gltf: GLTF }) {
         const sphere = new THREE.Sphere();
         const box = new THREE.Box3().setFromObject(target);
         box.getBoundingSphere(sphere);
-        const length = THREE.MathUtils.clamp(sphere.radius * 1.8, GIZMO_MIN_LENGTH, GIZMO_MAX_LENGTH);
+        const length = THREE.MathUtils.clamp(sphere.radius * 0.8, GIZMO_MIN_LENGTH, GIZMO_MAX_LENGTH);
 
         const group = new THREE.Group();
-        group.add(new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), length, '#ff4444', 0.12, 0.08));
-        group.add(new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), length, '#44ff44', 0.12, 0.08));
-        group.add(new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), length, '#4444ff', 0.12, 0.08));
+        group.add(new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), length, '#E06C75', 0.05, 0.03));
+        group.add(new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), length, '#98C379', 0.05, 0.03));
+        group.add(new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), length, '#61AFEF', 0.05, 0.03));
 
         target.getWorldPosition(group.position);
         target.getWorldQuaternion(group.quaternion);

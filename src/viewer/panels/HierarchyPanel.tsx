@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import type * as THREE from 'three';
 import { ChevronDown, ChevronRight, Search, Box, Bone, Camera, Lightbulb, Layers, Folder } from 'lucide-react';
 import { useViewerStore } from '../viewerStore';
-import { Toggle } from '../../components/ui/Toggle';
 
 function nodeMatches(object: THREE.Object3D, query: string): boolean {
   if (!query) return true;
@@ -10,48 +9,27 @@ function nodeMatches(object: THREE.Object3D, query: string): boolean {
   return object.children.some((child) => nodeMatches(child, query));
 }
 
-function isCollapsible(node: THREE.Object3D): boolean {
-  const n = node as THREE.Object3D & { isMesh?: boolean; isBone?: boolean; isLight?: boolean; isCamera?: boolean };
-  const hasExtras = node.userData && Object.keys(node.userData).length > 0;
-  return !n.isMesh && !n.isBone && !n.isLight && !n.isCamera && !hasExtras && node.children.length === 1;
-}
-
-function getEffectiveChildren(node: THREE.Object3D, simplify: boolean): THREE.Object3D[] {
-  if (!simplify) return node.children;
-  const result: THREE.Object3D[] = [];
-  for (const child of node.children) {
-    if (isCollapsible(child)) {
-      result.push(...getEffectiveChildren(child, simplify));
-    } else {
-      result.push(child);
-    }
-  }
-  return result;
-}
-
 function nodeIcon(object: THREE.Object3D) {
   const cls = 'h-3.5 w-3.5 shrink-0';
-  if ((object as THREE.SkinnedMesh).isSkinnedMesh) return <Bone className={cls} />;
+  if ((object as THREE.SkinnedMesh).isSkinnedMesh) return <Bone className={cls} style={{ color: 'var(--color-icon-skinned)' }} />;
   if ((object as THREE.Mesh).isMesh) {
     const mesh = object as THREE.Mesh;
-    if ((mesh as any).isInstancedMesh) return <Layers className={cls} />;
-    return <Box className={cls} />;
+    if ((mesh as any).isInstancedMesh) return <Layers className={cls} style={{ color: 'var(--color-icon-instanced)' }} />;
+    return <Box className={cls} style={{ color: 'var(--color-icon-mesh)' }} />;
   }
-  if ((object as THREE.Bone).isBone) return <Bone className={cls} />;
-  if ((object as THREE.Camera).isCamera) return <Camera className={cls} />;
-  if ((object as THREE.Light).isLight) return <Lightbulb className={cls} />;
-  if (object.type === 'Group' || object.children.length > 0) return <Folder className={cls} />;
-  return <Folder className={cls} />;
+  if ((object as THREE.Bone).isBone) return <Bone className={cls} style={{ color: 'var(--color-icon-bone)' }} />;
+  if ((object as THREE.Camera).isCamera) return <Camera className={cls} style={{ color: 'var(--color-icon-camera)' }} />;
+  if ((object as THREE.Light).isLight) return <Lightbulb className={cls} style={{ color: 'var(--color-icon-light)' }} />;
+  return <Folder className={cls} style={{ color: 'var(--color-icon-group)' }} />;
 }
 
-function TreeNode({ object, depth, query, simplify }: { object: THREE.Object3D; depth: number; query: string; simplify: boolean }) {
+function TreeNode({ object, depth, query }: { object: THREE.Object3D; depth: number; query: string }) {
   const [expanded, setExpanded] = useState(depth < 2);
   const selectedUuid = useViewerStore((s) => s.selectedUuid);
   const selectNode = useViewerStore((s) => s.selectNode);
 
-  const effectiveChildren = getEffectiveChildren(object, simplify);
-  const visibleChildren = effectiveChildren.filter((child) => nodeMatches(child, query));
-  const hasChildren = visibleChildren.length > 0;
+  const children = object.children.filter((child) => nodeMatches(child, query));
+  const hasChildren = children.length > 0;
   const isSelected = selectedUuid === object.uuid;
   const label = object.name || `(${object.type})`;
 
@@ -64,7 +42,7 @@ function TreeNode({ object, depth, query, simplify }: { object: THREE.Object3D; 
       <div
         onClick={() => selectNode(isSelected ? null : object.uuid)}
         style={{ paddingLeft: depth * 16 + 4 }}
-        className={`flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-xs transition ${
+        className={`flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-0.5 text-xs transition ${
           isSelected ? 'bg-accent-soft text-accent-ink' : 'text-ink-muted hover:bg-white/5 hover:text-ink'
         }`}
       >
@@ -78,14 +56,14 @@ function TreeNode({ object, depth, query, simplify }: { object: THREE.Object3D; 
         >
           {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
         </button>
-        <span className="text-ink-faint">{nodeIcon(object)}</span>
+        {nodeIcon(object)}
         <span className="truncate">{label}</span>
       </div>
 
       {expanded && hasChildren && (
         <div>
-          {visibleChildren.map((child) => (
-            <TreeNode key={child.uuid} object={child} depth={depth + 1} query={query} simplify={simplify} />
+          {children.map((child) => (
+            <TreeNode key={child.uuid} object={child} depth={depth + 1} query={query} />
           ))}
         </div>
       )}
@@ -95,25 +73,14 @@ function TreeNode({ object, depth, query, simplify }: { object: THREE.Object3D; 
 
 export function HierarchyPanel() {
   const gltf = useViewerStore((s) => s.gltf);
-  const simplify = useViewerStore((s) => s.simplifyHierarchy);
-  const toggleSimplify = useViewerStore((s) => s.toggleSimplifyHierarchy);
   const [search, setSearch] = useState('');
   const query = search.trim().toLowerCase();
 
-  const rootChildren = useMemo(() => (gltf ? getEffectiveChildren(gltf.scene, simplify) : []), [gltf, simplify]);
+  const rootChildren = useMemo(() => (gltf ? gltf.scene.children : []), [gltf]);
 
   return (
     <div>
-      <div className="mb-3">
-        <Toggle
-          label="Simplified hierarchy"
-          description="Collapse empty transform wrappers"
-          checked={simplify}
-          onChange={toggleSimplify}
-        />
-      </div>
-
-      <div className="mb-3 flex items-center gap-2 rounded-lg border border-hairline bg-canvas-raised px-2 py-1.5">
+      <div className="mb-2.5 flex items-center gap-2 rounded-md border border-hairline bg-surface-soft px-2 py-1.5">
         <Search className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
         <input
           value={search}
@@ -125,7 +92,7 @@ export function HierarchyPanel() {
 
       <div className="space-y-px">
         {rootChildren.map((child) => (
-          <TreeNode key={child.uuid} object={child} depth={0} query={query} simplify={simplify} />
+          <TreeNode key={child.uuid} object={child} depth={0} query={query} />
         ))}
       </div>
     </div>

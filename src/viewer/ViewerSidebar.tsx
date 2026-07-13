@@ -19,10 +19,10 @@ export function ViewerSidebar() {
   const gltf = useViewerStore((s) => s.gltf);
 
   return (
-    <aside className="absolute inset-y-0 right-0 flex w-72 flex-col border-l border-hairline bg-canvas-raised/95 backdrop-blur-sm">
+    <aside className="absolute inset-y-0 right-0 flex w-72 flex-col border-l border-hairline bg-canvas-raised">
       <Tabs items={TABS} activeId={activePanel} onChange={setActivePanel} />
 
-      <div className="flex-1 overflow-y-auto p-3">
+      <div className="flex-1 overflow-y-auto p-2.5">
         {!gltf ? (
           <p className="mt-8 text-center text-sm text-ink-muted">Waiting for model to load...</p>
         ) : (

@@ -10,15 +10,15 @@ export function HierarchyFloatingPanel() {
   if (!gltf) return null;
 
   return (
-    <div className="absolute left-3 top-3 z-10 max-h-[calc(100vh-12rem)] w-64 overflow-hidden rounded-lg border border-hairline bg-canvas-raised/90 shadow-lg backdrop-blur">
-      <div className="flex items-center justify-between border-b border-hairline px-3 py-2">
+    <div className="absolute left-3 top-3 z-10 max-h-[calc(100vh-12rem)] w-64 overflow-hidden rounded-lg border border-hairline bg-canvas-raised shadow-sm transition-all duration-150">
+      <div className="flex items-center justify-between border-b border-hairline px-3 py-1.5">
         <span className="font-mono text-[10px] uppercase tracking-wide text-ink-faint">Hierarchy</span>
         <button
           type="button"
           onClick={() => setCollapsed((v) => !v)}
           className="rounded p-0.5 text-ink-faint transition hover:text-ink"
         >
-          {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
         </button>
       </div>
       {!collapsed && (
