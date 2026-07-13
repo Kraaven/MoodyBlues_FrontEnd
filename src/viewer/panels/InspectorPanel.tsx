@@ -15,13 +15,29 @@ function formatEulerDegrees(e: THREE.Euler): string {
 }
 
 function friendlyType(object: THREE.Object3D): string {
+  if ((object as any).isInstancedMesh) return 'Instanced Mesh';
   if ((object as THREE.SkinnedMesh).isSkinnedMesh) return 'Skinned Mesh';
   if ((object as THREE.Mesh).isMesh) return 'Mesh';
   if ((object as THREE.Bone).isBone) return 'Bone';
-  if ((object as THREE.Light).isLight) return 'Light';
-  if ((object as THREE.Camera).isCamera) return 'Camera';
+  if ((object as THREE.Light).isLight) return object.type;
+  if ((object as THREE.Camera).isCamera) return object.type;
   if (object.type === 'Group') return 'Group';
   return object.type || 'Object3D';
+}
+
+function getFlag(userData: Record<string, unknown>, key: string): unknown {
+  for (const [k, v] of Object.entries(userData)) {
+    if (k.toLowerCase() === key.toLowerCase()) return v;
+  }
+  return undefined;
+}
+
+const RUNTIME_FLAG_KEYS = ['isstatic', 'objectid', 'ishidden'];
+
+function formatFlagValue(value: unknown): string {
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (typeof value === 'object' && value !== null) return JSON.stringify(value);
+  return String(value);
 }
 
 export function InspectorPanel() {
@@ -38,12 +54,10 @@ export function InspectorPanel() {
 
   if (!object) {
     return (
-      <div className="flex flex-col items-center gap-2 py-10 text-center">
+      <div className="flex flex-col items-center gap-2 py-6 text-center">
         <MousePointerClick className="h-5 w-5 text-ink-faint" />
         <p className="text-sm text-ink-muted">No object selected</p>
-        <p className="max-w-[220px] text-xs text-ink-faint">
-          Click an object in the viewport or select a node in the Hierarchy tab to inspect it.
-        </p>
+        <p className="text-xs text-ink-faint">Click an object in the viewport or the hierarchy to inspect it.</p>
       </div>
     );
   }
@@ -51,13 +65,24 @@ export function InspectorPanel() {
   const mesh = (object as THREE.Mesh).isMesh ? (object as THREE.Mesh) : null;
   const meshMaterials = mesh ? (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) : [];
   const geometry = mesh?.geometry;
-  const extras = Object.entries(object.userData ?? {});
+  const userData = (object.userData ?? {}) as Record<string, unknown>;
+
+  const extras = Object.entries(userData).filter(
+    ([key]) => !RUNTIME_FLAG_KEYS.includes(key.toLowerCase()),
+  );
 
   const worldPosition = new THREE.Vector3();
   object.getWorldPosition(worldPosition);
 
+  // Runtime flag checks
+  const isStatic = getFlag(userData, 'isStatic');
+  const objectId = getFlag(userData, 'ObjectID');
+  const isHidden = getFlag(userData, 'isHidden');
+
+  const hasRuntimeFlags = isStatic !== undefined || objectId !== undefined || isHidden !== undefined;
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div>
         <div className="mb-1 flex items-center gap-2">
           <p className="truncate text-sm font-medium text-ink">{object.name || '(unnamed)'}</p>
@@ -76,6 +101,36 @@ export function InspectorPanel() {
         <div className="my-1.5 border-t border-hairline" />
         <Row label="World position" value={formatVector(worldPosition)} />
       </div>
+
+      {hasRuntimeFlags && (
+        <div className="rounded-lg border border-hairline bg-canvas-raised/60 p-2.5">
+          <SectionLabel>Runtime properties</SectionLabel>
+          <div className="space-y-0.5">
+            {isStatic !== undefined && (
+              <div className="flex items-center justify-between py-0.5">
+                <span className="text-xs text-ink-faint">isStatic</span>
+                <Chip tone={isStatic ? 'success' : 'neutral'}>{String(isStatic)}</Chip>
+              </div>
+            )}
+            {objectId !== undefined && (
+              <Row label="Object ID" value={formatFlagValue(objectId)} />
+            )}
+            {isHidden !== undefined && (
+              <div className="flex items-center justify-between py-0.5">
+                <span className="text-xs text-ink-faint">isHidden</span>
+                <Chip tone={isHidden ? 'warning' : 'neutral'}>{String(isHidden)}</Chip>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {mesh && (mesh as any).isInstancedMesh && (
+        <div className="rounded-lg border border-hairline bg-canvas-raised/60 p-2.5">
+          <SectionLabel>Instances</SectionLabel>
+          <Row label="Count" value={String((mesh as THREE.InstancedMesh).count)} />
+        </div>
+      )}
 
       {mesh && geometry && (
         <div className="rounded-lg border border-hairline bg-canvas-raised/60 p-2.5">

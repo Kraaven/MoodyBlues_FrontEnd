@@ -5,9 +5,12 @@ import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { useViewerStore } from './viewerStore';
 import { inspectScene } from './gltfInspection';
 
-const SELECTION_COLOR = '#5b7cfa';
+const SELECTION_COLOR = '#f3ab6f';
+const WIREFRAME_COLOR = '#5b7cfa';
 const MATERIAL_HIGHLIGHT_COLOR = '#dceeb1';
 const CLICK_DRAG_THRESHOLD_PX = 4;
+const GIZMO_MIN_LENGTH = 0.2;
+const GIZMO_MAX_LENGTH = 5;
 
 export function ModelRoot({ gltf }: { gltf: GLTF }) {
   const { scene, gl, camera } = useThree();
@@ -15,20 +18,38 @@ export function ModelRoot({ gltf }: { gltf: GLTF }) {
   const actionsRef = useRef<THREE.AnimationAction[]>([]);
   const uiThrottleRef = useRef(0);
   const skeletonHelpersRef = useRef<THREE.SkeletonHelper[]>([]);
-  const selectionHelperRef = useRef<THREE.BoxHelper | null>(null);
   const materialHighlightHelpersRef = useRef<THREE.BoxHelper[]>([]);
+  const gizmoGroupRef = useRef<THREE.Group | null>(null);
+  const originalMaterialsRef = useRef<Map<string, THREE.Material | THREE.Material[]>>(new Map());
 
   const wireframe = useViewerStore((s) => s.wireframe);
   const showSkeleton = useViewerStore((s) => s.showSkeleton);
   const selectedUuid = useViewerStore((s) => s.selectedUuid);
   const highlightedMaterialUuid = useViewerStore((s) => s.highlightedMaterialUuid);
 
-  // One-time setup per loaded model: register it in the scene, collect inspection data, set up animations.
   useEffect(() => {
     scene.add(gltf.scene);
 
     const inspection = inspectScene(gltf.scene);
     useViewerStore.getState().setInspection(inspection);
+
+    const originalMaterials = originalMaterialsRef.current;
+    originalMaterials.clear();
+    gltf.scene.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      originalMaterials.set(mesh.uuid, mesh.material);
+    });
+
+    gltf.scene.traverse((object) => {
+      const userData = (object as THREE.Object3D).userData;
+      if (userData) {
+        const isHidden = getFlag(userData, 'isHidden');
+        if (isHidden) {
+          object.visible = false;
+        }
+      }
+    });
 
     const mixer = new THREE.AnimationMixer(gltf.scene);
     mixerRef.current = mixer;
@@ -43,12 +64,8 @@ export function ModelRoot({ gltf }: { gltf: GLTF }) {
       scene.remove(gltf.scene);
       useViewerStore.getState().reset();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gltf, scene]);
 
-  // Click-to-select directly in the viewport -- a pointerdown/pointerup pair that didn't move far
-  // (so orbit-control drags don't get mistaken for a selection) raycasts against the model and
-  // selects the first mesh hit, or clears selection if the click missed everything.
   useEffect(() => {
     const canvasEl = gl.domElement;
     const raycaster = new THREE.Raycaster();
@@ -84,7 +101,6 @@ export function ModelRoot({ gltf }: { gltf: GLTF }) {
     };
   }, [gltf, gl, camera]);
 
-  // Switch which clip is "active" when the Animations panel changes selection.
   useEffect(() => {
     const unsubscribe = useViewerStore.subscribe((state, prevState) => {
       if (state.currentClipIndex === prevState.currentClipIndex) return;
@@ -115,21 +131,40 @@ export function ModelRoot({ gltf }: { gltf: GLTF }) {
     return unsubscribe;
   }, []);
 
-  // Wireframe toggle -- applied to every material on every mesh in the model.
+  const wireBlueRef = useRef<THREE.MeshBasicMaterial | null>(null);
+  const wireOrangeRef = useRef<THREE.MeshBasicMaterial | null>(null);
+
   useEffect(() => {
+    if (!wireBlueRef.current) {
+      wireBlueRef.current = new THREE.MeshBasicMaterial({ color: WIREFRAME_COLOR, wireframe: true });
+    }
+    if (!wireOrangeRef.current) {
+      wireOrangeRef.current = new THREE.MeshBasicMaterial({ color: SELECTION_COLOR, wireframe: true });
+    }
+
+    const wireBlue = wireBlueRef.current;
+    const wireOrange = wireOrangeRef.current;
+    const originalMaterials = originalMaterialsRef.current;
+
     gltf.scene.traverse((object) => {
       const mesh = object as THREE.Mesh;
       if (!mesh.isMesh) return;
-      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      for (const material of materials) {
-        if (material && 'wireframe' in material) {
-          (material as THREE.MeshStandardMaterial).wireframe = wireframe;
+
+      const isSelected = mesh.uuid === selectedUuid;
+
+      if (isSelected) {
+        mesh.material = wireOrange;
+      } else if (wireframe) {
+        mesh.material = wireBlue;
+      } else {
+        const original = originalMaterials.get(mesh.uuid);
+        if (original !== undefined) {
+          mesh.material = original;
         }
       }
     });
-  }, [gltf, wireframe]);
+  }, [gltf, wireframe, selectedUuid]);
 
-  // Skeleton visualization toggle -- adds a SkeletonHelper per SkinnedMesh.
   useEffect(() => {
     skeletonHelpersRef.current.forEach((helper) => scene.remove(helper));
     skeletonHelpersRef.current = [];
@@ -150,31 +185,41 @@ export function ModelRoot({ gltf }: { gltf: GLTF }) {
     };
   }, [gltf, showSkeleton, scene]);
 
-  // Selection highlight -- a bounding-box outline around the currently selected node.
   useEffect(() => {
-    if (selectionHelperRef.current) {
-      scene.remove(selectionHelperRef.current);
-      selectionHelperRef.current = null;
+    if (gizmoGroupRef.current) {
+      scene.remove(gizmoGroupRef.current);
+      gizmoGroupRef.current = null;
     }
 
     if (selectedUuid) {
       const target = gltf.scene.getObjectByProperty('uuid', selectedUuid);
       if (target) {
-        const helper = new THREE.BoxHelper(target, new THREE.Color(SELECTION_COLOR));
-        scene.add(helper);
-        selectionHelperRef.current = helper;
+        const sphere = new THREE.Sphere();
+        const box = new THREE.Box3().setFromObject(target);
+        box.getBoundingSphere(sphere);
+        const length = THREE.MathUtils.clamp(sphere.radius * 1.8, GIZMO_MIN_LENGTH, GIZMO_MAX_LENGTH);
+
+        const group = new THREE.Group();
+        group.add(new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), length, '#ff4444', 0.12, 0.08));
+        group.add(new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), length, '#44ff44', 0.12, 0.08));
+        group.add(new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), length, '#4444ff', 0.12, 0.08));
+
+        target.getWorldPosition(group.position);
+        target.getWorldQuaternion(group.quaternion);
+
+        scene.add(group);
+        gizmoGroupRef.current = group;
       }
     }
 
     return () => {
-      if (selectionHelperRef.current) {
-        scene.remove(selectionHelperRef.current);
-        selectionHelperRef.current = null;
+      if (gizmoGroupRef.current) {
+        scene.remove(gizmoGroupRef.current);
+        gizmoGroupRef.current = null;
       }
     };
   }, [gltf, selectedUuid, scene]);
 
-  // Material Index cross-highlight -- outlines every mesh using the selected material.
   useEffect(() => {
     materialHighlightHelpersRef.current.forEach((helper) => scene.remove(helper));
     materialHighlightHelpersRef.current = [];
@@ -225,9 +270,23 @@ export function ModelRoot({ gltf }: { gltf: GLTF }) {
       }
     }
 
-    selectionHelperRef.current?.update();
+    if (gizmoGroupRef.current && selectedUuid) {
+      const target = gltf.scene.getObjectByProperty('uuid', selectedUuid);
+      if (target) {
+        target.getWorldPosition(gizmoGroupRef.current.position);
+        target.getWorldQuaternion(gizmoGroupRef.current.quaternion);
+      }
+    }
+
     materialHighlightHelpersRef.current.forEach((helper) => helper.update());
   });
 
   return null;
+}
+
+function getFlag(userData: Record<string, unknown>, key: string): unknown {
+  for (const [k, v] of Object.entries(userData)) {
+    if (k.toLowerCase() === key.toLowerCase()) return v;
+  }
+  return undefined;
 }

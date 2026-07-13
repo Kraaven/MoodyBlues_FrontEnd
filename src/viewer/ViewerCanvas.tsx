@@ -8,7 +8,6 @@ import { useViewerStore } from './viewerStore';
 export function ViewerCanvas({ developerId, sceneId }: { developerId: string; sceneId: string }) {
   const showGrid = useViewerStore((s) => s.showGrid);
   const cameraResetToken = useViewerStore((s) => s.cameraResetToken);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- drei's OrbitControls ref type is unwieldy to import just for .reset()
   const controlsRef = useRef<any>(null);
 
   useEffect(() => {
@@ -18,9 +17,8 @@ export function ViewerCanvas({ developerId, sceneId }: { developerId: string; sc
   }, [cameraResetToken]);
 
   return (
-    <div className="relative h-full w-full">
-      <Canvas camera={{ position: [3, 2, 4], fov: 45 }} gl={{ antialias: true, preserveDrawingBuffer: true }}>
-        <color attach="background" args={['#09090b']} />
+    <div className="absolute inset-0 viewer-canvas-bg">
+      <Canvas camera={{ position: [3, 2, 4], fov: 45 }} gl={{ antialias: true, preserveDrawingBuffer: true, alpha: true }}>
         <hemisphereLight args={['#ffffff', '#26262e', 0.9]} />
         <directionalLight position={[5, 8, 5]} intensity={1.4} castShadow />
         <directionalLight position={[-5, -2, -5]} intensity={0.4} />

@@ -3,6 +3,8 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Download, Loader2 } from 'lucide-react';
 import { ViewerCanvas } from '../viewer/ViewerCanvas';
 import { ViewerSidebar } from '../viewer/ViewerSidebar';
+import { HierarchyFloatingPanel } from '../viewer/panels/HierarchyFloatingPanel';
+import { InspectorFloatingPanel } from '../viewer/panels/InspectorFloatingPanel';
 import { useViewerStore } from '../viewer/viewerStore';
 import { IconButton } from '../components/ui/Button';
 import { api, ApiError, downloadSceneFile } from '../lib/api';
@@ -88,10 +90,10 @@ export function ViewerPage() {
       {viewerError && <p className="px-4 py-2 text-sm text-danger">{viewerError}</p>}
       {downloadError && <p className="px-4 py-2 text-sm text-danger">{downloadError}</p>}
 
-      <div className="relative flex flex-1 overflow-hidden">
-        <div className="relative flex-1">
-          {project && <ViewerCanvas developerId={project.developerId} sceneId={sceneId} />}
-        </div>
+      <div className="relative flex-1 overflow-hidden">
+        {project && <ViewerCanvas developerId={project.developerId} sceneId={sceneId} />}
+        <HierarchyFloatingPanel />
+        <InspectorFloatingPanel />
         <ViewerSidebar />
       </div>
     </div>

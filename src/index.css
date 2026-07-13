@@ -71,6 +71,11 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+.viewer-canvas-bg {
+  background:
+    radial-gradient(ellipse at 50% 35%, #1a1a2e 0%, #0e0e14 50%, #08080d 100%);
+}
+
 * {
   box-sizing: border-box;
 }

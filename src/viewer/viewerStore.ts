@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import * as THREE from 'three';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
-export type PanelId = 'hierarchy' | 'inspector' | 'materials' | 'textures' | 'animations' | 'statistics';
+export type PanelId = 'materials' | 'textures' | 'statistics';
 
 export interface MeshInfo {
   uuid: string;
@@ -72,7 +72,7 @@ const initialState = {
   fileSizeBytes: null,
 
   selectedUuid: null,
-  activePanel: 'hierarchy' as PanelId,
+  activePanel: 'materials' as PanelId,
   wireframe: false,
   showSkeleton: false,
   showGrid: true,
@@ -101,7 +101,7 @@ export const useViewerStore = create<ViewerState>((set) => ({
   setLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error }),
   setFileSizeBytes: (fileSizeBytes) => set({ fileSizeBytes }),
-  selectNode: (uuid) => set({ selectedUuid: uuid, activePanel: uuid ? 'inspector' : 'hierarchy' }),
+  selectNode: (uuid) => set({ selectedUuid: uuid }),
   setActivePanel: (activePanel) => set({ activePanel }),
   toggleWireframe: () => set((s) => ({ wireframe: !s.wireframe })),
   toggleSkeleton: () => set((s) => ({ showSkeleton: !s.showSkeleton })),

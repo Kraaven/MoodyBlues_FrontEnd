@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type * as THREE from 'three';
-import { ChevronDown, ChevronRight, Search } from 'lucide-react';
+import { ChevronDown, ChevronRight, Search, Box, Bone, Camera, Lightbulb, Layers, Folder } from 'lucide-react';
 import { useViewerStore } from '../viewerStore';
 import { Toggle } from '../../components/ui/Toggle';
 
@@ -10,14 +10,12 @@ function nodeMatches(object: THREE.Object3D, query: string): boolean {
   return object.children.some((child) => nodeMatches(child, query));
 }
 
-/** A pure pass-through transform wrapper -- no mesh/light/camera/bone content, no extras, exactly one child. */
 function isCollapsible(node: THREE.Object3D): boolean {
   const n = node as THREE.Object3D & { isMesh?: boolean; isBone?: boolean; isLight?: boolean; isCamera?: boolean };
   const hasExtras = node.userData && Object.keys(node.userData).length > 0;
   return !n.isMesh && !n.isBone && !n.isLight && !n.isCamera && !hasExtras && node.children.length === 1;
 }
 
-/** Flattens chains of collapsible empty wrapper nodes so the simplified tree only shows meaningful structure. */
 function getEffectiveChildren(node: THREE.Object3D, simplify: boolean): THREE.Object3D[] {
   if (!simplify) return node.children;
   const result: THREE.Object3D[] = [];
@@ -29,6 +27,21 @@ function getEffectiveChildren(node: THREE.Object3D, simplify: boolean): THREE.Ob
     }
   }
   return result;
+}
+
+function nodeIcon(object: THREE.Object3D) {
+  const cls = 'h-3.5 w-3.5 shrink-0';
+  if ((object as THREE.SkinnedMesh).isSkinnedMesh) return <Bone className={cls} />;
+  if ((object as THREE.Mesh).isMesh) {
+    const mesh = object as THREE.Mesh;
+    if ((mesh as any).isInstancedMesh) return <Layers className={cls} />;
+    return <Box className={cls} />;
+  }
+  if ((object as THREE.Bone).isBone) return <Bone className={cls} />;
+  if ((object as THREE.Camera).isCamera) return <Camera className={cls} />;
+  if ((object as THREE.Light).isLight) return <Lightbulb className={cls} />;
+  if (object.type === 'Group' || object.children.length > 0) return <Folder className={cls} />;
+  return <Folder className={cls} />;
 }
 
 function TreeNode({ object, depth, query, simplify }: { object: THREE.Object3D; depth: number; query: string; simplify: boolean }) {
@@ -50,9 +63,9 @@ function TreeNode({ object, depth, query, simplify }: { object: THREE.Object3D; 
     <div>
       <div
         onClick={() => selectNode(isSelected ? null : object.uuid)}
-        style={{ paddingLeft: depth * 14 }}
-        className={`flex cursor-pointer items-center gap-1 rounded px-1 py-1 text-xs transition ${
-          isSelected ? 'bg-accent-soft text-accent-ink' : 'text-ink-muted hover:bg-white/5'
+        style={{ paddingLeft: depth * 16 + 4 }}
+        className={`flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-xs transition ${
+          isSelected ? 'bg-accent-soft text-accent-ink' : 'text-ink-muted hover:bg-white/5 hover:text-ink'
         }`}
       >
         <button
@@ -65,8 +78,8 @@ function TreeNode({ object, depth, query, simplify }: { object: THREE.Object3D; 
         >
           {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
         </button>
+        <span className="text-ink-faint">{nodeIcon(object)}</span>
         <span className="truncate">{label}</span>
-        <span className="ml-auto shrink-0 text-[10px] text-ink-faint">{object.type}</span>
       </div>
 
       {expanded && hasChildren && (
@@ -101,7 +114,7 @@ export function HierarchyPanel() {
       </div>
 
       <div className="mb-3 flex items-center gap-2 rounded-lg border border-hairline bg-canvas-raised px-2 py-1.5">
-        <Search className="h-3.5 w-3.5 text-ink-faint" />
+        <Search className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -110,9 +123,11 @@ export function HierarchyPanel() {
         />
       </div>
 
-      {rootChildren.map((child) => (
-        <TreeNode key={child.uuid} object={child} depth={0} query={query} simplify={simplify} />
-      ))}
+      <div className="space-y-px">
+        {rootChildren.map((child) => (
+          <TreeNode key={child.uuid} object={child} depth={0} query={query} simplify={simplify} />
+        ))}
+      </div>
     </div>
   );
 }
