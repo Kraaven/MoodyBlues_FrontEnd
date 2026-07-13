@@ -1,4 +1,4 @@
-import { List, Info, Palette, BarChart3, Settings } from 'lucide-react';
+import { List, MousePointer2, Palette, BarChart3, Settings } from 'lucide-react';
 import { useViewerStore } from './viewerStore';
 
 function ToolbarIcon({
@@ -36,33 +36,33 @@ export function ViewerFloatingToolbar() {
   return (
     <div className="pointer-events-none absolute inset-0 z-30">
       <div className="pointer-events-auto absolute left-3 top-3 flex items-center gap-1 rounded-full border border-hairline bg-canvas-raised/95 px-1.5 py-1 shadow-lg shadow-black/40">
-        <div className="flex items-center gap-0.5">
-          <ToolbarIcon
-            icon={List}
-            label="Hierarchy"
-            active={openPanels.hierarchy}
-            onClick={() => togglePanel('hierarchy')}
-          />
-          <ToolbarIcon
-            icon={Info}
-            label="Inspector"
-            active={openPanels.inspector}
-            onClick={() => togglePanel('inspector')}
-          />
-          <ToolbarIcon
-            icon={Palette}
-            label="Materials"
-            active={openPanels.materials}
-            onClick={() => togglePanel('materials')}
-          />
-          <ToolbarIcon
-            icon={BarChart3}
-            label="Scene stats"
-            active={openPanels.stats}
-            onClick={() => togglePanel('stats')}
-          />
-        </div>
-        <div className="mx-0.5 h-5 w-px bg-hairline" />
+        <ToolbarIcon
+          icon={List}
+          label="Hierarchy"
+          active={openPanels.hierarchy}
+          onClick={() => togglePanel('hierarchy')}
+        />
+        <ToolbarIcon
+          icon={MousePointer2}
+          label="Inspector"
+          active={openPanels.inspector}
+          onClick={() => togglePanel('inspector')}
+        />
+        <ToolbarIcon
+          icon={Palette}
+          label="Materials"
+          active={openPanels.materials}
+          onClick={() => togglePanel('materials')}
+        />
+        <ToolbarIcon
+          icon={BarChart3}
+          label="Scene stats"
+          active={openPanels.stats}
+          onClick={() => togglePanel('stats')}
+        />
+      </div>
+
+      <div className="pointer-events-auto absolute right-3 top-3">
         <ToolbarIcon
           icon={Settings}
           label="Settings"

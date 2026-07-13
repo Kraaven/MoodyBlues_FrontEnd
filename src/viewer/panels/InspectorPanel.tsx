@@ -83,11 +83,18 @@ function PropertiesTab({ object }: { object: THREE.Object3D }) {
   const objectId = getFlag(userData, 'ObjectID');
   const isHidden = getFlag(userData, 'isHidden');
 
+  const hasObjectData = isStatic !== undefined || isHidden !== undefined;
+
   return (
     <div className="space-y-3">
       <div>
         <div className="mb-1 flex items-center gap-2">
           <p className="truncate text-sm font-medium text-ink">{object.name || '(unnamed)'}</p>
+          {objectId !== undefined && (
+            <span className="shrink-0 font-mono text-[10px] tabular-nums text-ink-muted">
+              #{String(objectId)}
+            </span>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <Chip tone="accent">{friendlyType(object)}</Chip>
@@ -95,23 +102,15 @@ function PropertiesTab({ object }: { object: THREE.Object3D }) {
         </div>
       </div>
 
-      <div className="rounded-lg border border-hairline bg-canvas-raised/60 p-2.5">
-        <p className="mb-1.5 font-mono text-[10px] uppercase tracking-wide text-ink-faint">Object data</p>
-        <div className="space-y-0.5">
-          <div className="flex items-center justify-between py-0.5">
-            <span className="text-xs text-ink-faint">Object ID</span>
-            <span className="font-mono text-xs text-ink">{objectId !== undefined ? String(objectId) : '--'}</span>
-          </div>
-          <div className="flex items-center justify-between py-0.5">
-            <span className="text-xs text-ink-faint">isStatic</span>
-            <Chip tone={isStatic ? 'success' : 'neutral'}>{isStatic !== undefined ? String(isStatic) : 'false'}</Chip>
-          </div>
-          <div className="flex items-center justify-between py-0.5">
-            <span className="text-xs text-ink-faint">isHidden</span>
-            <Chip tone={isHidden ? 'warning' : 'neutral'}>{isHidden !== undefined ? String(isHidden) : 'false'}</Chip>
+      {hasObjectData && (
+        <div className="rounded-lg border border-hairline bg-canvas-raised/60 p-2.5">
+          <p className="mb-1.5 font-mono text-[10px] uppercase tracking-wide text-ink-faint">Object data</p>
+          <div className="space-y-0.5">
+            {isStatic !== undefined && <Row label="isStatic" value={String(isStatic)} />}
+            {isHidden !== undefined && <Row label="isHidden" value={String(isHidden)} />}
           </div>
         </div>
-      </div>
+      )}
 
       <div className="rounded-lg border border-hairline bg-canvas-raised/60 p-2.5">
         <p className="mb-1.5 font-mono text-[10px] uppercase tracking-wide text-ink-faint">Transform (local)</p>
