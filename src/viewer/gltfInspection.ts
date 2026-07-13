@@ -9,6 +9,7 @@ export interface InspectionData {
   staticCount: number;
   trackedCount: number;
   hiddenCount: number;
+  preHiddenUuids: string[];
 }
 
 function getFlag(userData: Record<string, unknown>, key: string): unknown {
@@ -27,6 +28,7 @@ export function inspectScene(root: THREE.Object3D): InspectionData {
   let staticCount = 0;
   let trackedCount = 0;
   let hiddenCount = 0;
+  const preHiddenUuids: string[] = [];
 
   const textureKeys = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap', 'bumpMap', 'displacementMap', 'clearcoatMap', 'clearcoatNormalMap', 'transmissionMap', 'thicknessMap', 'sheenColorMap', 'specularMap'] as const;
 
@@ -38,7 +40,10 @@ export function inspectScene(root: THREE.Object3D): InspectionData {
     const userData = (object.userData ?? {}) as Record<string, unknown>;
     if (getFlag(userData, 'isStatic')) staticCount += 1;
     if (getFlag(userData, 'objectId') !== undefined) trackedCount += 1;
-    if (getFlag(userData, 'isHidden')) hiddenCount += 1;
+    if (getFlag(userData, 'isHidden')) {
+      hiddenCount += 1;
+      preHiddenUuids.push(object.uuid);
+    }
 
     if ((object as THREE.Mesh).isMesh) {
       const mesh = object as THREE.Mesh;
@@ -67,5 +72,6 @@ export function inspectScene(root: THREE.Object3D): InspectionData {
     staticCount,
     trackedCount,
     hiddenCount,
+    preHiddenUuids,
   };
 }

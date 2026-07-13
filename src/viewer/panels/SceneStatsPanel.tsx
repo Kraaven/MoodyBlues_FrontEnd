@@ -3,7 +3,6 @@ import {
   Boxes,
   Cuboid,
   Crosshair,
-  Film,
   HardDrive,
   Image,
   Layers,
@@ -116,16 +115,6 @@ export function SceneStatsPanel() {
         </div>
         <span className="font-mono text-sm tabular-nums text-ink">
           {formatCount(hiddenCount)}
-        </span>
-      </div>
-
-      <div className={statItemCls}>
-        <div className="flex items-center gap-2">
-          <Film className="h-3.5 w-3.5 shrink-0 text-icon-camera" />
-          <span className="text-xs text-ink-muted">Animation clips</span>
-        </div>
-        <span className="font-mono text-sm tabular-nums text-ink">
-          {formatCount(stats.animationClipCount)}
         </span>
       </div>
 

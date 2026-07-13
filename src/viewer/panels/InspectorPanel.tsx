@@ -1,17 +1,16 @@
 import { useMemo, useState } from 'react';
 import * as THREE from 'three';
-import { MousePointerClick, ArrowUpRight, ChevronDown, ChevronRight } from 'lucide-react';
+import { MousePointerClick, ArrowUpRight } from 'lucide-react';
 import { useViewerStore } from '../viewerStore';
 import { Row } from './Row';
 import { Chip } from '../../components/ui/Chip';
 
-type InspectorTab = 'properties' | 'material' | 'geometry' | 'raw';
+type InspectorTab = 'properties' | 'material' | 'geometry';
 
 const TABS: { id: InspectorTab; label: string }[] = [
   { id: 'properties', label: 'Properties' },
   { id: 'material', label: 'Material' },
   { id: 'geometry', label: 'Geometry' },
-  { id: 'raw', label: 'Raw glTF' },
 ];
 
 function formatVector(v: THREE.Vector3, digits = 2): string {
@@ -57,50 +56,6 @@ const MAP_SLOTS = [
   { key: 'transmissionMap', label: 'Transmission' },
 ] as const;
 
-function JsonTree({ data, depth }: { data: unknown; depth?: number }) {
-  const isObject = data !== null && typeof data === 'object' && !Array.isArray(data);
-  const isArray = Array.isArray(data);
-
-  if (!isObject && !isArray) {
-    const val = data === null ? 'null' : typeof data === 'string' ? `"${data}"` : String(data);
-    return <span className="text-accent-strong">{val}</span>;
-  }
-
-  return <JsonTreeNode data={data as Record<string, unknown> | unknown[]} depth={depth ?? 0} />;
-}
-
-function JsonTreeNode({ data, depth }: { data: Record<string, unknown> | unknown[]; depth: number }) {
-  const [expanded, setExpanded] = useState(depth < 2);
-  const isArray = Array.isArray(data);
-  const entries = isArray ? data.map((v, i) => [String(i), v] as const) : Object.entries(data);
-  const isEmpty = entries.length === 0;
-
-  return (
-    <div style={{ paddingLeft: depth * 12 }} className="font-mono text-[11px] leading-relaxed">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="inline-flex items-center gap-1 text-ink-faint hover:text-ink"
-      >
-        {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-        <span className="text-ink-muted">{isArray ? `Array(${data.length})` : isEmpty ? '{}' : `{...}`}</span>
-      </button>
-      {expanded && !isEmpty && (
-        <div className="border-l border-hairline/60 pl-2">
-          {entries.map(([key, value]) => (
-            <div key={key}>
-              <span className="text-icon-camera">{key}</span>
-              <span className="text-ink-faint">: </span>
-              <JsonTree data={value} depth={depth + 1} />
-            </div>
-          ))}
-        </div>
-      )}
-      {expanded && isEmpty && <span className="text-ink-faint"> empty</span>}
-    </div>
-  );
-}
-
 function PropertiesTab({ object }: { object: THREE.Object3D }) {
   const wireframe = useViewerStore((s) => s.wireframe);
   const userData = (object.userData ?? {}) as Record<string, unknown>;
@@ -127,7 +82,6 @@ function PropertiesTab({ object }: { object: THREE.Object3D }) {
   const isStatic = getFlag(userData, 'isStatic');
   const objectId = getFlag(userData, 'ObjectID');
   const isHidden = getFlag(userData, 'isHidden');
-  const hasRuntimeFlags = isStatic !== undefined || objectId !== undefined || isHidden !== undefined;
 
   return (
     <div className="space-y-3">
@@ -138,6 +92,24 @@ function PropertiesTab({ object }: { object: THREE.Object3D }) {
         <div className="flex flex-wrap items-center gap-1.5">
           <Chip tone="accent">{friendlyType(object)}</Chip>
           {mesh && <Chip tone={wireframe ? 'warning' : 'neutral'}>{wireframe ? 'Wireframe on' : 'Wireframe off'}</Chip>}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-hairline bg-canvas-raised/60 p-2.5">
+        <p className="mb-1.5 font-mono text-[10px] uppercase tracking-wide text-ink-faint">Object data</p>
+        <div className="space-y-0.5">
+          <div className="flex items-center justify-between py-0.5">
+            <span className="text-xs text-ink-faint">Object ID</span>
+            <span className="font-mono text-xs text-ink">{objectId !== undefined ? String(objectId) : '--'}</span>
+          </div>
+          <div className="flex items-center justify-between py-0.5">
+            <span className="text-xs text-ink-faint">isStatic</span>
+            <Chip tone={isStatic ? 'success' : 'neutral'}>{isStatic !== undefined ? String(isStatic) : 'false'}</Chip>
+          </div>
+          <div className="flex items-center justify-between py-0.5">
+            <span className="text-xs text-ink-faint">isHidden</span>
+            <Chip tone={isHidden ? 'warning' : 'neutral'}>{isHidden !== undefined ? String(isHidden) : 'false'}</Chip>
+          </div>
         </div>
       </div>
 
@@ -162,41 +134,16 @@ function PropertiesTab({ object }: { object: THREE.Object3D }) {
         </div>
       )}
 
-      {hasRuntimeFlags && (
+      {extras.length > 0 && (
         <div className="rounded-lg border border-hairline bg-canvas-raised/60 p-2.5">
-          <p className="mb-1.5 font-mono text-[10px] uppercase tracking-wide text-ink-faint">Runtime properties</p>
-          <div className="space-y-0.5">
-            {isStatic !== undefined && (
-              <div className="flex items-center justify-between py-0.5">
-                <span className="text-xs text-ink-faint">isStatic</span>
-                <Chip tone={isStatic ? 'success' : 'neutral'}>{String(isStatic)}</Chip>
-              </div>
-            )}
-            {objectId !== undefined && (
-              <Row label="Object ID" value={String(objectId)} />
-            )}
-            {isHidden !== undefined && (
-              <div className="flex items-center justify-between py-0.5">
-                <span className="text-xs text-ink-faint">isHidden</span>
-                <Chip tone={isHidden ? 'warning' : 'neutral'}>{String(isHidden)}</Chip>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="rounded-lg border border-hairline bg-canvas-raised/60 p-2.5">
-        <p className="mb-1.5 font-mono text-[10px] uppercase tracking-wide text-ink-faint">Extra object data</p>
-        {extras.length === 0 ? (
-          <p className="py-1 text-xs text-ink-faint">No extras on this object.</p>
-        ) : (
+          <p className="mb-1.5 font-mono text-[10px] uppercase tracking-wide text-ink-faint">Extra object data</p>
           <div className="space-y-0.5">
             {extras.map(([key, value]) => (
               <Row key={key} label={key} value={typeof value === 'object' ? JSON.stringify(value) : String(value)} />
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -340,7 +287,6 @@ function GeometryTab({ object }: { object: THREE.Object3D }) {
           <>
             <div className="my-1 border-t border-hairline" />
             <Row label="Bone count" value={String(boneCount)} />
-            <Row label="Bind matrix" value='auto' />
           </>
         )}
       </div>
@@ -356,34 +302,10 @@ function GeometryTab({ object }: { object: THREE.Object3D }) {
   );
 }
 
-function RawTab({ object }: { object: THREE.Object3D }) {
-  const data = {
-    name: object.name,
-    type: friendlyType(object),
-    uuid: object.uuid,
-    position: object.position.toArray(),
-    rotation: object.rotation.toArray(),
-    scale: object.scale.toArray(),
-    visible: object.visible,
-    children: object.children.length,
-    userData: object.userData,
-  };
-
-  return (
-    <div className="rounded-lg border border-hairline bg-canvas-raised/60 p-2.5">
-      <p className="mb-1.5 font-mono text-[10px] uppercase tracking-wide text-ink-faint">Node definition</p>
-      <div className="overflow-x-auto">
-        <JsonTree data={data} />
-      </div>
-    </div>
-  );
-}
-
 const TAB_CONTENT: Record<InspectorTab, (object: THREE.Object3D) => React.ReactNode> = {
   properties: (obj) => <PropertiesTab object={obj} />,
   material: (obj) => <MaterialTab object={obj} />,
   geometry: (obj) => <GeometryTab object={obj} />,
-  raw: (obj) => <RawTab object={obj} />,
 };
 
 export function InspectorPanel() {

@@ -8,6 +8,7 @@ import { inspectScene } from './gltfInspection';
 const SELECTION_COLOR = '#F4B675';
 const WIREFRAME_COLOR = '#5B7CFA';
 const MATERIAL_HIGHLIGHT_COLOR = '#DCEB1';
+const CAMERA_HELPER_COLOR = '#C586C0';
 const CLICK_DRAG_THRESHOLD_PX = 4;
 const GIZMO_MIN_LENGTH = 0.06;
 const GIZMO_MAX_LENGTH = 0.8;
@@ -17,10 +18,37 @@ function createWireMaterial(color: string) {
     color,
     wireframe: true,
     depthTest: true,
+    depthWrite: false,
     polygonOffset: true,
-    polygonOffsetFactor: -1,
-    polygonOffsetUnits: -1,
+    polygonOffsetFactor: -10,
+    polygonOffsetUnits: -10,
   });
+}
+
+function createCameraFrustum(): THREE.BufferGeometry {
+  const geom = new THREE.BufferGeometry();
+  const h = 0.25;
+  const wNear = 0.12;
+  const wFar = 0.18;
+  const d = 0.3;
+  const o = 0.06;
+
+  const vertices = new Float32Array([
+    0, 0, 0,
+    -wNear, h, d, wNear, h, d, wNear, -h, d, -wNear, -h, d,
+    -wFar, h, d + o, wFar, h, d + o, wFar, -h, d + o, -wFar, -h, d + o,
+  ]);
+
+  const indices = [
+    0, 1, 0, 2, 0, 3, 0, 4,
+    1, 5, 2, 6, 3, 7, 4, 8,
+    5, 6, 6, 7, 7, 8, 8, 5,
+    5, 1, 6, 2, 7, 3, 8, 4,
+  ];
+
+  geom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+  geom.setIndex(indices);
+  return geom;
 }
 
 export function ModelRoot({ gltf }: { gltf: GLTF }) {
@@ -29,6 +57,7 @@ export function ModelRoot({ gltf }: { gltf: GLTF }) {
   const actionsRef = useRef<THREE.AnimationAction[]>([]);
   const uiThrottleRef = useRef(0);
   const skeletonHelpersRef = useRef<THREE.SkeletonHelper[]>([]);
+  const cameraHelpersRef = useRef<THREE.LineSegments[]>([]);
   const materialHighlightHelpersRef = useRef<THREE.BoxHelper[]>([]);
   const gizmoGroupRef = useRef<THREE.Group | null>(null);
   const wireOverlaysRef = useRef<THREE.Mesh[]>([]);
@@ -43,7 +72,17 @@ export function ModelRoot({ gltf }: { gltf: GLTF }) {
     scene.add(gltf.scene);
 
     const inspection = inspectScene(gltf.scene);
-    useViewerStore.getState().setInspection(inspection);
+    const store = useViewerStore.getState();
+    store.setInspection({
+      materials: inspection.materials,
+      textures: inspection.textures,
+      meshes: inspection.meshes,
+      skinnedMeshCount: inspection.skinnedMeshCount,
+      staticCount: inspection.staticCount,
+      trackedCount: inspection.trackedCount,
+      hiddenCount: inspection.hiddenCount,
+      preHiddenUuids: inspection.preHiddenUuids,
+    });
 
     gltf.scene.traverse((object) => {
       const userData = (object as THREE.Object3D).userData;
@@ -176,6 +215,63 @@ export function ModelRoot({ gltf }: { gltf: GLTF }) {
   }, [gltf, wireframe, selectedUuid]);
 
   useEffect(() => {
+    cameraHelpersRef.current.forEach((helper) => {
+      helper.geometry.dispose();
+      (helper.material as THREE.Material).dispose();
+      helper.removeFromParent();
+    });
+    cameraHelpersRef.current = [];
+
+    const frustumGeom = createCameraFrustum();
+    const camMaterial = new THREE.LineBasicMaterial({ color: CAMERA_HELPER_COLOR, depthTest: true });
+
+    gltf.scene.traverse((object) => {
+      if ((object as THREE.Camera).isCamera) {
+        const helper = new THREE.LineSegments(frustumGeom, camMaterial);
+        helper.matrixAutoUpdate = false;
+        object.getWorldPosition(helper.position);
+        object.getWorldQuaternion(helper.quaternion);
+        helper.updateMatrix();
+        scene.add(helper);
+        cameraHelpersRef.current.push(helper);
+      }
+    });
+
+    return () => {
+      cameraHelpersRef.current.forEach((helper) => {
+        helper.removeFromParent();
+      });
+    };
+  }, [gltf, scene]);
+
+  useEffect(() => {
+    gltf.scene.traverse((object) => {
+      const userData = object.userData as Record<string, unknown>;
+      const wasPrehidden = Boolean(getFlag(userData, 'isHidden'));
+      const isToggledHidden = Boolean(hiddenNodes[object.uuid]);
+
+      if (isToggledHidden) {
+        object.visible = false;
+      } else if (wasPrehidden) {
+        object.visible = false;
+      } else {
+        object.visible = true;
+      }
+    });
+
+    cameraHelpersRef.current.forEach((helper, i) => {
+      const cameras: THREE.Camera[] = [];
+      gltf.scene.traverse((obj) => {
+        if ((obj as THREE.Camera).isCamera) cameras.push(obj as THREE.Camera);
+      });
+      if (cameras[i]) {
+        cameras[i].getWorldPosition(helper.position);
+        cameras[i].getWorldQuaternion(helper.quaternion);
+      }
+    });
+  }, [hiddenNodes, gltf.scene]);
+
+  useEffect(() => {
     skeletonHelpersRef.current.forEach((helper) => scene.remove(helper));
     skeletonHelpersRef.current = [];
 
@@ -194,22 +290,6 @@ export function ModelRoot({ gltf }: { gltf: GLTF }) {
       skeletonHelpersRef.current = [];
     };
   }, [gltf, showSkeleton, scene]);
-
-  useEffect(() => {
-    gltf.scene.traverse((object) => {
-      const userData = object.userData as Record<string, unknown>;
-      const wasPrehidden = Boolean(getFlag(userData, 'isHidden'));
-      const isToggledHidden = Boolean(hiddenNodes[object.uuid]);
-
-      if (isToggledHidden) {
-        object.visible = false;
-      } else if (wasPrehidden) {
-        object.visible = false;
-      } else {
-        object.visible = true;
-      }
-    });
-  }, [hiddenNodes, gltf.scene]);
 
   useEffect(() => {
     if (gizmoGroupRef.current) {
@@ -306,6 +386,17 @@ export function ModelRoot({ gltf }: { gltf: GLTF }) {
     }
 
     materialHighlightHelpersRef.current.forEach((helper) => helper.update());
+
+    cameraHelpersRef.current.forEach((helper, i) => {
+      const cameras: THREE.Camera[] = [];
+      gltf.scene.traverse((obj) => {
+        if ((obj as THREE.Camera).isCamera) cameras.push(obj as THREE.Camera);
+      });
+      if (cameras[i]) {
+        cameras[i].getWorldPosition(helper.position);
+        cameras[i].getWorldQuaternion(helper.quaternion);
+      }
+    });
   });
 
   return null;
@@ -321,7 +412,16 @@ function addWireOverlay(
 
   let overlay: THREE.Mesh;
 
-  if ((mesh as THREE.SkinnedMesh).isSkinnedMesh) {
+  if ((mesh as THREE.InstancedMesh).isInstancedMesh) {
+    const im = mesh as THREE.InstancedMesh;
+    overlay = new THREE.InstancedMesh(im.geometry, material, im.count);
+    for (let i = 0; i < im.count; i++) {
+      const matrix = new THREE.Matrix4();
+      im.getMatrixAt(i, matrix);
+      (overlay as THREE.InstancedMesh).setMatrixAt(i, matrix);
+    }
+    (overlay as THREE.InstancedMesh).instanceMatrix.needsUpdate = true;
+  } else if ((mesh as THREE.SkinnedMesh).isSkinnedMesh) {
     const skinned = mesh as THREE.SkinnedMesh;
     overlay = new THREE.SkinnedMesh(mesh.geometry, material);
     (overlay as THREE.SkinnedMesh).bind(skinned.skeleton, skinned.bindMatrix);
