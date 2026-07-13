@@ -12,6 +12,17 @@ const CLICK_DRAG_THRESHOLD_PX = 4;
 const GIZMO_MIN_LENGTH = 0.06;
 const GIZMO_MAX_LENGTH = 0.8;
 
+function createWireMaterial(color: string) {
+  return new THREE.MeshBasicMaterial({
+    color,
+    wireframe: true,
+    depthTest: true,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
+  });
+}
+
 export function ModelRoot({ gltf }: { gltf: GLTF }) {
   const { scene, gl, camera } = useThree();
   const mixerRef = useRef<THREE.AnimationMixer | null>(null);
@@ -20,7 +31,7 @@ export function ModelRoot({ gltf }: { gltf: GLTF }) {
   const skeletonHelpersRef = useRef<THREE.SkeletonHelper[]>([]);
   const materialHighlightHelpersRef = useRef<THREE.BoxHelper[]>([]);
   const gizmoGroupRef = useRef<THREE.Group | null>(null);
-  const originalMaterialsRef = useRef<Map<string, THREE.Material | THREE.Material[]>>(new Map());
+  const wireOverlaysRef = useRef<THREE.Mesh[]>([]);
 
   const wireframe = useViewerStore((s) => s.wireframe);
   const showSkeleton = useViewerStore((s) => s.showSkeleton);
@@ -32,14 +43,6 @@ export function ModelRoot({ gltf }: { gltf: GLTF }) {
 
     const inspection = inspectScene(gltf.scene);
     useViewerStore.getState().setInspection(inspection);
-
-    const originalMaterials = originalMaterialsRef.current;
-    originalMaterials.clear();
-    gltf.scene.traverse((object) => {
-      const mesh = object as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      originalMaterials.set(mesh.uuid, mesh.material);
-    });
 
     gltf.scene.traverse((object) => {
       const userData = (object as THREE.Object3D).userData;
@@ -89,7 +92,10 @@ export function ModelRoot({ gltf }: { gltf: GLTF }) {
       raycaster.setFromCamera(ndc, camera);
 
       const hits = raycaster.intersectObject(gltf.scene, true);
-      const meshHit = hits.find((hit) => (hit.object as THREE.Mesh).isMesh);
+      const meshHit = hits.find((hit) => {
+        const obj = hit.object as THREE.Mesh;
+        return obj.isMesh && !obj.userData._wireOverlay;
+      });
       useViewerStore.getState().selectNode(meshHit ? meshHit.object.uuid : null);
     };
 
@@ -136,33 +142,36 @@ export function ModelRoot({ gltf }: { gltf: GLTF }) {
 
   useEffect(() => {
     if (!wireBlueRef.current) {
-      wireBlueRef.current = new THREE.MeshBasicMaterial({ color: WIREFRAME_COLOR, wireframe: true });
+      wireBlueRef.current = createWireMaterial(WIREFRAME_COLOR);
     }
     if (!wireOrangeRef.current) {
-      wireOrangeRef.current = new THREE.MeshBasicMaterial({ color: SELECTION_COLOR, wireframe: true });
+      wireOrangeRef.current = createWireMaterial(SELECTION_COLOR);
     }
+
+    wireOverlaysRef.current.forEach((overlay) => overlay.removeFromParent());
+    wireOverlaysRef.current = [];
 
     const wireBlue = wireBlueRef.current;
     const wireOrange = wireOrangeRef.current;
-    const originalMaterials = originalMaterialsRef.current;
 
     gltf.scene.traverse((object) => {
       const mesh = object as THREE.Mesh;
       if (!mesh.isMesh) return;
+      if (mesh.userData._wireOverlay) return;
 
       const isSelected = mesh.uuid === selectedUuid;
 
       if (isSelected) {
-        mesh.material = wireOrange;
+        addWireOverlay(mesh, wireOrange, wireOverlaysRef);
       } else if (wireframe) {
-        mesh.material = wireBlue;
-      } else {
-        const original = originalMaterials.get(mesh.uuid);
-        if (original !== undefined) {
-          mesh.material = original;
-        }
+        addWireOverlay(mesh, wireBlue, wireOverlaysRef);
       }
     });
+
+    return () => {
+      wireOverlaysRef.current.forEach((overlay) => overlay.removeFromParent());
+      wireOverlaysRef.current = [];
+    };
   }, [gltf, wireframe, selectedUuid]);
 
   useEffect(() => {
@@ -228,6 +237,7 @@ export function ModelRoot({ gltf }: { gltf: GLTF }) {
       gltf.scene.traverse((object) => {
         const mesh = object as THREE.Mesh;
         if (!mesh.isMesh) return;
+        if (mesh.userData._wireOverlay) return;
         const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
         if (materials.some((m) => m?.uuid === highlightedMaterialUuid)) {
           const helper = new THREE.BoxHelper(mesh, new THREE.Color(MATERIAL_HIGHLIGHT_COLOR));
@@ -282,6 +292,29 @@ export function ModelRoot({ gltf }: { gltf: GLTF }) {
   });
 
   return null;
+}
+
+function addWireOverlay(
+  mesh: THREE.Mesh,
+  material: THREE.MeshBasicMaterial,
+  ref: React.MutableRefObject<THREE.Mesh[]>,
+) {
+  const parent = mesh.parent;
+  if (!parent) return;
+
+  let overlay: THREE.Mesh;
+
+  if ((mesh as THREE.SkinnedMesh).isSkinnedMesh) {
+    const skinned = mesh as THREE.SkinnedMesh;
+    overlay = new THREE.SkinnedMesh(mesh.geometry, material);
+    (overlay as THREE.SkinnedMesh).bind(skinned.skeleton, skinned.bindMatrix);
+  } else {
+    overlay = new THREE.Mesh(mesh.geometry, material);
+  }
+
+  overlay.userData._wireOverlay = true;
+  parent.add(overlay);
+  ref.current.push(overlay);
 }
 
 function getFlag(userData: Record<string, unknown>, key: string): unknown {

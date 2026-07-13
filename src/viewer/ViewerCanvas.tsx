@@ -17,7 +17,7 @@ export function ViewerCanvas({ developerId, sceneId }: { developerId: string; sc
   }, [cameraResetToken]);
 
   return (
-    <div className="absolute inset-0 viewer-canvas-bg">
+    <div className="relative flex-1 viewer-canvas-bg">
       <Canvas camera={{ position: [3, 2, 4], fov: 45 }} gl={{ antialias: true, preserveDrawingBuffer: true, alpha: true }}>
         <hemisphereLight args={['#ffffff', '#26262e', 0.9]} />
         <directionalLight position={[5, 8, 5]} intensity={1.4} castShadow />

@@ -44,7 +44,6 @@ export function InspectorPanel() {
   const gltf = useViewerStore((s) => s.gltf);
   const selectedUuid = useViewerStore((s) => s.selectedUuid);
   const wireframe = useViewerStore((s) => s.wireframe);
-  const setActivePanel = useViewerStore((s) => s.setActivePanel);
   const setHighlightedMaterial = useViewerStore((s) => s.setHighlightedMaterial);
 
   const object = useMemo(() => {
@@ -154,7 +153,6 @@ export function InspectorPanel() {
                 type="button"
                 onClick={() => {
                   setHighlightedMaterial(material.uuid);
-                  setActivePanel('materials');
                 }}
                 className="flex w-full items-center justify-between gap-2 rounded-md px-1.5 py-1 text-left transition hover:bg-white/5"
               >

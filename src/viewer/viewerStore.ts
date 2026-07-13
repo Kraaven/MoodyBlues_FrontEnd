@@ -2,8 +2,6 @@ import { create } from 'zustand';
 import * as THREE from 'three';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
-export type PanelId = 'materials' | 'textures' | 'statistics';
-
 export interface MeshInfo {
   uuid: string;
   name: string;
@@ -18,7 +16,6 @@ interface ViewerState {
   fileSizeBytes: number | null;
 
   selectedUuid: string | null;
-  activePanel: PanelId;
   wireframe: boolean;
   showSkeleton: boolean;
   showGrid: boolean;
@@ -43,7 +40,6 @@ interface ViewerState {
   setError: (error: string | null) => void;
   setFileSizeBytes: (bytes: number | null) => void;
   selectNode: (uuid: string | null) => void;
-  setActivePanel: (panel: PanelId) => void;
   toggleWireframe: () => void;
   toggleSkeleton: () => void;
   toggleGrid: () => void;
@@ -70,7 +66,6 @@ const initialState = {
   fileSizeBytes: null,
 
   selectedUuid: null,
-  activePanel: 'materials' as PanelId,
   wireframe: false,
   showSkeleton: false,
   showGrid: true,
@@ -99,7 +94,6 @@ export const useViewerStore = create<ViewerState>((set) => ({
   setError: (error) => set({ error }),
   setFileSizeBytes: (fileSizeBytes) => set({ fileSizeBytes }),
   selectNode: (uuid) => set({ selectedUuid: uuid }),
-  setActivePanel: (activePanel) => set({ activePanel }),
   toggleWireframe: () => set((s) => ({ wireframe: !s.wireframe })),
   toggleSkeleton: () => set((s) => ({ showSkeleton: !s.showSkeleton })),
   toggleGrid: () => set((s) => ({ showGrid: !s.showGrid })),

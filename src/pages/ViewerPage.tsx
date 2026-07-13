@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Download, Loader2 } from 'lucide-react';
 import { ViewerCanvas } from '../viewer/ViewerCanvas';
-import { ViewerSidebar } from '../viewer/ViewerSidebar';
-import { HierarchyFloatingPanel } from '../viewer/panels/HierarchyFloatingPanel';
-import { InspectorFloatingPanel } from '../viewer/panels/InspectorFloatingPanel';
+import { SceneTreePanel } from '../viewer/panels/SceneTreePanel';
+import { DetailsPanel } from '../viewer/panels/DetailsPanel';
 import { useViewerStore } from '../viewer/viewerStore';
 import { IconButton } from '../components/ui/Button';
 import { api, ApiError, downloadSceneFile } from '../lib/api';
@@ -52,11 +51,11 @@ export function ViewerPage() {
 
   return (
     <div className="flex h-screen flex-col bg-canvas">
-      <header className="flex items-center justify-between border-b border-hairline px-4 py-2.5">
+      <header className="flex h-11 shrink-0 items-center justify-between border-b border-hairline px-4">
         <div className="flex items-center gap-3">
           <Link
             to={`/projects/${projectId}/scenes/${encodeURIComponent(sceneId)}`}
-            className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm text-ink-muted transition hover:bg-white/5 hover:text-ink"
+            className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm text-ink-muted transition hover:bg-white/5 hover:text-ink"
           >
             <ArrowLeft className="h-4 w-4" />
             Back
@@ -64,7 +63,7 @@ export function ViewerPage() {
           <div className="h-5 w-px bg-hairline" />
           <div>
             <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-faint">Model viewer</p>
-            <p className="text-sm font-medium text-ink">{title}</p>
+            <p className="text-sm font-medium leading-tight text-ink">{title}</p>
           </div>
         </div>
 
@@ -90,11 +89,10 @@ export function ViewerPage() {
       {viewerError && <p className="px-4 py-2 text-sm text-danger">{viewerError}</p>}
       {downloadError && <p className="px-4 py-2 text-sm text-danger">{downloadError}</p>}
 
-      <div className="relative flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden">
+        <SceneTreePanel />
         {project && <ViewerCanvas developerId={project.developerId} sceneId={sceneId} />}
-        <HierarchyFloatingPanel />
-        <InspectorFloatingPanel />
-        <ViewerSidebar />
+        <DetailsPanel />
       </div>
     </div>
   );
