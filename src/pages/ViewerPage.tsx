@@ -8,6 +8,7 @@ import { HierarchyPanel } from '../viewer/panels/HierarchyPanel';
 import { InspectorPanel } from '../viewer/panels/InspectorPanel';
 import { MaterialsPanel } from '../viewer/panels/MaterialsPanel';
 import { SceneStatsPanel } from '../viewer/panels/SceneStatsPanel';
+import { SettingsPanel } from '../viewer/panels/SettingsPanel';
 import { useViewerStore } from '../viewer/viewerStore';
 import { IconButton } from '../components/ui/Button';
 import { api, ApiError, downloadSceneFile } from '../lib/api';
@@ -118,6 +119,11 @@ export function ViewerPage() {
         {gltf && openPanels.stats && (
           <FloatingPanel type="stats" title="Scene Stats" onClose={() => togglePanel('stats')}>
             <SceneStatsPanel />
+          </FloatingPanel>
+        )}
+        {gltf && openPanels.settings && (
+          <FloatingPanel type="settings" title="Settings" onClose={() => togglePanel('settings')}>
+            <SettingsPanel />
           </FloatingPanel>
         )}
       </div>

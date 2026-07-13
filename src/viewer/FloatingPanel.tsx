@@ -9,6 +9,7 @@ const DEFAULT_SIZES: Record<PanelType, { w: number; h: number }> = {
   inspector: { w: 320, h: 440 },
   materials: { w: 320, h: 380 },
   stats: { w: 300, h: 420 },
+  settings: { w: 240, h: 200 },
 };
 
 function defaultPosition(type: PanelType) {
@@ -17,6 +18,7 @@ function defaultPosition(type: PanelType) {
   const sz = DEFAULT_SIZES[type];
   if (type === 'hierarchy') return { x: 60, y: viewH / 2 - sz.h / 2 };
   if (type === 'stats') return { x: viewW - sz.w - 60, y: viewH / 2 - sz.h / 2 };
+  if (type === 'settings') return { x: viewW - sz.w - 20, y: 60 };
   return { x: viewW - sz.w - 40, y: 100 };
 }
 

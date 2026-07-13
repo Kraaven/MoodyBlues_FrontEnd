@@ -9,7 +9,7 @@ export interface MeshInfo {
   geometry: THREE.BufferGeometry;
 }
 
-export type PanelType = 'hierarchy' | 'inspector' | 'materials' | 'stats';
+export type PanelType = 'hierarchy' | 'inspector' | 'materials' | 'stats' | 'settings';
 
 interface ViewerState {
   gltf: GLTF | null;
@@ -99,7 +99,7 @@ const initialState = {
   duration: 0,
   seekRequest: null,
 
-  openPanels: { hierarchy: false, inspector: false, materials: false, stats: false } as Record<PanelType, boolean>,
+  openPanels: { hierarchy: false, inspector: false, materials: false, stats: false, settings: false } as Record<PanelType, boolean>,
   hiddenNodes: {} as Record<string, true>,
 };
 

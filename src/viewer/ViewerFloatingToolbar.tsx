@@ -1,13 +1,4 @@
-import {
-  List,
-  Info,
-  Palette,
-  BarChart3,
-  Spline,
-  Grid3x3,
-  Bone,
-  RefreshCcw,
-} from 'lucide-react';
+import { List, Info, Palette, BarChart3, Settings } from 'lucide-react';
 import { useViewerStore } from './viewerStore';
 
 function ToolbarIcon({
@@ -41,14 +32,6 @@ function ToolbarIcon({
 export function ViewerFloatingToolbar() {
   const openPanels = useViewerStore((s) => s.openPanels);
   const togglePanel = useViewerStore((s) => s.togglePanel);
-  const wireframe = useViewerStore((s) => s.wireframe);
-  const toggleWireframe = useViewerStore((s) => s.toggleWireframe);
-  const showGrid = useViewerStore((s) => s.showGrid);
-  const toggleGrid = useViewerStore((s) => s.toggleGrid);
-  const showSkeleton = useViewerStore((s) => s.showSkeleton);
-  const toggleSkeleton = useViewerStore((s) => s.toggleSkeleton);
-  const skinnedMeshCount = useViewerStore((s) => s.skinnedMeshCount);
-  const requestCameraReset = useViewerStore((s) => s.requestCameraReset);
 
   return (
     <div className="pointer-events-none absolute inset-0 z-30">
@@ -80,34 +63,12 @@ export function ViewerFloatingToolbar() {
           />
         </div>
         <div className="mx-0.5 h-5 w-px bg-hairline" />
-        <div className="flex items-center gap-0.5">
-          <ToolbarIcon
-            icon={Spline}
-            label="Wireframe"
-            active={wireframe}
-            onClick={toggleWireframe}
-          />
-          <ToolbarIcon
-            icon={Grid3x3}
-            label="Grid"
-            active={showGrid}
-            onClick={toggleGrid}
-          />
-          {skinnedMeshCount > 0 && (
-            <ToolbarIcon
-              icon={Bone}
-              label={`Skeleton (${skinnedMeshCount} skinned)`}
-              active={showSkeleton}
-              onClick={toggleSkeleton}
-            />
-          )}
-          <ToolbarIcon
-            icon={RefreshCcw}
-            label="Reset camera"
-            active={false}
-            onClick={requestCameraReset}
-          />
-        </div>
+        <ToolbarIcon
+          icon={Settings}
+          label="Settings"
+          active={openPanels.settings}
+          onClick={() => togglePanel('settings')}
+        />
       </div>
     </div>
   );
