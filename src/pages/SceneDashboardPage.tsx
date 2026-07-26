@@ -5,14 +5,13 @@ import { ArrowLeft, Clock, Download, Eye, HardDrive, Loader2, PlayCircle, Settin
 import { Navbar } from '../components/Navbar';
 import { CopyableId } from '../components/CopyableId';
 import { Modal } from '../components/Modal';
-import { SceneStatusChip } from '../components/StatusChip';
+import { SceneStatusChip, SessionStatusChip } from '../components/StatusChip';
 import { Button, IconButton, LinkButton } from '../components/ui/Button';
-import { Chip } from '../components/ui/Chip';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Input, Label, FieldError } from '../components/ui/Input';
-import { api, ApiError, downloadSceneFile } from '../lib/api';
+import { api, ApiError, downloadSceneFile, fetchSessions } from '../lib/api';
 import { formatBytes, formatDate } from '../lib/format';
-import type { ProjectDetail, ProjectScene } from '../lib/types';
+import type { ProjectDetail, ProjectScene, SessionSummary } from '../lib/types';
 
 export function SceneDashboardPage() {
   const { projectId, sceneId } = useParams<{ projectId: string; sceneId: string }>();
@@ -70,7 +69,7 @@ export function SceneDashboardPage() {
               onOpenSettings={() => setIsSettingsOpen(true)}
             />
 
-            <SessionsSection />
+            <SessionsSection developerId={project.developerId} sceneId={sceneId} />
           </>
         )}
       </main>
@@ -178,30 +177,73 @@ function SceneHeroHeader({
   );
 }
 
-function SessionsSection() {
+function SessionsSection({ developerId, sceneId }: { developerId: string; sceneId: string }) {
+  const [sessions, setSessions] = useState<SessionSummary[] | null>(null);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchSessions(developerId, sceneId)
+      .then(setSessions)
+      .catch((err) => setSessionsError(err instanceof ApiError ? err.message : 'Failed to load sessions.'));
+  }, [developerId, sceneId]);
+
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
         <h2 className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-faint">Session recordings</h2>
-        <Chip tone="lilac">Coming soon</Chip>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-hairline bg-surface">
-        <div className="grid grid-cols-[2.5rem_1fr_1fr_6rem_5rem] gap-3 border-b border-hairline px-4 py-2.5 font-mono text-[10px] uppercase tracking-wide text-ink-faint">
-          <span>#</span>
-          <span>Session ID</span>
-          <span>Date</span>
-          <span>Duration</span>
-          <span className="text-right">View</span>
-        </div>
+      {sessionsError && <FieldError>{sessionsError}</FieldError>}
 
+      {sessions && sessions.length === 0 && (
         <EmptyState
           icon={PlayCircle}
           title="No session recordings yet"
-          description="Playback of recorded play sessions will show up here once this feature ships."
-          className="rounded-none border-0"
+          description="Recorded play sessions will appear here once a Unity client streams and closes a connection."
+          className="rounded-2xl border-hairline"
         />
-      </div>
+      )}
+
+      {sessions && sessions.length > 0 && (
+        <div className="overflow-hidden rounded-2xl border border-hairline bg-surface">
+          <div className="grid grid-cols-[2.5rem_1fr_1fr_6rem_6rem_6rem] gap-3 border-b border-hairline px-4 py-2.5 font-mono text-[10px] uppercase tracking-wide text-ink-faint">
+            <span>#</span>
+            <span>Date</span>
+            <span>Duration</span>
+            <span>Objects</span>
+            <span>Status</span>
+            <span className="text-right">View</span>
+          </div>
+
+          {sessions.map((s, i) => (
+            <div
+              key={s.id}
+              className="grid grid-cols-[2.5rem_1fr_1fr_6rem_6rem_6rem] gap-3 border-b border-hairline px-4 py-3 text-sm last:border-b-0"
+            >
+              <span className="font-mono text-[11px] text-ink-faint">{i + 1}</span>
+              <span className="text-ink-muted">{new Date(s.createdAtUtc).toLocaleDateString()}</span>
+              <span className="font-mono text-[11px] tabular-nums text-ink-muted">
+                {Math.floor(s.durationSeconds / 60)}m {Math.floor(s.durationSeconds % 60)}s
+              </span>
+              <span className="font-mono text-[11px] tabular-nums text-ink-muted">{s.objectCount}</span>
+              <span><SessionStatusChip status={s.status} /></span>
+              <span className="text-right">
+                <Link
+                  to={`sessions/${encodeURIComponent(s.id)}`}
+                  className="inline-flex items-center gap-1 font-mono text-[11px] text-accent-strong transition hover:underline"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                  View
+                </Link>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {sessions === null && !sessionsError && (
+        <div className="h-32 animate-pulse rounded-2xl border border-hairline bg-surface" />
+      )}
     </div>
   );
 }

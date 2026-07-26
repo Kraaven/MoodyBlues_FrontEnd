@@ -5,6 +5,7 @@ import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ProjectPage } from './pages/ProjectPage';
 import { SceneDashboardPage } from './pages/SceneDashboardPage';
+import { SessionViewerPage } from './pages/SessionViewerPage';
 import { ViewerPage } from './pages/ViewerPage';
 
 function App() {
@@ -18,6 +19,7 @@ function App() {
         <Route path="/projects/:projectId" element={<ProjectPage />} />
         <Route path="/projects/:projectId/scenes/:sceneId" element={<SceneDashboardPage />} />
         <Route path="/projects/:projectId/scenes/:sceneId/view" element={<ViewerPage />} />
+        <Route path="/projects/:projectId/scenes/:sceneId/sessions/:sessionId" element={<SessionViewerPage />} />
       </Route>
 
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

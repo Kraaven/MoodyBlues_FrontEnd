@@ -1,3 +1,5 @@
+import type { AnimationData, SessionDetail, SessionSummary } from './types';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8765';
 
 const TOKEN_STORAGE_KEY = 'moodyblues.token';
@@ -124,6 +126,28 @@ export async function downloadSceneFile(developerId: string, sceneId: string, su
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+export function fetchSessions(developerId: string, sceneId: string): Promise<SessionSummary[]> {
+  return api.get<SessionSummary[]>(`/api/scenes/${encodeURIComponent(developerId)}/${encodeURIComponent(sceneId)}/sessions`);
+}
+
+export function fetchSessionDetail(sessionId: string): Promise<SessionDetail> {
+  return api.get<SessionDetail>(`/api/sessions/${encodeURIComponent(sessionId)}`);
+}
+
+/** Fetches and JSON-parses a session's animation. The response is gzip-encoded on the wire; fetch() decodes that transparently via Content-Encoding, same as any other compressed HTTP response. */
+export async function fetchSessionAnimation(sessionId: string): Promise<AnimationData> {
+  const token = getToken();
+  const res = await fetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/animation`), {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+
+  if (!res.ok) {
+    throw new ApiError(res.status, await extractErrorMessage(res));
+  }
+
+  return res.json() as Promise<AnimationData>;
 }
 
 export { API_BASE_URL };
