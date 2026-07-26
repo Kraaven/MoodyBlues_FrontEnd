@@ -4,7 +4,6 @@ import { Link } from 'react-router-dom';
 import { Check, ChevronRight, Pencil, X } from 'lucide-react';
 import type { ProjectScene } from '../lib/types';
 import { formatDate } from '../lib/format';
-import { SceneStatusChip } from './StatusChip';
 import { IconButton } from './ui/Button';
 
 interface SceneCardProps {
@@ -56,7 +55,6 @@ export function SceneCard({ projectId, scene, onRename }: SceneCardProps) {
         ) : (
           <div className="flex items-center gap-2.5">
             <p className="truncate text-sm font-medium text-ink">{scene.displayName ?? scene.sceneId}</p>
-            <SceneStatusChip status={scene.processingStatus} />
           </div>
         )}
         {scene.displayName && !isEditing && (

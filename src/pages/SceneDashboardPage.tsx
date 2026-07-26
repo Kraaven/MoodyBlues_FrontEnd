@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Clock, Download, Eye, HardDrive, Loader2, PlayCircle, Settings, Sparkles } from 'lucide-react';
+import { ArrowLeft, Clock, Download, HardDrive, Loader2, Play, Settings, Sparkles, Trash2 } from 'lucide-react';
 import { Navbar } from '../components/Navbar';
 import { CopyableId } from '../components/CopyableId';
 import { Modal } from '../components/Modal';
-import { SceneStatusChip, SessionStatusChip } from '../components/StatusChip';
 import { Button, IconButton, LinkButton } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Input, Label, FieldError } from '../components/ui/Input';
-import { api, ApiError, downloadSceneFile, fetchSessions } from '../lib/api';
+import { api, ApiError, deleteSession, downloadSceneFile, fetchSessions } from '../lib/api';
 import { formatBytes, formatDate } from '../lib/format';
 import type { ProjectDetail, ProjectScene, SessionSummary } from '../lib/types';
 
@@ -127,7 +126,6 @@ function SceneHeroHeader({
           </h1>
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <SceneStatusChip status={scene.processingStatus} />
             <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-white/70">
               <HardDrive className="h-3 w-3" />
               {formatBytes(scene.sizeBytes)}
@@ -197,7 +195,7 @@ function SessionsSection({ developerId, sceneId }: { developerId: string; sceneI
 
       {sessions && sessions.length === 0 && (
         <EmptyState
-          icon={PlayCircle}
+          icon={Play}
           title="No session recordings yet"
           description="Recorded play sessions will appear here once a Unity client streams and closes a connection."
           className="rounded-2xl border-hairline"
@@ -206,35 +204,48 @@ function SessionsSection({ developerId, sceneId }: { developerId: string; sceneI
 
       {sessions && sessions.length > 0 && (
         <div className="overflow-hidden rounded-2xl border border-hairline bg-surface">
-          <div className="grid grid-cols-[2.5rem_1fr_1fr_6rem_6rem_6rem] gap-3 border-b border-hairline px-4 py-2.5 font-mono text-[10px] uppercase tracking-wide text-ink-faint">
+          <div className="grid grid-cols-[2.5rem_1fr_1fr_6rem_2.5rem] gap-3 border-b border-hairline px-4 py-2.5 font-mono text-[10px] uppercase tracking-wide text-ink-faint">
             <span>#</span>
             <span>Date</span>
             <span>Duration</span>
             <span>Objects</span>
-            <span>Status</span>
-            <span className="text-right">View</span>
+            <span></span>
           </div>
 
           {sessions.map((s, i) => (
             <div
               key={s.id}
-              className="grid grid-cols-[2.5rem_1fr_1fr_6rem_6rem_6rem] gap-3 border-b border-hairline px-4 py-3 text-sm last:border-b-0"
+              className="grid grid-cols-[2.5rem_1fr_1fr_6rem_2.5rem] gap-3 border-b border-hairline px-4 py-3 text-sm last:border-b-0"
             >
-              <span className="font-mono text-[11px] text-ink-faint">{i + 1}</span>
+              <span className="flex items-center gap-1.5">
+                <span className="font-mono text-[11px] text-ink-faint">{i + 1}</span>
+                <Link
+                  to={`sessions/${encodeURIComponent(s.id)}`}
+                  className="inline-flex items-center text-accent-strong transition hover:opacity-80"
+                  title="Play session"
+                >
+                  <Play className="h-3.5 w-3.5 fill-current" />
+                </Link>
+              </span>
               <span className="text-ink-muted">{new Date(s.createdAtUtc).toLocaleDateString()}</span>
               <span className="font-mono text-[11px] tabular-nums text-ink-muted">
                 {Math.floor(s.durationSeconds / 60)}m {Math.floor(s.durationSeconds % 60)}s
               </span>
               <span className="font-mono text-[11px] tabular-nums text-ink-muted">{s.objectCount}</span>
-              <span><SessionStatusChip status={s.status} /></span>
-              <span className="text-right">
-                <Link
-                  to={`sessions/${encodeURIComponent(s.id)}`}
-                  className="inline-flex items-center gap-1 font-mono text-[11px] text-accent-strong transition hover:underline"
+              <span className="flex justify-end">
+                <button
+                  onClick={() => {
+                    if (window.confirm('Delete this session recording?')) {
+                      deleteSession(s.id).then(() => {
+                        setSessions((prev) => prev?.filter((sess) => sess.id !== s.id) ?? null);
+                      });
+                    }
+                  }}
+                  className="inline-flex items-center text-ink-faint transition hover:text-danger"
+                  title="Delete session"
                 >
-                  <Eye className="h-3.5 w-3.5" />
-                  View
-                </Link>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </span>
             </div>
           ))}

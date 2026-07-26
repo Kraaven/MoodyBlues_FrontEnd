@@ -21,6 +21,35 @@ function formatTime(seconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+/** Frames the camera so the given object (and its descendants) fill the view. */
+function fitCameraToObject(
+  camera: THREE.PerspectiveCamera,
+  controls: { target: THREE.Vector3 } | null,
+  object: THREE.Object3D,
+) {
+  const box = new THREE.Box3().setFromObject(object);
+  if (box.isEmpty()) return;
+
+  const center = new THREE.Vector3();
+  box.getCenter(center);
+
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  const radius = sphere.radius;
+
+  const fov = camera.fov * (Math.PI / 180);
+  const distance = (radius * 2) / Math.tan(fov / 2);
+
+  const direction = camera.position.clone().sub(center).normalize();
+  camera.position.copy(center).add(direction.multiplyScalar(distance * 1.5));
+  camera.lookAt(center);
+
+  if (controls) {
+    controls.target.copy(center);
+  }
+
+  camera.updateProjectionMatrix();
+}
+
 export function SessionViewerPage() {
   const { projectId, sceneId, sessionId } = useParams<{ projectId: string; sceneId: string; sessionId: string }>();
   const [project, setProject] = useState<ProjectDetail | null>(null);
@@ -36,6 +65,7 @@ export function SessionViewerPage() {
   const duration = session?.durationSeconds ?? 0;
 
   const driverRef = useRef<SessionAnimationDriver | null>(null);
+  const controlsRef = useRef<InstanceType<typeof OrbitControls> | null>(null);
 
   useEffect(() => {
     if (!projectId) return;
@@ -114,12 +144,13 @@ export function SessionViewerPage() {
               <directionalLight position={[5, 8, 5]} intensity={1.4} castShadow />
               <directionalLight position={[-5, -2, -5]} intensity={0.4} />
               <Grid args={[20, 20]} cellColor="#2A2A30" sectionColor="#3A3A40" fadeDistance={25} infiniteGrid />
-              <OrbitControls makeDefault enableDamping dampingFactor={0.08} />
+              <OrbitControls ref={controlsRef} makeDefault enableDamping dampingFactor={0.08} />
               <SessionScene
                 developerId={project.developerId}
                 sceneId={sceneId}
                 sessionId={sessionId}
                 driverRef={driverRef}
+                controlsRef={controlsRef}
                 isPlaying={isPlaying}
                 speed={speed}
                 currentTimeRef={{ get: () => currentTime, set: setCurrentTime }}
@@ -166,14 +197,15 @@ interface SessionSceneProps {
   sceneId: string;
   sessionId: string;
   driverRef: React.MutableRefObject<SessionAnimationDriver | null>;
+  controlsRef: React.MutableRefObject<InstanceType<typeof OrbitControls> | null>;
   isPlaying: boolean;
   speed: number;
   currentTimeRef: { get: () => number; set: (t: number) => void };
   onObjectClick: (info: { objectId: number; name: string; pos: THREE.Vector3 } | null) => void;
 }
 
-function SessionScene({ developerId, sceneId, sessionId, driverRef, isPlaying, speed, currentTimeRef, onObjectClick }: SessionSceneProps) {
-  const { gl, scene: r3fScene } = useThree();
+function SessionScene({ developerId, sceneId, sessionId, driverRef, controlsRef, isPlaying, speed, currentTimeRef, onObjectClick }: SessionSceneProps) {
+  const { gl, camera, scene: r3fScene } = useThree();
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const gltfSceneRef = useRef<THREE.Group | null>(null);
@@ -208,6 +240,10 @@ function SessionScene({ developerId, sceneId, sessionId, driverRef, isPlaying, s
         });
 
         r3fScene.add(gltf.scene);
+
+        // Frame the camera to fit all visible content
+        const perspCamera = camera as THREE.PerspectiveCamera;
+        fitCameraToObject(perspCamera, controlsRef.current, gltf.scene);
 
         const driver = new SessionAnimationDriver(gltf.scene, animation);
         driverRef.current = driver;

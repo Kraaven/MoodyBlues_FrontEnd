@@ -87,6 +87,7 @@ export const api = {
   get: <T>(path: string) => request<T>(path, { method: 'GET' }),
   post: <T>(path: string, body?: unknown, auth = true) => request<T>(path, { method: 'POST', body, auth }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),
+  delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 };
 
 export function apiUrl(path: string): string {
@@ -130,6 +131,10 @@ export async function downloadSceneFile(developerId: string, sceneId: string, su
 
 export function fetchSessions(developerId: string, sceneId: string): Promise<SessionSummary[]> {
   return api.get<SessionSummary[]>(`/api/scenes/${encodeURIComponent(developerId)}/${encodeURIComponent(sceneId)}/sessions`);
+}
+
+export function deleteSession(sessionId: string): Promise<void> {
+  return api.delete<void>(`/api/sessions/${encodeURIComponent(sessionId)}`);
 }
 
 export function fetchSessionDetail(sessionId: string): Promise<SessionDetail> {
