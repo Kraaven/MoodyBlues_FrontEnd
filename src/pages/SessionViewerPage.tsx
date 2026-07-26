@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, Grid } from '@react-three/drei';
+import { OrbitControls as DreiOrbitControls, Grid } from '@react-three/drei';
 import { ArrowLeft } from 'lucide-react';
 import * as THREE from 'three';
 import { Navbar } from '../components/Navbar';
@@ -65,7 +65,7 @@ export function SessionViewerPage() {
   const duration = session?.durationSeconds ?? 0;
 
   const driverRef = useRef<SessionAnimationDriver | null>(null);
-  const controlsRef = useRef<InstanceType<typeof OrbitControls> | null>(null);
+  const controlsRef = useRef<React.ComponentRef<typeof DreiOrbitControls> | null>(null);
 
   useEffect(() => {
     if (!projectId) return;
@@ -144,7 +144,7 @@ export function SessionViewerPage() {
               <directionalLight position={[5, 8, 5]} intensity={1.4} castShadow />
               <directionalLight position={[-5, -2, -5]} intensity={0.4} />
               <Grid args={[20, 20]} cellColor="#2A2A30" sectionColor="#3A3A40" fadeDistance={25} infiniteGrid />
-              <OrbitControls ref={controlsRef} makeDefault enableDamping dampingFactor={0.08} />
+              <DreiOrbitControls ref={controlsRef} makeDefault enableDamping dampingFactor={0.08} />
               <SessionScene
                 developerId={project.developerId}
                 sceneId={sceneId}
@@ -197,7 +197,7 @@ interface SessionSceneProps {
   sceneId: string;
   sessionId: string;
   driverRef: React.MutableRefObject<SessionAnimationDriver | null>;
-  controlsRef: React.MutableRefObject<InstanceType<typeof OrbitControls> | null>;
+  controlsRef: React.MutableRefObject<React.ComponentRef<typeof DreiOrbitControls> | null>;
   isPlaying: boolean;
   speed: number;
   currentTimeRef: { get: () => number; set: (t: number) => void };

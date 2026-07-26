@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Clock, Download, HardDrive, Loader2, Play, Settings, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, Clock, Download, Eye, HardDrive, Loader2, Play, Settings, Sparkles, Trash2 } from 'lucide-react';
 import { Navbar } from '../components/Navbar';
 import { CopyableId } from '../components/CopyableId';
 import { Modal } from '../components/Modal';
