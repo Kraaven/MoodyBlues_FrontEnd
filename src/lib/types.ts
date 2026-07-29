@@ -84,6 +84,8 @@ export interface AnimationObjectData {
   objectId: number;
   /** Null for objects present in the initial scene walk; set for runtime-spawned instances. */
   templateObjectId: number | null;
+  /** Set for runtime-spawned instances (0 means scene root). */
+  parentObjectId: number | null;
   channels: Record<string, AnimationChannel>;
   lifecycle: AnimationLifecycleMoment[];
 }

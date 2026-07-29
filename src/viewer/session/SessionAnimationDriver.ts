@@ -108,11 +108,17 @@ export class SessionAnimationDriver {
 
   private _apply(time: number): void {
     for (const obj of this.animation.objects) {
+      const defaultAlive = obj.templateObjectId === null;
+      const { visible, alive } = resolveLifecycle(obj.lifecycle, time, defaultAlive);
+
+      if (!alive) {
+        const existing = this.objectMap.get(obj.objectId);
+        if (existing) existing.visible = false;
+        continue;
+      }
+
       const node = this._resolveNode(obj);
       if (!node) continue;
-
-      const { visible, alive } = resolveLifecycle(obj.lifecycle, time);
-      if (!alive) continue;
 
       node.visible = visible;
       if (visible) {
@@ -132,9 +138,14 @@ export class SessionAnimationDriver {
     this._spawnedClones.clear();
 
     for (const obj of this.animation.objects) {
-      const { alive, visible } = resolveLifecycle(obj.lifecycle, time);
+      const defaultAlive = obj.templateObjectId === null;
+      const { alive, visible } = resolveLifecycle(obj.lifecycle, time, defaultAlive);
 
-      if (!alive) continue;
+      if (!alive) {
+        const existing = this.objectMap.get(obj.objectId);
+        if (existing) existing.visible = false;
+        continue;
+      }
 
       const node = this._resolveNode(obj);
       if (!node) continue;
@@ -160,7 +171,7 @@ export class SessionAnimationDriver {
     // Vector3 in newer versions; the runtime still supports it but the type may not reflect it.
   }
 
-  private _resolveNode(obj: { objectId: number; templateObjectId: number | null }): THREE.Object3D | null {
+  private _resolveNode(obj: { objectId: number; templateObjectId: number | null; parentObjectId: number | null }): THREE.Object3D | null {
     if (this.objectMap.has(obj.objectId)) {
       return this.objectMap.get(obj.objectId)!;
     }
@@ -171,12 +182,23 @@ export class SessionAnimationDriver {
 
       const clone = template.clone(true);
       template.visible = false;
-      this.scene.add(clone);
       this.objectMap.set(obj.objectId, clone);
       this._spawnedClones.set(obj.objectId, clone);
 
       if (clone.userData && typeof obj.objectId === 'number') {
         clone.userData.objectId = obj.objectId;
+      }
+
+      // Parent clone under the specified parent object, or scene root (0/null)
+      if (obj.parentObjectId != null && obj.parentObjectId !== 0) {
+        const parent = this.objectMap.get(obj.parentObjectId);
+        if (parent) {
+          parent.add(clone);
+        } else {
+          this.scene.add(clone);
+        }
+      } else {
+        this.scene.add(clone);
       }
 
       return clone;

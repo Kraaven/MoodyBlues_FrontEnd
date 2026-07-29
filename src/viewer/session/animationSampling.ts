@@ -91,13 +91,16 @@ export function sampleObjectTransform(object: AnimationObjectData, target: THREE
   return true;
 }
 
-/** Resolves the lifecycle state for one object at `time` by scanning its events linearly (lifecycle lists are expected to be small, tens of entries at most). */
+/** Resolves the lifecycle state for one object at `time` by scanning its events linearly (lifecycle lists are expected to be small, tens of entries at most).
+ *  `defaultAlive` should be true for scene objects (present from the start) and false for
+ *  runtime-spawned objects (which only exist after their first Spawn event). */
 export function resolveLifecycle(
   lifecycle: AnimationLifecycleMoment[],
   time: number,
+  defaultAlive = true,
 ): { visible: boolean; alive: boolean } {
-  let visible = true;
-  let alive = true;
+  let visible = defaultAlive;
+  let alive = defaultAlive;
 
   for (const event of lifecycle) {
     if (event.time > time) break;
