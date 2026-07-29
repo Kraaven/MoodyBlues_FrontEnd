@@ -4,7 +4,6 @@ import { resolveLifecycle, sampleObjectTransform } from './animationSampling';
 
 type ObjectMap = Map<number, THREE.Object3D>;
 
-/** Builds an ObjectID → Object3D lookup from userData.objectId (set by ObjectIdExportPlugin in Unity). */
 export function buildObjectMap(scene: THREE.Object3D): ObjectMap {
   const map: ObjectMap = new Map();
   scene.traverse((node) => {
@@ -15,17 +14,6 @@ export function buildObjectMap(scene: THREE.Object3D): ObjectMap {
   return map;
 }
 
-/**
- * Drives per-frame animation for a Session recording, mutating Object3D transforms directly
- * inside a `useFrame` loop. Not using AnimationMixer -- session channels are independent
- * per-object TRS data, not pre-baked AnimationClips.
- *
- * Usage in a R3F component:
- *   const driver = useMemo(() => new SessionAnimationDriver(scene, animation), [scene, animation]);
- *   useFrame((_, delta) => driver.update(delta));
- *   // Seeking: driver.seekTo(targetTime);
- *   // Cleanup: driver.dispose();
- */
 const _ON_VEC = new THREE.Vector3(1, 1, 1);
 
 type Baseline = { position: THREE.Vector3; quaternion: THREE.Quaternion; scale: THREE.Vector3 };
@@ -35,13 +23,7 @@ export class SessionAnimationDriver {
   readonly objectMap: ObjectMap;
   readonly scene: THREE.Object3D;
 
-  /** GLB-baked starting TRS for scene objects (no template!). Server accumulates from
-   *  (0,0,0)/Identity/(1,1,1) defaults, so we offset every sample by this baseline.
-   *  Spawned objects get correct absolute positions via InstantiateObjectEvent True events,
-   *  so they skip the correction. */
   private _baselines = new Map<number, Baseline>();
-
-  /** Clones created for runtime-spawned objects (ObjectID → clone), for cleanup. */
   private _spawnedClones = new Map<number, THREE.Object3D>();
   private _currentTime = 0;
   private _playing = true;
@@ -77,25 +59,19 @@ export class SessionAnimationDriver {
   get playing(): boolean { return this._playing; }
   set playing(value: boolean) { this._playing = value; }
 
-  /** Called every frame. `rawDelta` is the wall-clock delta from useFrame's state. */
   update(rawDelta: number): void {
     if (!this._playing) return;
 
-    // Clamp delta so a single huge-frame hitch (browser tab was backgrounded) doesn't
-    // jump over lifecycle events; a 1s cap still catches up quickly but never skips
-    // spawn/delete boundaries entirely.
     const delta = Math.min(rawDelta, 1.0);
     this._currentTime = Math.min(this._currentTime + delta, this.animation.durationSeconds);
     this._apply(this._currentTime);
   }
 
-  /** Scrubs to an exact time, replaying lifecycle events to rebuild visibility/clones correctly. */
   seekTo(time: number): void {
     this._currentTime = Math.max(0, Math.min(time, this.animation.durationSeconds));
     this._rebuildState(this._currentTime);
   }
 
-  /** Tears down all spawned clones and stops playback. Call when unmounting. */
   dispose(): void {
     for (const clone of this._spawnedClones.values()) {
       this.scene.remove(clone);
@@ -103,8 +79,6 @@ export class SessionAnimationDriver {
     this._spawnedClones.clear();
     this._playing = false;
   }
-
-  // ---- internals ----
 
   private _apply(time: number): void {
     for (const obj of this.animation.objects) {
@@ -125,9 +99,10 @@ export class SessionAnimationDriver {
         this._applyTransform(obj, node, time);
       }
     }
+
+    this._reparentSpawned();
   }
 
-  /** Rebuilds state from T=0 to `time` to handle seeking (spawns, deletes, visibility). */
   private _rebuildState(time: number): void {
     for (const clone of this._spawnedClones.values()) {
       this.scene.remove(clone);
@@ -155,6 +130,23 @@ export class SessionAnimationDriver {
         this._applyTransform(obj, node, time);
       }
     }
+
+    this._reparentSpawned();
+  }
+
+  private _reparentSpawned(): void {
+    for (const [objectId, clone] of this._spawnedClones) {
+      const obj = this.animation.objects.find(o => o.objectId === objectId);
+      if (!obj) continue;
+
+      const parentId = obj.parentObjectId;
+      if (parentId == null || parentId === 0) continue;
+
+      const parent = this.objectMap.get(parentId);
+      if (parent && clone.parent !== parent) {
+        parent.add(clone);
+      }
+    }
   }
 
   private _applyTransform(obj: AnimationData['objects'][number], node: THREE.Object3D, time: number): void {
@@ -166,9 +158,6 @@ export class SessionAnimationDriver {
     node.position.add(baseline.position);
     node.quaternion.premultiply(baseline.quaternion);
     node.scale.add(baseline.scale).sub(_ON_VEC);
-
-    // Three.js Object3D.scale.add(baseline.scale) may be incorrect because scale is not a
-    // Vector3 in newer versions; the runtime still supports it but the type may not reflect it.
   }
 
   private _resolveNode(obj: { objectId: number; templateObjectId: number | null; parentObjectId: number | null }): THREE.Object3D | null {
@@ -189,17 +178,7 @@ export class SessionAnimationDriver {
         clone.userData.objectId = obj.objectId;
       }
 
-      // Parent clone under the specified parent object, or scene root (0/null)
-      if (obj.parentObjectId != null && obj.parentObjectId !== 0) {
-        const parent = this.objectMap.get(obj.parentObjectId);
-        if (parent) {
-          parent.add(clone);
-        } else {
-          this.scene.add(clone);
-        }
-      } else {
-        this.scene.add(clone);
-      }
+      this.scene.add(clone);
 
       return clone;
     }
