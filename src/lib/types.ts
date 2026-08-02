@@ -46,6 +46,7 @@ export interface SessionSummary {
   keyframeCount: number;
   objectCount: number;
   animationSizeBytes: number;
+  eventLogSizeBytes?: number;
   status: SessionStatus;
 }
 
