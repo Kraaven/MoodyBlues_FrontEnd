@@ -7,11 +7,20 @@ import * as THREE from 'three';
 import { Navbar } from '../components/Navbar';
 import { TransportBar } from '../components/session/TransportBar';
 import { TimelineScrubber } from '../components/session/TimelineScrubber';
+import { EventTimeline } from '../components/session/EventTimeline';
 import { SessionInfoPanel } from '../components/session/SessionInfoPanel';
 import { FieldError } from '../components/ui/Input';
-import { api, ApiError, fetchSessionAnimation } from '../lib/api';
-import { createGltfLoader, fetchSceneArrayBuffer, parseGlb } from '../viewer/loadScene';
+import { api, ApiError, fetchSessionAnimation, fetchSessionEventsRaw } from '../lib/api';
+import {
+  createGltfLoader,
+  disposeGltfLoaderBundle,
+  disposeObject3D,
+  fetchSceneArrayBuffer,
+  parseGlb,
+  type GltfLoaderBundle,
+} from '../viewer/loadScene';
 import { SessionAnimationDriver } from '../viewer/session/SessionAnimationDriver';
+import { getEventMarkers, parseEventLog, type SessionEvent } from '../viewer/session/eventLog';
 import type { ProjectDetail, SessionDetail } from '../lib/types';
 
 /** Converts seconds to MM:SS string like TimelineScrubber uses. */
@@ -57,6 +66,9 @@ export function SessionViewerPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [selectedObject, setSelectedObject] = useState<{ objectId: number; name: string; pos: THREE.Vector3 } | null>(null);
+  const [sceneLoadError, setSceneLoadError] = useState<string | null>(null);
+  const [events, setEvents] = useState<SessionEvent[]>([]);
+  const [showEventTimeline, setShowEventTimeline] = useState(true);
 
   // Transport state
   const [isPlaying, setIsPlaying] = useState(true);
@@ -66,6 +78,7 @@ export function SessionViewerPage() {
 
   const driverRef = useRef<SessionAnimationDriver | null>(null);
   const controlsRef = useRef<React.ComponentRef<typeof DreiOrbitControls> | null>(null);
+  const wasPlayingBeforeScrubRef = useRef(false);
 
   useEffect(() => {
     if (!projectId) return;
@@ -83,9 +96,38 @@ export function SessionViewerPage() {
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Failed to load session.'));
   }, [sessionId]);
 
+  useEffect(() => {
+    if (!sessionId || !session || session.status !== 'Ready') {
+      setEvents([]);
+      return;
+    }
+
+    let cancelled = false;
+    fetchSessionEventsRaw(sessionId)
+      .then((buffer) => {
+        if (!cancelled) setEvents(parseEventLog(buffer));
+      })
+      .catch(() => {
+        if (!cancelled) setEvents([]);
+      });
+
+    return () => { cancelled = true; };
+  }, [sessionId, session?.status]);
+
   const onScrub = useCallback((time: number) => {
     driverRef.current?.seekTo(time);
     setCurrentTime(time);
+  }, []);
+
+  const onScrubStart = useCallback(() => {
+    wasPlayingBeforeScrubRef.current = isPlaying;
+    setIsPlaying(false);
+  }, [isPlaying]);
+
+  const onScrubEnd = useCallback(() => {
+    if (wasPlayingBeforeScrubRef.current) {
+      setIsPlaying(true);
+    }
   }, []);
 
   const onTogglePlay = useCallback(() => {
@@ -96,6 +138,8 @@ export function SessionViewerPage() {
 
   const scene = project?.scenes.find((s) => s.sceneId === sceneId);
   const title = scene?.displayName ?? sceneId;
+  const sessionNotReady = session != null && session.status !== 'Ready';
+  const eventMarkers = getEventMarkers(events);
 
   return (
     <div className="flex h-screen flex-col bg-canvas">
@@ -136,8 +180,30 @@ export function SessionViewerPage() {
         </div>
       )}
 
+      {sceneLoadError && (
+        <div className="px-4 py-2">
+          <FieldError>{sceneLoadError}</FieldError>
+        </div>
+      )}
+
       <div className="relative flex-1 overflow-hidden">
-        {project && (
+        {sessionNotReady ? (
+          <div className="flex h-full items-center justify-center px-6">
+            <div className="max-w-md text-center">
+              {session!.status === 'Processing' ? (
+                <>
+                  <p className="text-sm font-medium text-ink">Session is still processing</p>
+                  <p className="mt-1 text-sm text-ink-muted">Animation and event data will be available once processing completes.</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium text-ink">Session processing failed</p>
+                  <p className="mt-1 text-sm text-ink-muted">{session!.errorMessage ?? 'An unknown error occurred during processing.'}</p>
+                </>
+              )}
+            </div>
+          </div>
+        ) : project ? (
           <div className="absolute inset-0 viewer-canvas-bg">
             <Canvas camera={{ position: [3, 2, 4], fov: 45 }} gl={{ antialias: true, preserveDrawingBuffer: true, alpha: true }}>
               <hemisphereLight args={['#ffffff', '#26262e', 0.9]} />
@@ -153,14 +219,15 @@ export function SessionViewerPage() {
                 controlsRef={controlsRef}
                 isPlaying={isPlaying}
                 speed={speed}
-                currentTimeRef={{ get: () => currentTime, set: setCurrentTime }}
+                onTimeUpdate={setCurrentTime}
+                onLoadError={setSceneLoadError}
                 onObjectClick={setSelectedObject}
               />
             </Canvas>
           </div>
-        )}
+        ) : null}
 
-        {selectedObject && (
+        {selectedObject && !showEventTimeline && (
           <SessionInfoPanel
             objectId={selectedObject.objectId}
             name={selectedObject.name}
@@ -170,20 +237,48 @@ export function SessionViewerPage() {
             onClose={() => setSelectedObject(null)}
           />
         )}
+
+        {showEventTimeline && !sessionNotReady && (
+          <EventTimeline
+            events={events}
+            currentTime={currentTime}
+            onSeek={onScrub}
+            onClose={() => setShowEventTimeline(false)}
+          />
+        )}
       </div>
 
       {/* Bottom transport bar */}
       <div className="shrink-0 border-t border-hairline bg-surface px-4 py-2.5">
         <div className="mx-auto max-w-5xl space-y-1.5">
-          <TimelineScrubber value={currentTime} max={duration} onChange={onScrub} />
-          <TransportBar
-            isPlaying={isPlaying}
-            onTogglePlay={onTogglePlay}
-            speed={speed}
-            onSpeedChange={setSpeed}
-            currentLabel={formatTime(currentTime)}
-            totalLabel={formatTime(duration)}
+          <TimelineScrubber
+            value={currentTime}
+            max={duration}
+            onChange={onScrub}
+            onScrubStart={onScrubStart}
+            onScrubEnd={onScrubEnd}
+            markers={eventMarkers}
+            disabled={sessionNotReady}
           />
+          <div className="flex items-center justify-between gap-3">
+            <TransportBar
+              isPlaying={isPlaying}
+              onTogglePlay={onTogglePlay}
+              speed={speed}
+              onSpeedChange={setSpeed}
+              currentLabel={formatTime(currentTime)}
+              totalLabel={formatTime(duration)}
+            />
+            {!sessionNotReady && !showEventTimeline && (
+              <button
+                type="button"
+                onClick={() => setShowEventTimeline(true)}
+                className="rounded-full px-2.5 py-0.5 font-mono text-[10px] text-ink-muted transition hover:bg-white/5 hover:text-ink"
+              >
+                Events ({events.length})
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -200,17 +295,30 @@ interface SessionSceneProps {
   controlsRef: React.MutableRefObject<React.ComponentRef<typeof DreiOrbitControls> | null>;
   isPlaying: boolean;
   speed: number;
-  currentTimeRef: { get: () => number; set: (t: number) => void };
+  onTimeUpdate: (time: number) => void;
+  onLoadError: (message: string | null) => void;
   onObjectClick: (info: { objectId: number; name: string; pos: THREE.Vector3 } | null) => void;
 }
 
-function SessionScene({ developerId, sceneId, sessionId, driverRef, controlsRef, isPlaying, speed, currentTimeRef, onObjectClick }: SessionSceneProps) {
+function SessionScene({
+  developerId,
+  sceneId,
+  sessionId,
+  driverRef,
+  controlsRef,
+  isPlaying,
+  speed,
+  onTimeUpdate,
+  onLoadError,
+  onObjectClick,
+}: SessionSceneProps) {
   const { gl, camera, scene: r3fScene } = useThree();
   const [loaded, setLoaded] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const gltfSceneRef = useRef<THREE.Group | null>(null);
+  const loaderBundleRef = useRef<GltfLoaderBundle | null>(null);
   const raycasterRef = useRef(new THREE.Raycaster());
   const clockRef = useRef(new THREE.Clock());
+  const lastUiUpdateRef = useRef(0);
 
   // Load GLB + animation on mount
   useEffect(() => {
@@ -225,14 +333,13 @@ function SessionScene({ developerId, sceneId, sessionId, driverRef, controlsRef,
 
         if (cancelled) return;
 
-        const loader = createGltfLoader(gl);
-        const gltf = await parseGlb(loader, buffer);
+        const bundle = createGltfLoader(gl);
+        loaderBundleRef.current = bundle;
+        const gltf = await parseGlb(bundle.loader, buffer);
         if (cancelled) return;
 
         gltfSceneRef.current = gltf.scene;
 
-        // Hide all TemplateObjectId nodes in the scene (they're for cloning only).
-        // Also hide any isHidden-flagged nodes the exporter marked.
         gltf.scene.traverse((node) => {
           if (node.userData && typeof node.userData.isHidden === 'boolean' && node.userData.isHidden === true) {
             node.visible = false;
@@ -241,7 +348,6 @@ function SessionScene({ developerId, sceneId, sessionId, driverRef, controlsRef,
 
         r3fScene.add(gltf.scene);
 
-        // Frame the camera to fit all visible content
         const perspCamera = camera as THREE.PerspectiveCamera;
         fitCameraToObject(perspCamera, controlsRef.current, gltf.scene);
 
@@ -251,7 +357,7 @@ function SessionScene({ developerId, sceneId, sessionId, driverRef, controlsRef,
         clockRef.current.start();
       } catch (err) {
         if (!cancelled) {
-          setLoadError(err instanceof Error ? err.message : 'Failed to load session.');
+          onLoadError(err instanceof Error ? err.message : 'Failed to load session.');
         }
       }
     })();
@@ -263,8 +369,13 @@ function SessionScene({ developerId, sceneId, sessionId, driverRef, controlsRef,
         driverRef.current = null;
       }
       if (gltfSceneRef.current) {
+        disposeObject3D(gltfSceneRef.current);
         r3fScene.remove(gltfSceneRef.current);
         gltfSceneRef.current = null;
+      }
+      if (loaderBundleRef.current) {
+        disposeGltfLoaderBundle(loaderBundleRef.current);
+        loaderBundleRef.current = null;
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -278,10 +389,14 @@ function SessionScene({ developerId, sceneId, sessionId, driverRef, controlsRef,
     driver.playing = isPlaying;
     const rawDelta = clockRef.current.getDelta() * speed;
     driver.update(rawDelta);
-    currentTimeRef.set(driver.currentTime);
+
+    const now = performance.now();
+    if (now - lastUiUpdateRef.current >= 100) {
+      lastUiUpdateRef.current = now;
+      onTimeUpdate(driver.currentTime);
+    }
   });
 
-  // Use pointer events on the root div via a useThree effect to set up click handling
   useEffect(() => {
     if (!loaded || !gltfSceneRef.current) return;
 
@@ -299,13 +414,11 @@ function SessionScene({ developerId, sceneId, sessionId, driverRef, controlsRef,
       const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
-      const camera = gl.xr.getCamera();
       raycasterRef.current.setFromCamera(new THREE.Vector2(x, y), camera);
 
       if (!gltfSceneRef.current) return;
       const hits = raycasterRef.current.intersectObjects(gltfSceneRef.current.children, true);
       if (hits.length > 0) {
-        // Walk up to find the first parent with an objectId userData
         let obj: THREE.Object3D | null = hits[0].object;
         while (obj) {
           if (obj.userData && typeof obj.userData.objectId === 'number') {
@@ -328,11 +441,7 @@ function SessionScene({ developerId, sceneId, sessionId, driverRef, controlsRef,
       domElement.removeEventListener('pointerup', onPointerUp);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, gl, onObjectClick]);
-
-  if (loadError) {
-    return null;
-  }
+  }, [loaded, gl, camera, onObjectClick]);
 
   return null; // The scene is added imperatively
 }

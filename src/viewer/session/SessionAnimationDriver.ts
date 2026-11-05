@@ -14,26 +14,28 @@ export function buildObjectMap(scene: THREE.Object3D): ObjectMap {
   return map;
 }
 
-const _ON_VEC = new THREE.Vector3(1, 1, 1);
-const _sampleQuat = new THREE.Quaternion();
+const _samplePos = new THREE.Vector3();
+const _sampleRot = new THREE.Quaternion();
+const _sampleScl = new THREE.Vector3();
 
 type ObjData = AnimationData['objects'][number];
+
+function objectKey(obj: ObjData): number {
+  return obj.objectId;
+}
+
+function channelKey(obj: ObjData): string {
+  return `${obj.objectId}:${obj.instanceIndex ?? 0}`;
+}
 
 export class SessionAnimationDriver {
   readonly animation: AnimationData;
   readonly objectMap: ObjectMap;
   readonly scene: THREE.Object3D;
 
-  // Fixed-size buffers: one 3-float / 4-float slot per baseline-eligible object, indexed via
-  // _baselineIndex. No per-object heap objects, no per-frame allocation.
-  private _baselinePos!: Float32Array;
-  private _baselineRot!: Float32Array;
-  private _baselineScl!: Float32Array;
-  private _baselineIndex = new Map<number, number>();
-
   private _spawnedClones = new Map<number, THREE.Object3D>();
-  private _objectsById = new Map<number, ObjData>();
-  private _channelsById = new Map<number, ChannelEntry[]>();
+  private _objectsById = new Map<string, ObjData>();
+  private _channelsById = new Map<string, ChannelEntry[]>();
   private _currentTime = 0;
   private _playing = true;
 
@@ -42,33 +44,15 @@ export class SessionAnimationDriver {
     this.animation = animation;
     this.objectMap = buildObjectMap(scene);
 
-    const baselineCandidates: { objectId: number; node: THREE.Object3D }[] = [];
-
     for (const obj of animation.objects) {
-      this._objectsById.set(obj.objectId, obj);
-      this._channelsById.set(obj.objectId, buildChannelEntries(obj));
+      this._objectsById.set(channelKey(obj), obj);
+      this._channelsById.set(channelKey(obj), buildChannelEntries(obj));
 
       if (obj.templateObjectId !== null) {
         const template = this.objectMap.get(obj.templateObjectId);
         if (template) template.visible = false;
-        continue;
       }
-
-      const node = this.objectMap.get(obj.objectId);
-      if (!node) continue;
-      baselineCandidates.push({ objectId: obj.objectId, node });
     }
-
-    this._baselinePos = new Float32Array(baselineCandidates.length * 3);
-    this._baselineRot = new Float32Array(baselineCandidates.length * 4);
-    this._baselineScl = new Float32Array(baselineCandidates.length * 3);
-
-    baselineCandidates.forEach(({ objectId, node }, i) => {
-      this._baselineIndex.set(objectId, i);
-      this._baselinePos.set([node.position.x, node.position.y, node.position.z], i * 3);
-      this._baselineRot.set([node.quaternion.x, node.quaternion.y, node.quaternion.z, node.quaternion.w], i * 4);
-      this._baselineScl.set([node.scale.x, node.scale.y, node.scale.z], i * 3);
-    });
 
     this.seekTo(0);
   }
@@ -97,9 +81,6 @@ export class SessionAnimationDriver {
   }
 
   private _apply(time: number): void {
-    // Reparent FIRST, so anything created earlier gets attached to its real parent before we
-    // compute this frame's local transform for it -- avoids the "one frame under the wrong
-    // parent" pop on spawn.
     this._reparentSpawned();
 
     for (const obj of this.animation.objects) {
@@ -107,7 +88,7 @@ export class SessionAnimationDriver {
       const { visible, alive } = resolveLifecycle(obj.lifecycle, time, defaultAlive);
 
       if (!alive) {
-        const existing = this.objectMap.get(obj.objectId);
+        const existing = this.objectMap.get(objectKey(obj));
         if (existing) existing.visible = false;
         continue;
       }
@@ -129,7 +110,7 @@ export class SessionAnimationDriver {
 
   private _reparentSpawned(): void {
     for (const [objectId, clone] of this._spawnedClones) {
-      const obj = this._objectsById.get(objectId);
+      const obj = [...this._objectsById.values()].find((o) => objectKey(o) === objectId || o.objectId === objectId);
       if (!obj) continue;
 
       const parentId = obj.parentObjectId;
@@ -137,37 +118,21 @@ export class SessionAnimationDriver {
 
       const parent = this.objectMap.get(parentId);
       if (parent && clone.parent !== parent) {
-        parent.add(clone); // preserves clone's local TRS -- correct since samples are local
+        parent.add(clone);
       }
     }
   }
 
   private _applyTransform(obj: ObjData, node: THREE.Object3D, time: number): void {
-    const entries = this._channelsById.get(obj.objectId);
-    const sample = entries ? sampleObjectTransformScratch(entries, time) : null;
-    if (!sample) return;
+    const entries = this._channelsById.get(channelKey(obj));
+    if (!entries) return;
 
-    const baseIdx = this._baselineIndex.get(obj.objectId);
-    if (baseIdx === undefined) {
-      node.position.copy(sample.position);
-      node.quaternion.copy(sample.rotation);
-      node.scale.copy(sample.scale);
-      return;
-    }
+    const hadSample = sampleObjectTransformScratch(entries, time, _samplePos, _sampleRot, _sampleScl);
+    if (!hadSample) return;
 
-    const bp = this._baselinePos, br = this._baselineRot, bs = this._baselineScl;
-    const pi = baseIdx * 3, ri = baseIdx * 4, si = baseIdx * 3;
-
-    node.position.set(sample.position.x + bp[pi], sample.position.y + bp[pi + 1], sample.position.z + bp[pi + 2]);
-
-    _sampleQuat.set(br[ri], br[ri + 1], br[ri + 2], br[ri + 3]); // baseline rotation
-    node.quaternion.copy(_sampleQuat).multiply(sample.rotation);  // baseline * sample
-
-    node.scale.set(
-      sample.scale.x + bs[si] - 1,
-      sample.scale.y + bs[si + 1] - 1,
-      sample.scale.z + bs[si + 2] - 1,
-    );
+    node.position.copy(_samplePos);
+    node.quaternion.copy(_sampleRot);
+    node.scale.copy(_sampleScl);
   }
 
   private _resolveNode(obj: ObjData): THREE.Object3D | null {
@@ -183,8 +148,6 @@ export class SessionAnimationDriver {
       this._spawnedClones.set(obj.objectId, clone);
       if (clone.userData) clone.userData.objectId = obj.objectId;
 
-      // Attach to its real parent immediately if it's already resolvable, so we never even
-      // hit the one-frame-under-root case in the common (parent-already-exists) path.
       const parentId = obj.parentObjectId;
       const parent = parentId != null && parentId !== 0 ? this.objectMap.get(parentId) : null;
       (parent ?? this.scene).add(clone);

@@ -7,6 +7,31 @@ const CHANNEL_KEY_NAMES: Record<string, 'position' | 'rotation' | 'scale' | null
   sclX: 'scale', sclY: 'scale', sclZ: 'scale',
 };
 
+const CHANNEL_AXIS: Record<string, 0 | 1 | 2 | 3> = {
+  posX: 0, posY: 1, posZ: 2,
+  rotX: 0, rotY: 1, rotZ: 2, rotW: 3,
+  sclX: 0, sclY: 1, sclZ: 2,
+};
+
+/** Pre-resolved channel entry for zero-allocation per-frame sampling. */
+export interface ChannelEntry {
+  kind: 'position' | 'rotation' | 'scale';
+  axis: 0 | 1 | 2 | 3;
+  channel: AnimationChannel;
+}
+
+/** Builds a fixed channel list once per object (avoids Object.entries per frame). */
+export function buildChannelEntries(object: AnimationObjectData): ChannelEntry[] {
+  const entries: ChannelEntry[] = [];
+  for (const [key, channel] of Object.entries(object.channels)) {
+    const kind = CHANNEL_KEY_NAMES[key];
+    const axis = CHANNEL_AXIS[key];
+    if (!kind || axis === undefined) continue;
+    entries.push({ kind, axis, channel });
+  }
+  return entries;
+}
+
 /** Dequantizes and interpolates a single channel at `time`, returning the float value. */
 export function dequantizeChannel(channel: AnimationChannel, time: number): number {
   if (channel.type === 'constant') {
@@ -51,6 +76,42 @@ export function dequantizeChannel(channel: AnimationChannel, time: number): numb
 
 function dequantizeValue(raw: number, min: number, max: number): number {
   return min + (raw / 65535) * (max - min);
+}
+
+/** Samples all channels at `time` into caller-supplied scratch vectors (no allocation). */
+export function sampleObjectTransformScratch(
+  entries: ChannelEntry[],
+  time: number,
+  outPos: THREE.Vector3,
+  outRot: THREE.Quaternion,
+  outScl: THREE.Vector3,
+): boolean {
+  if (entries.length === 0) return false;
+
+  outPos.set(0, 0, 0);
+  outRot.set(0, 0, 0, 1);
+  outScl.set(1, 1, 1);
+
+  for (const { kind, axis, channel } of entries) {
+    const value = dequantizeChannel(channel, time);
+    if (kind === 'position') {
+      if (axis === 0) outPos.x = value;
+      else if (axis === 1) outPos.y = value;
+      else outPos.z = value;
+    } else if (kind === 'rotation') {
+      if (axis === 0) outRot.x = value;
+      else if (axis === 1) outRot.y = value;
+      else if (axis === 2) outRot.z = value;
+      else outRot.w = value;
+    } else {
+      if (axis === 0) outScl.x = value;
+      else if (axis === 1) outScl.y = value;
+      else outScl.z = value;
+    }
+  }
+
+  outRot.normalize();
+  return true;
 }
 
 /** Samples all channels for one object at `time` and applies them to `target`. Returns false if there are no channels to sample (object stays at its current transform). */

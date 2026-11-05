@@ -21,8 +21,14 @@ export async function fetchSceneArrayBuffer(developerId: string, sceneId: string
   return res.arrayBuffer();
 }
 
+export interface GltfLoaderBundle {
+  loader: GLTFLoader;
+  dracoLoader: DRACOLoader;
+  ktx2Loader: KTX2Loader;
+}
+
 /** Builds a GLTFLoader wired up with self-hosted Draco (geometry) and KTX2/Basis Universal (texture) decoders. */
-export function createGltfLoader(renderer: THREE.WebGLRenderer): GLTFLoader {
+export function createGltfLoader(renderer: THREE.WebGLRenderer): GltfLoaderBundle {
   const loader = new GLTFLoader();
 
   const dracoLoader = new DRACOLoader();
@@ -34,7 +40,31 @@ export function createGltfLoader(renderer: THREE.WebGLRenderer): GLTFLoader {
   ktx2Loader.detectSupport(renderer);
   loader.setKTX2Loader(ktx2Loader);
 
-  return loader;
+  return { loader, dracoLoader, ktx2Loader };
+}
+
+/** Disposes GPU resources held by a loaded GLTF scene graph. */
+export function disposeObject3D(root: THREE.Object3D): void {
+  root.traverse((node) => {
+    const mesh = node as THREE.Mesh;
+    if (mesh.isMesh) {
+      mesh.geometry?.dispose();
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const material of materials) {
+        if (!material) continue;
+        for (const value of Object.values(material)) {
+          if (value instanceof THREE.Texture) value.dispose();
+        }
+        material.dispose();
+      }
+    }
+  });
+}
+
+/** Disposes Draco/KTX2 worker pools created by createGltfLoader. */
+export function disposeGltfLoaderBundle(bundle: GltfLoaderBundle): void {
+  bundle.dracoLoader.dispose();
+  bundle.ktx2Loader.dispose();
 }
 
 export function parseGlb(loader: GLTFLoader, buffer: ArrayBuffer): Promise<GLTF> {

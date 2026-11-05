@@ -17,7 +17,7 @@ export function SceneLoader({ developerId, sceneId }: { developerId: string; sce
     (async () => {
       try {
         const buffer = await fetchSceneArrayBuffer(developerId, sceneId);
-        const loader = createGltfLoader(gl);
+        const { loader } = createGltfLoader(gl);
         const parsed = await parseGlb(loader, buffer);
         if (!cancelled) {
           useViewerStore.getState().setFileSizeBytes(buffer.byteLength);

@@ -52,6 +52,7 @@ export interface SessionSummary {
 
 export interface SessionDetail extends SessionSummary {
   developerId: string;
+  sceneHash?: string | null;
   errorMessage: string | null;
 }
 
@@ -83,6 +84,8 @@ export interface AnimationLifecycleMoment {
 
 export interface AnimationObjectData {
   objectId: number;
+  /** Zero for the first lifecycle segment; increments when the same wire ObjectId is reused after Delete. */
+  instanceIndex?: number;
   /** Null for objects present in the initial scene walk; set for runtime-spawned instances. */
   templateObjectId: number | null;
   /** Set for runtime-spawned instances (0 means scene root). */
@@ -92,6 +95,7 @@ export interface AnimationObjectData {
 }
 
 export interface AnimationData {
+  schemaVersion?: number;
   durationSeconds: number;
   objects: AnimationObjectData[];
 }

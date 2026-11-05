@@ -155,4 +155,18 @@ export async function fetchSessionAnimation(sessionId: string): Promise<Animatio
   return res.json() as Promise<AnimationData>;
 }
 
+/** Fetches the binary transform-free lifecycle event log for a session. */
+export async function fetchSessionEventsRaw(sessionId: string): Promise<ArrayBuffer> {
+  const token = getToken();
+  const res = await fetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/events`), {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+
+  if (!res.ok) {
+    throw new ApiError(res.status, await extractErrorMessage(res));
+  }
+
+  return res.arrayBuffer();
+}
+
 export { API_BASE_URL };
