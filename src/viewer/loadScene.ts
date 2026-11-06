@@ -8,9 +8,15 @@ import { apiUrl, getToken } from '../lib/api';
 const DRACO_DECODER_PATH = '/decoders/draco/';
 const BASIS_TRANSCODER_PATH = '/decoders/basis/';
 
-export async function fetchSceneArrayBuffer(developerId: string, sceneId: string): Promise<ArrayBuffer> {
+/**
+ * Downloads a scene revision's GLB: the optimized file once the backend has produced it,
+ * otherwise the raw upload. `hash` selects a revision (a session passes the hash it was recorded
+ * against); without it the latest revision is returned.
+ */
+export async function fetchSceneArrayBuffer(developerId: string, sceneId: string, hash?: string): Promise<ArrayBuffer> {
   const token = getToken();
-  const res = await fetch(apiUrl(`/api/scenes/${encodeURIComponent(developerId)}/${encodeURIComponent(sceneId)}/file`), {
+  const query = hash ? `?hash=${encodeURIComponent(hash)}` : '';
+  const res = await fetch(apiUrl(`/api/scenes/${encodeURIComponent(developerId)}/${encodeURIComponent(sceneId)}/file${query}`), {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
 

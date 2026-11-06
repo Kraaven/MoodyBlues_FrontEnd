@@ -2,7 +2,7 @@ import type { ChangeEvent } from 'react';
 
 export interface TimelineMarker {
   time: number;
-  type: 'Spawn' | 'Delete';
+  type: 'Spawn' | 'Delete' | 'Session';
 }
 
 interface TimelineScrubberProps {
@@ -41,7 +41,7 @@ export function TimelineScrubber({ value, max, onChange, onScrubStart, onScrubEn
               <span
                 key={`${marker.type}-${marker.time}-${i}`}
                 className={`absolute top-1/2 h-2 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full ${
-                  marker.type === 'Spawn' ? 'bg-emerald-400/80' : 'bg-red-400/80'
+                  marker.type === 'Spawn' ? 'bg-emerald-400/80' : marker.type === 'Delete' ? 'bg-red-400/80' : 'bg-amber-400/90'
                 }`}
                 style={{ left: `${(marker.time / max) * 100}%` }}
               />
@@ -57,6 +57,7 @@ export function TimelineScrubber({ value, max, onChange, onScrubStart, onScrubEn
           onChange={onInput}
           onPointerDown={onScrubStart}
           onPointerUp={onScrubEnd}
+          onLostPointerCapture={onScrubEnd}
           disabled={disabled}
           className="relative z-[1] h-1.5 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-white/70 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
           aria-label="Timeline scrubber"

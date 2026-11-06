@@ -1,4 +1,4 @@
-import type { AnimationData, SessionDetail, SessionSummary } from './types';
+import type { SessionDetail, SessionSummary } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8765';
 
@@ -141,24 +141,18 @@ export function fetchSessionDetail(sessionId: string): Promise<SessionDetail> {
   return api.get<SessionDetail>(`/api/sessions/${encodeURIComponent(sessionId)}`);
 }
 
-/** Fetches and JSON-parses a session's animation. The response is gzip-encoded on the wire; fetch() decodes that transparently via Content-Encoding, same as any other compressed HTTP response. */
-export async function fetchSessionAnimation(sessionId: string): Promise<AnimationData> {
-  const token = getToken();
-  const res = await fetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/animation`), {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-  });
-
-  if (!res.ok) {
-    throw new ApiError(res.status, await extractErrorMessage(res));
-  }
-
-  return res.json() as Promise<AnimationData>;
+/** Asks the backend to rebuild a session's replay from its raw log. */
+export function recompileSession(sessionId: string): Promise<void> {
+  return api.post<void>(`/api/sessions/${encodeURIComponent(sessionId)}/recompile`);
 }
 
-/** Fetches the binary transform-free lifecycle event log for a session. */
-export async function fetchSessionEventsRaw(sessionId: string): Promise<ArrayBuffer> {
+/**
+ * Fetches a session's compiled replay file (see viewer/replay/replayFile.ts for the layout). It is
+ * gzip-encoded on the wire; fetch() decodes that transparently via Content-Encoding.
+ */
+export async function fetchSessionReplay(sessionId: string): Promise<ArrayBuffer> {
   const token = getToken();
-  const res = await fetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/events`), {
+  const res = await fetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/replay`), {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
 

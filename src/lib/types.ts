@@ -19,12 +19,15 @@ export interface ProjectSummary {
 
 export type SceneProcessingStatus = 'Pending' | 'Processing' | 'Ready' | 'Failed';
 
+/** A scene as the backend reports it: the latest uploaded revision's hash, size and status. */
 export interface ProjectScene {
   sceneId: string;
   displayName: string | null;
   updatedAtUtc: string;
+  latestHash: string;
   sizeBytes: number;
   processingStatus: SceneProcessingStatus;
+  revisionCount: number;
 }
 
 export interface ProjectDetail {
@@ -35,67 +38,36 @@ export interface ProjectDetail {
   scenes: ProjectScene[];
 }
 
-export type SessionStatus = 'Processing' | 'Ready' | 'Failed';
+/** Recording: the game may still be streaming. Queued/Compiling: the replay is being built. */
+export type SessionStatus = 'Recording' | 'Queued' | 'Compiling' | 'Ready' | 'Failed';
 
 export interface SessionSummary {
   id: string;
   sceneId: string;
+  /** The scene revision this session was recorded against; the viewer loads exactly that GLB. */
+  sceneHash: string;
   createdAtUtc: string;
-  durationSeconds: number;
-  rawEventCount: number;
-  keyframeCount: number;
-  objectCount: number;
-  animationSizeBytes: number;
-  eventLogSizeBytes?: number;
   status: SessionStatus;
+  /** False when the game stopped streaming without EndSession (crash, kill, lost connection). */
+  endedCleanly: boolean;
+  durationSeconds: number;
+  objectCount: number;
+  spawnCount: number;
+  keyframeCount: number;
+  replaySizeBytes: number;
+  rawLogSizeBytes: number;
 }
 
 export interface SessionDetail extends SessionSummary {
   developerId: string;
-  sceneHash?: string | null;
+  lastActivityUtc: string;
+  connectionCount: number;
+  rawEventCount: number;
+  deltaPromotions: number;
+  /** Non-zero means some recorded transforms exceeded the configured ranges and are wrong. */
+  hardClamps: number;
+  droppedEvents: number;
+  compilerVersion: number;
+  compiledAtUtc: string | null;
   errorMessage: string | null;
-}
-
-/** One optimized animation channel -- exactly one of the three shapes below, per `type` (see AnimationOptimizer.cs). */
-export type AnimationChannelType = 'constant' | 'linear' | 'keyframes';
-
-export interface AnimationChannel {
-  type: AnimationChannelType;
-  /** Only set when type === 'constant'. */
-  value?: number;
-  /** Only set when type === 'linear'. */
-  t0?: number;
-  v0?: number;
-  t1?: number;
-  v1?: number;
-  /** Only set when type === 'keyframes' -- dequantize with: min + (raw / 65535) * (max - min). */
-  min?: number;
-  max?: number;
-  times?: number[];
-  values?: number[];
-}
-
-export type AnimationLifecycleType = 'Spawn' | 'Show' | 'Hide' | 'Delete';
-
-export interface AnimationLifecycleMoment {
-  time: number;
-  type: AnimationLifecycleType;
-}
-
-export interface AnimationObjectData {
-  objectId: number;
-  /** Zero for the first lifecycle segment; increments when the same wire ObjectId is reused after Delete. */
-  instanceIndex?: number;
-  /** Null for objects present in the initial scene walk; set for runtime-spawned instances. */
-  templateObjectId: number | null;
-  /** Set for runtime-spawned instances (0 means scene root). */
-  parentObjectId: number | null;
-  channels: Record<string, AnimationChannel>;
-  lifecycle: AnimationLifecycleMoment[];
-}
-
-export interface AnimationData {
-  schemaVersion?: number;
-  durationSeconds: number;
-  objects: AnimationObjectData[];
 }

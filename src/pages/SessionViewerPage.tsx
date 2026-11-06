@@ -1,16 +1,17 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls as DreiOrbitControls, Grid } from '@react-three/drei';
-import { ArrowLeft } from 'lucide-react';
+import { AlertTriangle, ArrowLeft } from 'lucide-react';
 import * as THREE from 'three';
 import { Navbar } from '../components/Navbar';
 import { TransportBar } from '../components/session/TransportBar';
-import { TimelineScrubber } from '../components/session/TimelineScrubber';
+import { TimelineScrubber, type TimelineMarker } from '../components/session/TimelineScrubber';
 import { EventTimeline } from '../components/session/EventTimeline';
 import { SessionInfoPanel } from '../components/session/SessionInfoPanel';
+import { SessionStatusChip } from '../components/StatusChip';
 import { FieldError } from '../components/ui/Input';
-import { api, ApiError, fetchSessionAnimation, fetchSessionEventsRaw } from '../lib/api';
+import { api, ApiError, fetchSessionReplay } from '../lib/api';
 import {
   createGltfLoader,
   disposeGltfLoaderBundle,
@@ -19,11 +20,10 @@ import {
   parseGlb,
   type GltfLoaderBundle,
 } from '../viewer/loadScene';
-import { SessionAnimationDriver } from '../viewer/session/SessionAnimationDriver';
-import { getEventMarkers, parseEventLog, type SessionEvent } from '../viewer/session/eventLog';
+import { parseReplay, type Replay, type ReplayEvent } from '../viewer/replay/replayFile';
+import { ReplayPlayer } from '../viewer/replay/ReplayPlayer';
 import type { ProjectDetail, SessionDetail } from '../lib/types';
 
-/** Converts seconds to MM:SS string like TimelineScrubber uses. */
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
@@ -31,52 +31,53 @@ function formatTime(seconds: number): string {
 }
 
 /** Frames the camera so the given object (and its descendants) fill the view. */
-function fitCameraToObject(
-  camera: THREE.PerspectiveCamera,
-  controls: { target: THREE.Vector3 } | null,
-  object: THREE.Object3D,
-) {
+function fitCameraToObject(camera: THREE.PerspectiveCamera, controls: { target: THREE.Vector3 } | null, object: THREE.Object3D) {
   const box = new THREE.Box3().setFromObject(object);
   if (box.isEmpty()) return;
 
-  const center = new THREE.Vector3();
-  box.getCenter(center);
-
-  const sphere = box.getBoundingSphere(new THREE.Sphere());
-  const radius = sphere.radius;
-
-  const fov = camera.fov * (Math.PI / 180);
-  const distance = (radius * 2) / Math.tan(fov / 2);
+  const center = box.getCenter(new THREE.Vector3());
+  const radius = box.getBoundingSphere(new THREE.Sphere()).radius;
+  const distance = radius / Math.sin((camera.fov * Math.PI) / 360);
 
   const direction = camera.position.clone().sub(center).normalize();
-  camera.position.copy(center).add(direction.multiplyScalar(distance * 1.5));
+  camera.position.copy(center).add(direction.multiplyScalar(distance * 1.1));
+  camera.near = Math.max(0.01, distance / 1000);
+  camera.far = Math.max(1000, distance * 10);
   camera.lookAt(center);
-
-  if (controls) {
-    controls.target.copy(center);
-  }
-
+  controls?.target.copy(center);
   camera.updateProjectionMatrix();
 }
+
+/** Spawn and delete markers, plus session markers that indicate missing data. */
+function buildMarkers(events: ReplayEvent[]): TimelineMarker[] {
+  const markers: TimelineMarker[] = [];
+  for (const e of events) {
+    if (e.type === 'Spawn' || e.type === 'Delete') markers.push({ time: e.time, type: e.type });
+    else if (e.type === 'DataGap' || (e.type === 'Connected' && e.a > 0)) markers.push({ time: e.time, type: 'Session' });
+  }
+  return markers;
+}
+
+const NOT_READY_COPY: Record<string, { title: string; body: string }> = {
+  Recording: { title: 'Still recording', body: 'The game is still streaming this session. The replay is built once it ends.' },
+  Queued: { title: 'Waiting to build the replay', body: 'The session has ended. It is queued, or waiting for its scene upload to finish.' },
+  Compiling: { title: 'Building the replay', body: 'The recorded events are being turned into animation. This page updates when it is done.' },
+};
 
 export function SessionViewerPage() {
   const { projectId, sceneId, sessionId } = useParams<{ projectId: string; sceneId: string; sessionId: string }>();
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [session, setSession] = useState<SessionDetail | null>(null);
+  const [replay, setReplay] = useState<Replay | null>(null);
   const [error, setError] = useState<string | null>(null);
-
   const [selectedObject, setSelectedObject] = useState<{ objectId: number; name: string; pos: THREE.Vector3 } | null>(null);
-  const [sceneLoadError, setSceneLoadError] = useState<string | null>(null);
-  const [events, setEvents] = useState<SessionEvent[]>([]);
   const [showEventTimeline, setShowEventTimeline] = useState(true);
 
-  // Transport state
   const [isPlaying, setIsPlaying] = useState(true);
   const [speed, setSpeed] = useState(1);
   const [currentTime, setCurrentTime] = useState(0);
-  const duration = session?.durationSeconds ?? 0;
 
-  const driverRef = useRef<SessionAnimationDriver | null>(null);
+  const playerRef = useRef<ReplayPlayer | null>(null);
   const controlsRef = useRef<React.ComponentRef<typeof DreiOrbitControls> | null>(null);
   const wasPlayingBeforeScrubRef = useRef(false);
 
@@ -88,34 +89,45 @@ export function SessionViewerPage() {
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Failed to load project.'));
   }, [projectId]);
 
+  // Load the session, polling while its replay is still being produced.
   useEffect(() => {
     if (!sessionId) return;
-    api
-      .get<SessionDetail>(`/api/sessions/${sessionId}`)
-      .then(setSession)
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'Failed to load session.'));
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const load = () => {
+      api
+        .get<SessionDetail>(`/api/sessions/${encodeURIComponent(sessionId)}`)
+        .then((s) => {
+          if (cancelled) return;
+          setSession(s);
+          if (s.status !== 'Ready' && s.status !== 'Failed') timer = setTimeout(load, 4000);
+        })
+        .catch((err) => !cancelled && setError(err instanceof ApiError ? err.message : 'Failed to load session.'));
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [sessionId]);
 
+  const isReady = session?.status === 'Ready';
+
   useEffect(() => {
-    if (!sessionId || !session || session.status !== 'Ready') {
-      setEvents([]);
-      return;
-    }
-
+    if (!sessionId || !isReady) return;
     let cancelled = false;
-    fetchSessionEventsRaw(sessionId)
-      .then((buffer) => {
-        if (!cancelled) setEvents(parseEventLog(buffer));
-      })
-      .catch(() => {
-        if (!cancelled) setEvents([]);
-      });
-
-    return () => { cancelled = true; };
-  }, [sessionId, session?.status]);
+    fetchSessionReplay(sessionId)
+      .then((buffer) => !cancelled && setReplay(parseReplay(buffer)))
+      .catch((err) => !cancelled && setError(err instanceof Error ? err.message : 'Failed to load the replay.'));
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, isReady]);
 
   const onScrub = useCallback((time: number) => {
-    driverRef.current?.seekTo(time);
+    playerRef.current?.seek(time);
     setCurrentTime(time);
   }, []);
 
@@ -126,20 +138,39 @@ export function SessionViewerPage() {
 
   const onScrubEnd = useCallback(() => {
     if (wasPlayingBeforeScrubRef.current) {
+      wasPlayingBeforeScrubRef.current = false;
       setIsPlaying(true);
     }
   }, []);
 
   const onTogglePlay = useCallback(() => {
-    setIsPlaying((p) => !p);
+    setIsPlaying((playing) => {
+      const player = playerRef.current;
+      // Pressing play at the end starts again from the beginning.
+      if (!playing && player && player.currentTime >= player.duration) player.seek(0);
+      return !playing;
+    });
   }, []);
+
+  const onPlaybackEnded = useCallback(() => setIsPlaying(false), []);
+
+  const markers = useMemo(() => (replay ? buildMarkers(replay.events) : []), [replay]);
+  const events = replay?.events ?? [];
 
   if (!projectId || !sceneId || !sessionId) return null;
 
   const scene = project?.scenes.find((s) => s.sceneId === sceneId);
   const title = scene?.displayName ?? sceneId;
-  const sessionNotReady = session != null && session.status !== 'Ready';
-  const eventMarkers = getEventMarkers(events);
+  const duration = replay?.durationSeconds ?? session?.durationSeconds ?? 0;
+  const notReady = session != null && !isReady;
+
+  const warnings: string[] = [];
+  if (session && isReady) {
+    if (!session.endedCleanly) warnings.push('The game stopped streaming without ending the session (crash, kill or lost connection); the end may be missing.');
+    if (session.hardClamps > 0) warnings.push(`${session.hardClamps} transform value(s) exceeded the configured ranges and are wrong. Raise the ranges in MoodyBluesClientConfig.`);
+    if (session.droppedEvents > 0) warnings.push(`${session.droppedEvents} event(s) were dropped on the client because the connection could not keep up.`);
+    if (session.errorMessage) warnings.push(session.errorMessage);
+  }
 
   return (
     <div className="flex h-screen flex-col bg-canvas">
@@ -159,16 +190,13 @@ export function SessionViewerPage() {
             <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-faint">Session playback</p>
             <p className="text-sm font-medium leading-tight text-ink">{title}</p>
           </div>
-
           {session && (
             <div className="flex items-center gap-2">
               <div className="h-5 w-px bg-hairline" />
-              <span className="font-mono text-[10px] text-ink-faint">
-                {new Date(session.createdAtUtc).toLocaleDateString()}
-              </span>
-              <span className="font-mono text-[10px] text-ink-faint">
-                {session.objectCount} objects
-              </span>
+              <SessionStatusChip status={session.status} />
+              <span className="font-mono text-[10px] text-ink-faint">{new Date(session.createdAtUtc).toLocaleString()}</span>
+              <span className="font-mono text-[10px] text-ink-faint">{session.objectCount} objects</span>
+              {session.spawnCount > 0 && <span className="font-mono text-[10px] text-ink-faint">{session.spawnCount} spawns</span>}
             </div>
           )}
         </div>
@@ -180,52 +208,63 @@ export function SessionViewerPage() {
         </div>
       )}
 
-      {sceneLoadError && (
-        <div className="px-4 py-2">
-          <FieldError>{sceneLoadError}</FieldError>
+      {warnings.length > 0 && (
+        <div className="space-y-1 border-b border-hairline bg-amber-500/5 px-4 py-2">
+          {warnings.map((w) => (
+            <p key={w} className="flex items-start gap-2 text-xs text-amber-200/90">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              {w}
+            </p>
+          ))}
         </div>
       )}
 
       <div className="relative flex-1 overflow-hidden">
-        {sessionNotReady ? (
+        {notReady ? (
           <div className="flex h-full items-center justify-center px-6">
             <div className="max-w-md text-center">
-              {session!.status === 'Processing' ? (
+              {session!.status === 'Failed' ? (
                 <>
-                  <p className="text-sm font-medium text-ink">Session is still processing</p>
-                  <p className="mt-1 text-sm text-ink-muted">Animation and event data will be available once processing completes.</p>
+                  <p className="text-sm font-medium text-ink">This session could not be replayed</p>
+                  <p className="mt-1 text-sm text-ink-muted">{session!.errorMessage ?? 'An unknown error occurred.'}</p>
                 </>
               ) : (
                 <>
-                  <p className="text-sm font-medium text-ink">Session processing failed</p>
-                  <p className="mt-1 text-sm text-ink-muted">{session!.errorMessage ?? 'An unknown error occurred during processing.'}</p>
+                  <p className="text-sm font-medium text-ink">{NOT_READY_COPY[session!.status]?.title}</p>
+                  <p className="mt-1 text-sm text-ink-muted">{NOT_READY_COPY[session!.status]?.body}</p>
                 </>
               )}
             </div>
           </div>
-        ) : project ? (
+        ) : project && session && replay ? (
           <div className="absolute inset-0 viewer-canvas-bg">
-            <Canvas camera={{ position: [3, 2, 4], fov: 45 }} gl={{ antialias: true, preserveDrawingBuffer: true, alpha: true }}>
+            <Canvas camera={{ position: [3, 2, 4], fov: 45 }} gl={{ antialias: true, alpha: true }}>
               <hemisphereLight args={['#ffffff', '#26262e', 0.9]} />
-              <directionalLight position={[5, 8, 5]} intensity={1.4} castShadow />
+              <directionalLight position={[5, 8, 5]} intensity={1.4} />
               <directionalLight position={[-5, -2, -5]} intensity={0.4} />
               <Grid args={[20, 20]} cellColor="#2A2A30" sectionColor="#3A3A40" fadeDistance={25} infiniteGrid />
               <DreiOrbitControls ref={controlsRef} makeDefault enableDamping dampingFactor={0.08} />
-              <SessionScene
+              <ReplayScene
                 developerId={project.developerId}
                 sceneId={sceneId}
-                sessionId={sessionId}
-                driverRef={driverRef}
+                sceneHash={session.sceneHash}
+                replay={replay}
+                playerRef={playerRef}
                 controlsRef={controlsRef}
                 isPlaying={isPlaying}
                 speed={speed}
                 onTimeUpdate={setCurrentTime}
-                onLoadError={setSceneLoadError}
+                onEnded={onPlaybackEnded}
+                onLoadError={setError}
                 onObjectClick={setSelectedObject}
               />
             </Canvas>
           </div>
-        ) : null}
+        ) : (
+          <div className="flex h-full items-center justify-center">
+            <p className="font-mono text-[11px] text-ink-faint">Loading…</p>
+          </div>
+        )}
 
         {selectedObject && !showEventTimeline && (
           <SessionInfoPanel
@@ -238,17 +277,11 @@ export function SessionViewerPage() {
           />
         )}
 
-        {showEventTimeline && !sessionNotReady && (
-          <EventTimeline
-            events={events}
-            currentTime={currentTime}
-            onSeek={onScrub}
-            onClose={() => setShowEventTimeline(false)}
-          />
+        {showEventTimeline && !notReady && replay && (
+          <EventTimeline events={events} currentTime={currentTime} onSeek={onScrub} onClose={() => setShowEventTimeline(false)} />
         )}
       </div>
 
-      {/* Bottom transport bar */}
       <div className="shrink-0 border-t border-hairline bg-surface px-4 py-2.5">
         <div className="mx-auto max-w-5xl space-y-1.5">
           <TimelineScrubber
@@ -257,8 +290,8 @@ export function SessionViewerPage() {
             onChange={onScrub}
             onScrubStart={onScrubStart}
             onScrubEnd={onScrubEnd}
-            markers={eventMarkers}
-            disabled={sessionNotReady}
+            markers={markers}
+            disabled={notReady || !replay}
           />
           <div className="flex items-center justify-between gap-3">
             <TransportBar
@@ -269,7 +302,7 @@ export function SessionViewerPage() {
               currentLabel={formatTime(currentTime)}
               totalLabel={formatTime(duration)}
             />
-            {!sessionNotReady && !showEventTimeline && (
+            {replay && !showEventTimeline && (
               <button
                 type="button"
                 onClick={() => setShowEventTimeline(true)}
@@ -285,163 +318,150 @@ export function SessionViewerPage() {
   );
 }
 
-// ---- R3F component that loads scene + animation and drives playback ----
+// ---- R3F component: loads the scene revision and drives the replay player ----
 
-interface SessionSceneProps {
+interface ReplaySceneProps {
   developerId: string;
   sceneId: string;
-  sessionId: string;
-  driverRef: React.MutableRefObject<SessionAnimationDriver | null>;
+  sceneHash: string;
+  replay: Replay;
+  playerRef: React.MutableRefObject<ReplayPlayer | null>;
   controlsRef: React.MutableRefObject<React.ComponentRef<typeof DreiOrbitControls> | null>;
   isPlaying: boolean;
   speed: number;
   onTimeUpdate: (time: number) => void;
+  onEnded: () => void;
   onLoadError: (message: string | null) => void;
   onObjectClick: (info: { objectId: number; name: string; pos: THREE.Vector3 } | null) => void;
 }
 
-function SessionScene({
+function ReplayScene({
   developerId,
   sceneId,
-  sessionId,
-  driverRef,
+  sceneHash,
+  replay,
+  playerRef,
   controlsRef,
   isPlaying,
   speed,
   onTimeUpdate,
+  onEnded,
   onLoadError,
   onObjectClick,
-}: SessionSceneProps) {
+}: ReplaySceneProps) {
   const { gl, camera, scene: r3fScene } = useThree();
   const [loaded, setLoaded] = useState(false);
   const gltfSceneRef = useRef<THREE.Group | null>(null);
-  const loaderBundleRef = useRef<GltfLoaderBundle | null>(null);
-  const raycasterRef = useRef(new THREE.Raycaster());
-  const clockRef = useRef(new THREE.Clock());
   const lastUiUpdateRef = useRef(0);
+  const endedRef = useRef(false);
 
-  // Load GLB + animation on mount
   useEffect(() => {
     let cancelled = false;
+    let bundle: GltfLoaderBundle | null = null;
 
     (async () => {
       try {
-        const [buffer, animation] = await Promise.all([
-          fetchSceneArrayBuffer(developerId, sceneId),
-          fetchSessionAnimation(sessionId),
-        ]);
-
+        // The exact revision the session was recorded in (Unity Spec 5.1).
+        const buffer = await fetchSceneArrayBuffer(developerId, sceneId, sceneHash);
         if (cancelled) return;
-
-        const bundle = createGltfLoader(gl);
-        loaderBundleRef.current = bundle;
+        bundle = createGltfLoader(gl);
         const gltf = await parseGlb(bundle.loader, buffer);
-        if (cancelled) return;
+        if (cancelled) {
+          disposeObject3D(gltf.scene);
+          return;
+        }
 
-        gltfSceneRef.current = gltf.scene;
-
+        // Inactive GameObjects are exported with extras.isHidden (Unity Spec 13.3).
         gltf.scene.traverse((node) => {
-          if (node.userData && typeof node.userData.isHidden === 'boolean' && node.userData.isHidden === true) {
-            node.visible = false;
-          }
+          if (node.userData?.isHidden === true) node.visible = false;
         });
 
+        gltfSceneRef.current = gltf.scene;
         r3fScene.add(gltf.scene);
+        fitCameraToObject(camera as THREE.PerspectiveCamera, controlsRef.current, gltf.scene);
 
-        const perspCamera = camera as THREE.PerspectiveCamera;
-        fitCameraToObject(perspCamera, controlsRef.current, gltf.scene);
-
-        const driver = new SessionAnimationDriver(gltf.scene, animation);
-        driverRef.current = driver;
+        playerRef.current = new ReplayPlayer(gltf.scene, replay);
         setLoaded(true);
-        clockRef.current.start();
       } catch (err) {
-        if (!cancelled) {
-          onLoadError(err instanceof Error ? err.message : 'Failed to load session.');
-        }
+        if (!cancelled) onLoadError(err instanceof Error ? err.message : 'Failed to load the scene.');
       }
     })();
 
     return () => {
       cancelled = true;
-      if (driverRef.current) {
-        driverRef.current.dispose();
-        driverRef.current = null;
-      }
+      playerRef.current?.dispose();
+      playerRef.current = null;
       if (gltfSceneRef.current) {
-        disposeObject3D(gltfSceneRef.current);
         r3fScene.remove(gltfSceneRef.current);
+        disposeObject3D(gltfSceneRef.current);
         gltfSceneRef.current = null;
       }
-      if (loaderBundleRef.current) {
-        disposeGltfLoaderBundle(loaderBundleRef.current);
-        loaderBundleRef.current = null;
-      }
+      if (bundle) disposeGltfLoaderBundle(bundle);
+      setLoaded(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [developerId, sceneId, sessionId]);
+  }, [developerId, sceneId, sceneHash, replay]);
 
-  // Per-frame driver update
-  useFrame(() => {
-    const driver = driverRef.current;
-    if (!driver || !loaded) return;
+  useFrame((_, delta) => {
+    const player = playerRef.current;
+    if (!player || !loaded) return;
 
-    driver.playing = isPlaying;
-    const rawDelta = clockRef.current.getDelta() * speed;
-    driver.update(rawDelta);
+    player.playing = isPlaying;
+    player.speed = speed;
+    player.update(delta);
+
+    if (isPlaying && !player.playing && !endedRef.current) {
+      endedRef.current = true;
+      onEnded();
+    } else if (player.playing) {
+      endedRef.current = false;
+    }
 
     const now = performance.now();
     if (now - lastUiUpdateRef.current >= 100) {
       lastUiUpdateRef.current = now;
-      onTimeUpdate(driver.currentTime);
+      onTimeUpdate(player.currentTime);
     }
   });
 
+  // Click-to-inspect. Hidden objects (inactive, deleted, templates) are not pickable.
   useEffect(() => {
-    if (!loaded || !gltfSceneRef.current) return;
+    if (!loaded) return;
+    const dom = gl.domElement;
+    const raycaster = new THREE.Raycaster();
+    let downX = 0;
+    let downY = 0;
 
-    const domElement = gl.domElement;
-    let mouseDown = false;
-    let mouseMove = false;
-
-    const onPointerDown = () => { mouseDown = true; mouseMove = false; };
-    const onPointerMove = () => { if (mouseDown) mouseMove = true; };
+    const onPointerDown = (e: PointerEvent) => {
+      downX = e.clientX;
+      downY = e.clientY;
+    };
     const onPointerUp = (e: PointerEvent) => {
-      if (!mouseDown || mouseMove) { mouseDown = false; return; }
-      mouseDown = false;
+      if (Math.hypot(e.clientX - downX, e.clientY - downY) > 4) return; // a drag, not a click
+      const root = gltfSceneRef.current;
+      if (!root) return;
 
-      const rect = domElement.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      const rect = dom.getBoundingClientRect();
+      const ndc = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+      raycaster.setFromCamera(ndc, camera);
+      const hit = raycaster.intersectObject(root, true).find((h) => ReplayPlayer.isEffectivelyVisible(h.object));
 
-      raycasterRef.current.setFromCamera(new THREE.Vector2(x, y), camera);
-
-      if (!gltfSceneRef.current) return;
-      const hits = raycasterRef.current.intersectObjects(gltfSceneRef.current.children, true);
-      if (hits.length > 0) {
-        let obj: THREE.Object3D | null = hits[0].object;
-        while (obj) {
-          if (obj.userData && typeof obj.userData.objectId === 'number') {
-            onObjectClick({ objectId: obj.userData.objectId, name: obj.name || '', pos: obj.position.clone() });
-            return;
-          }
-          obj = obj.parent;
+      for (let obj: THREE.Object3D | null = hit?.object ?? null; obj; obj = obj.parent) {
+        if (typeof obj.userData?.objectId === 'number') {
+          onObjectClick({ objectId: obj.userData.objectId, name: obj.name || '', pos: obj.getWorldPosition(new THREE.Vector3()) });
+          return;
         }
       }
       onObjectClick(null);
     };
 
-    domElement.addEventListener('pointerdown', onPointerDown);
-    domElement.addEventListener('pointermove', onPointerMove);
-    domElement.addEventListener('pointerup', onPointerUp);
-
+    dom.addEventListener('pointerdown', onPointerDown);
+    dom.addEventListener('pointerup', onPointerUp);
     return () => {
-      domElement.removeEventListener('pointerdown', onPointerDown);
-      domElement.removeEventListener('pointermove', onPointerMove);
-      domElement.removeEventListener('pointerup', onPointerUp);
+      dom.removeEventListener('pointerdown', onPointerDown);
+      dom.removeEventListener('pointerup', onPointerUp);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, gl, camera, onObjectClick]);
 
-  return null; // The scene is added imperatively
+  return null; // the scene is added imperatively
 }

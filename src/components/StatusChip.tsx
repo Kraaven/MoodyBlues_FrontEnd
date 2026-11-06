@@ -19,13 +19,15 @@ export function SceneStatusChip({ status }: { status: SceneProcessingStatus }) {
 }
 
 const SESSION_STATUS_CONFIG: Record<SessionStatus, { label: string; tone: ChipTone }> = {
+  Recording: { label: 'Recording', tone: 'warning' },
+  Queued: { label: 'Queued', tone: 'neutral' },
+  Compiling: { label: 'Compiling', tone: 'warning' },
   Ready: { label: 'Ready', tone: 'success' },
-  Processing: { label: 'Processing', tone: 'warning' },
   Failed: { label: 'Failed', tone: 'danger' },
 };
 
 export function SessionStatusChip({ status }: { status: SessionStatus }) {
-  const config = SESSION_STATUS_CONFIG[status] ?? SESSION_STATUS_CONFIG.Processing;
+  const config = SESSION_STATUS_CONFIG[status] ?? SESSION_STATUS_CONFIG.Queued;
   return (
     <Chip tone={config.tone} dot>
       {config.label}

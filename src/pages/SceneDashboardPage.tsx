@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Clock, Download, Eye, HardDrive, Loader2, Play, Settings, Sparkles, Trash2 } from 'lucide-react';
 import { Navbar } from '../components/Navbar';
+import { SessionStatusChip } from '../components/StatusChip';
 import { CopyableId } from '../components/CopyableId';
 import { Modal } from '../components/Modal';
 import { Button, IconButton, LinkButton } from '../components/ui/Button';
@@ -229,7 +230,11 @@ function SessionsSection({ developerId, sceneId }: { developerId: string; sceneI
               </span>
               <span className="text-ink-muted">{new Date(s.createdAtUtc).toLocaleDateString()}</span>
               <span className="font-mono text-[11px] tabular-nums text-ink-muted">
-                {Math.floor(s.durationSeconds / 60)}m {Math.floor(s.durationSeconds % 60)}s
+                {s.status === 'Ready' ? (
+                  `${Math.floor(s.durationSeconds / 60)}m ${Math.floor(s.durationSeconds % 60)}s`
+                ) : (
+                  <SessionStatusChip status={s.status} />
+                )}
               </span>
               <span className="font-mono text-[11px] tabular-nums text-ink-muted">{s.objectCount}</span>
               <span className="flex justify-end">
