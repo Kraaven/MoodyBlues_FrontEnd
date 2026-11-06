@@ -1,18 +1,22 @@
 /**
- * Parser for the MoodyBlues replay file ("MBRP", format version 1), produced by the backend's
- * Compiler/ReplayFileWriter.cs. That file's doc comment is the authoritative layout; this parser
- * follows it field for field. All values are little-endian.
+ * Parser for the MoodyBlues replay file ("MBRP", format versions 1 and 2), produced by the
+ * backend's Compiler/ReplayFileWriter.cs. That file's doc comment is the authoritative layout;
+ * this parser follows it field for field. All values are little-endian.
  *
  * The file holds, per object, cubic Hermite keys for position / rotation / scale (already in
- * glTF space, so they apply directly to the scene GLB's nodes), plus a time-sorted list of
- * lifecycle events (spawn, delete, show, hide, reparent) and session markers.
+ * glTF space, so they apply directly to the scene GLB's nodes), a time-sorted list of
+ * lifecycle events (spawn, delete, show, hide, reparent) and session markers, and (version 2)
+ * the developer logs written with MoodyBluesLog.
  *
  * Keys are stored in time blocks so a future viewer can fetch only part of a long session.
  * Each block repeats the previous key of every live track as a "lead-in"; this parser loads the
  * whole file, so it drops lead-ins and concatenates the blocks into one track per channel.
  */
 
-export const REPLAY_FORMAT_VERSION = 1;
+export const REPLAY_FORMAT_VERSION = 2;
+
+/** Oldest version still readable. Version 1 files have no logs. */
+const MIN_REPLAY_FORMAT_VERSION = 1;
 
 export const ReplayObjectKind = {
   Scene: 0,
@@ -66,6 +70,51 @@ export interface ReplayEvent {
   b: number;
 }
 
+export const LogLevel = {
+  Info: 1,
+  Warning: 2,
+  Error: 3,
+} as const;
+export type LogLevel = (typeof LogLevel)[keyof typeof LogLevel];
+
+/** One developer log written with MoodyBluesLog in Unity. */
+export interface ReplayLog {
+  /** Seconds since the start of the session. */
+  time: number;
+  level: LogLevel;
+  /** Unity LogColor index, 0-63. See {@link logColorHex}. */
+  color: number;
+  text: string;
+}
+
+/**
+ * Hex colours for Unity's LogColor values 0-15, in enum order: Gray, White, Red, Orange, Yellow,
+ * Lime, Green, Teal, Cyan, Sky, Blue, Indigo, Violet, Pink, Rose, Brown. Indices 16-63 are
+ * reserved and drawn as gray.
+ */
+export const LOG_COLORS: readonly string[] = [
+  '#a1a1aa',
+  '#fafafa',
+  '#f87171',
+  '#fb923c',
+  '#facc15',
+  '#a3e635',
+  '#4ade80',
+  '#2dd4bf',
+  '#22d3ee',
+  '#38bdf8',
+  '#60a5fa',
+  '#818cf8',
+  '#a78bfa',
+  '#f472b6',
+  '#fb7185',
+  '#b08968',
+];
+
+export function logColorHex(color: number): string {
+  return LOG_COLORS[color] ?? LOG_COLORS[0];
+}
+
 /** A Hermite curve: per key a time, a value and in/out slopes (units per second). */
 export interface ReplayTrack {
   dimension: 3 | 4;
@@ -106,11 +155,15 @@ export interface Replay {
   objects: ReplayObject[];
   objectsById: Map<number, ReplayObject>;
   events: ReplayEvent[];
+  /** Developer logs, sorted by time. Empty for version 1 files. */
+  logs: ReplayLog[];
 }
 
-const HEADER_SIZE = 64;
+const HEADER_SIZE_V1 = 64;
+const HEADER_SIZE_V2 = 80;
 const OBJECT_ENTRY_SIZE = 20;
 const EVENT_ENTRY_SIZE = 16;
+const LOG_ENTRY_SIZE = 20;
 const BLOCK_INDEX_ENTRY_SIZE = 16;
 
 class TrackBuilder {
@@ -137,13 +190,16 @@ class TrackBuilder {
 
 export function parseReplay(buffer: ArrayBuffer): Replay {
   const view = new DataView(buffer);
-  if (buffer.byteLength < HEADER_SIZE || String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3)) !== 'MBRP') {
+  if (buffer.byteLength < HEADER_SIZE_V1 || String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3)) !== 'MBRP') {
     throw new Error('Not a MoodyBlues replay file.');
   }
 
   const version = view.getUint16(4, true);
-  if (version !== REPLAY_FORMAT_VERSION) {
-    throw new Error(`Unsupported replay format version ${version}; this viewer reads version ${REPLAY_FORMAT_VERSION}.`);
+  if (version < MIN_REPLAY_FORMAT_VERSION || version > REPLAY_FORMAT_VERSION) {
+    throw new Error(`Unsupported replay format version ${version}; this viewer reads versions ${MIN_REPLAY_FORMAT_VERSION}-${REPLAY_FORMAT_VERSION}.`);
+  }
+  if (version >= 2 && buffer.byteLength < HEADER_SIZE_V2) {
+    throw new Error('Replay file is truncated.');
   }
 
   const flags = view.getUint16(6, true);
@@ -185,6 +241,26 @@ export function parseReplay(buffer: ArrayBuffer): Replay {
       a: view.getUint16(o + 12, true),
       b: view.getUint16(o + 14, true),
     });
+  }
+
+  const logs: ReplayLog[] = [];
+  if (version >= 2) {
+    const logCount = view.getUint32(64, true);
+    const logTableOffset = view.getUint32(68, true);
+    const stringDataOffset = view.getUint32(72, true);
+    const decoder = new TextDecoder('utf-8');
+    for (let i = 0; i < logCount; i++) {
+      const o = logTableOffset + i * LOG_ENTRY_SIZE;
+      const level = view.getUint8(o + 8);
+      const textOffset = view.getUint32(o + 12, true);
+      const textLength = view.getUint32(o + 16, true);
+      logs.push({
+        time: view.getFloat64(o, true),
+        level: (level >= 1 && level <= 3 ? level : LogLevel.Info) as LogLevel,
+        color: view.getUint8(o + 9),
+        text: decoder.decode(new Uint8Array(buffer, stringDataOffset + textOffset, textLength)),
+      });
+    }
   }
 
   const builders = new Map<number, TrackBuilder>(); // key = objectId * 4 + channel
@@ -262,5 +338,6 @@ export function parseReplay(buffer: ArrayBuffer): Replay {
     objects,
     objectsById,
     events,
+    logs,
   };
 }

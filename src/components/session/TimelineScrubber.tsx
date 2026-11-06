@@ -1,8 +1,11 @@
 import type { ChangeEvent } from 'react';
 
+/** Log markers: a line for info, a dot for a warning, a cross for an error. */
 export interface TimelineMarker {
   time: number;
-  type: 'Spawn' | 'Delete' | 'Session';
+  shape: 'line' | 'dot' | 'cross';
+  /** CSS colour. */
+  color: string;
 }
 
 interface TimelineScrubberProps {
@@ -38,13 +41,7 @@ export function TimelineScrubber({ value, max, onChange, onScrubStart, onScrubEn
         {max > 0 && markers.length > 0 && (
           <div className="pointer-events-none absolute inset-x-0 top-1/2 h-0 -translate-y-1/2">
             {markers.map((marker, i) => (
-              <span
-                key={`${marker.type}-${marker.time}-${i}`}
-                className={`absolute top-1/2 h-2 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full ${
-                  marker.type === 'Spawn' ? 'bg-emerald-400/80' : marker.type === 'Delete' ? 'bg-red-400/80' : 'bg-amber-400/90'
-                }`}
-                style={{ left: `${(marker.time / max) * 100}%` }}
-              />
+              <MarkerGlyph key={`${marker.time}-${i}`} marker={marker} left={`${(marker.time / max) * 100}%`} />
             ))}
           </div>
         )}
@@ -68,4 +65,21 @@ export function TimelineScrubber({ value, max, onChange, onScrubStart, onScrubEn
       </span>
     </div>
   );
+}
+
+const MARKER_BASE = 'absolute top-1/2 -translate-x-1/2 -translate-y-1/2';
+
+function MarkerGlyph({ marker, left }: { marker: TimelineMarker; left: string }) {
+  switch (marker.shape) {
+    case 'dot':
+      return <span className={`${MARKER_BASE} h-1.5 w-1.5 rounded-full`} style={{ left, backgroundColor: marker.color }} />;
+    case 'cross':
+      return (
+        <svg className={`${MARKER_BASE} h-2 w-2`} style={{ left }} viewBox="0 0 8 8" aria-hidden="true">
+          <path d="M1 1L7 7M7 1L1 7" stroke={marker.color} strokeWidth="1.75" strokeLinecap="round" />
+        </svg>
+      );
+    default:
+      return <span className={`${MARKER_BASE} h-2.5 w-0.5 rounded-full opacity-80`} style={{ left, backgroundColor: marker.color }} />;
+  }
 }

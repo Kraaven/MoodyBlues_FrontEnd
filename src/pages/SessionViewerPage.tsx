@@ -2,12 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls as DreiOrbitControls, Grid } from '@react-three/drei';
-import { AlertTriangle, ArrowLeft } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import * as THREE from 'three';
 import { Navbar } from '../components/Navbar';
 import { TransportBar } from '../components/session/TransportBar';
 import { TimelineScrubber, type TimelineMarker } from '../components/session/TimelineScrubber';
-import { EventTimeline } from '../components/session/EventTimeline';
+import { LogPanel } from '../components/session/LogPanel';
 import { SessionInfoPanel } from '../components/session/SessionInfoPanel';
 import { SessionStatusChip } from '../components/StatusChip';
 import { FieldError } from '../components/ui/Input';
@@ -20,7 +20,7 @@ import {
   parseGlb,
   type GltfLoaderBundle,
 } from '../viewer/loadScene';
-import { parseReplay, type Replay, type ReplayEvent } from '../viewer/replay/replayFile';
+import { LogLevel, logColorHex, parseReplay, type Replay, type ReplayLog } from '../viewer/replay/replayFile';
 import { ReplayPlayer } from '../viewer/replay/ReplayPlayer';
 import type { ProjectDetail, SessionDetail } from '../lib/types';
 
@@ -48,14 +48,23 @@ function fitCameraToObject(camera: THREE.PerspectiveCamera, controls: { target: 
   camera.updateProjectionMatrix();
 }
 
-/** Spawn and delete markers, plus session markers that indicate missing data. */
-function buildMarkers(events: ReplayEvent[]): TimelineMarker[] {
-  const markers: TimelineMarker[] = [];
-  for (const e of events) {
-    if (e.type === 'Spawn' || e.type === 'Delete') markers.push({ time: e.time, type: e.type });
-    else if (e.type === 'DataGap' || (e.type === 'Connected' && e.a > 0)) markers.push({ time: e.time, type: 'Session' });
+/** One scrubber marker per log: a line for info, a dot for a warning, a cross for an error. */
+function buildMarkers(logs: ReplayLog[]): TimelineMarker[] {
+  return logs.map((log) => ({
+    time: log.time,
+    shape: log.level === LogLevel.Error ? 'cross' : log.level === LogLevel.Warning ? 'dot' : 'line',
+    color: logColorHex(log.color),
+  }));
+}
+
+const SHOW_LOGS_ON_SCRUBBER_KEY = 'moodyblues.showLogsOnScrubber';
+
+function readShowLogsOnScrubber(): boolean {
+  try {
+    return localStorage.getItem(SHOW_LOGS_ON_SCRUBBER_KEY) !== 'false';
+  } catch {
+    return true;
   }
-  return markers;
 }
 
 const NOT_READY_COPY: Record<string, { title: string; body: string }> = {
@@ -71,7 +80,8 @@ export function SessionViewerPage() {
   const [replay, setReplay] = useState<Replay | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedObject, setSelectedObject] = useState<{ objectId: number; name: string; pos: THREE.Vector3 } | null>(null);
-  const [showEventTimeline, setShowEventTimeline] = useState(true);
+  const [showLogPanel, setShowLogPanel] = useState(true);
+  const [showLogsOnScrubber, setShowLogsOnScrubber] = useState(readShowLogsOnScrubber);
 
   const [isPlaying, setIsPlaying] = useState(true);
   const [speed, setSpeed] = useState(1);
@@ -154,8 +164,16 @@ export function SessionViewerPage() {
 
   const onPlaybackEnded = useCallback(() => setIsPlaying(false), []);
 
-  const markers = useMemo(() => (replay ? buildMarkers(replay.events) : []), [replay]);
-  const events = replay?.events ?? [];
+  const onShowLogsOnScrubberChange = useCallback((show: boolean) => {
+    setShowLogsOnScrubber(show);
+    try {
+      localStorage.setItem(SHOW_LOGS_ON_SCRUBBER_KEY, String(show));
+    } catch {
+      // Storage unavailable (private mode); the setting just won't persist.
+    }
+  }, []);
+
+  const markers = useMemo(() => (replay && showLogsOnScrubber ? buildMarkers(replay.logs) : []), [replay, showLogsOnScrubber]);
 
   if (!projectId || !sceneId || !sessionId) return null;
 
@@ -163,14 +181,6 @@ export function SessionViewerPage() {
   const title = scene?.displayName ?? sceneId;
   const duration = replay?.durationSeconds ?? session?.durationSeconds ?? 0;
   const notReady = session != null && !isReady;
-
-  const warnings: string[] = [];
-  if (session && isReady) {
-    if (!session.endedCleanly) warnings.push('The game stopped streaming without ending the session (crash, kill or lost connection); the end may be missing.');
-    if (session.hardClamps > 0) warnings.push(`${session.hardClamps} transform value(s) exceeded the configured ranges and are wrong. Raise the ranges in MoodyBluesClientConfig.`);
-    if (session.droppedEvents > 0) warnings.push(`${session.droppedEvents} event(s) were dropped on the client because the connection could not keep up.`);
-    if (session.errorMessage) warnings.push(session.errorMessage);
-  }
 
   return (
     <div className="flex h-screen flex-col bg-canvas">
@@ -205,17 +215,6 @@ export function SessionViewerPage() {
       {error && (
         <div className="px-4 py-2">
           <FieldError>{error}</FieldError>
-        </div>
-      )}
-
-      {warnings.length > 0 && (
-        <div className="space-y-1 border-b border-hairline bg-amber-500/5 px-4 py-2">
-          {warnings.map((w) => (
-            <p key={w} className="flex items-start gap-2 text-xs text-amber-200/90">
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              {w}
-            </p>
-          ))}
         </div>
       )}
 
@@ -266,7 +265,7 @@ export function SessionViewerPage() {
           </div>
         )}
 
-        {selectedObject && !showEventTimeline && (
+        {selectedObject && !showLogPanel && (
           <SessionInfoPanel
             objectId={selectedObject.objectId}
             name={selectedObject.name}
@@ -277,8 +276,18 @@ export function SessionViewerPage() {
           />
         )}
 
-        {showEventTimeline && !notReady && replay && (
-          <EventTimeline events={events} currentTime={currentTime} onSeek={onScrub} onClose={() => setShowEventTimeline(false)} />
+        {!notReady && replay && session && (
+          <LogPanel
+            logs={replay.logs}
+            events={replay.events}
+            session={session}
+            currentTime={currentTime}
+            onSeek={onScrub}
+            open={showLogPanel}
+            onOpenChange={setShowLogPanel}
+            showOnScrubber={showLogsOnScrubber}
+            onShowOnScrubberChange={onShowLogsOnScrubberChange}
+          />
         )}
       </div>
 
@@ -302,15 +311,6 @@ export function SessionViewerPage() {
               currentLabel={formatTime(currentTime)}
               totalLabel={formatTime(duration)}
             />
-            {replay && !showEventTimeline && (
-              <button
-                type="button"
-                onClick={() => setShowEventTimeline(true)}
-                className="rounded-full px-2.5 py-0.5 font-mono text-[10px] text-ink-muted transition hover:bg-white/5 hover:text-ink"
-              >
-                Events ({events.length})
-              </button>
-            )}
           </div>
         </div>
       </div>
