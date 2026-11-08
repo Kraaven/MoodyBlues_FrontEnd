@@ -1,21 +1,21 @@
-import { Navigate, Outlet } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from './useAuth';
+import { Logo } from '../ui/Logo';
 
 export function ProtectedRoute() {
   const { user, isLoading } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center gap-2 bg-canvas text-sm text-ink-muted">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Loading...
+      <div className="flex h-full items-center justify-center">
+        <Logo size={36} className="animate-pulse" />
       </div>
     );
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   }
 
   return <Outlet />;

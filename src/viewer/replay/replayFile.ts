@@ -1,26 +1,32 @@
 /**
- * Parser for the MoodyBlues replay file ("MBRP", format versions 1 and 2), produced by the
- * backend's Compiler/ReplayFileWriter.cs. That file's doc comment is the authoritative layout;
- * this parser follows it field for field. All values are little-endian.
+ * Parser for the MoodyBlues replay file ("MBRP", format version 2), produced by the backend's
+ * Compiler/ReplayFileWriter.cs. That file's doc comment is the authoritative layout; this parser
+ * follows it field for field. All values are little-endian.
  *
  * The file holds, per object, cubic Hermite keys for position / rotation / scale (already in
- * glTF space, so they apply directly to the scene GLB's nodes), a time-sorted list of
- * lifecycle events (spawn, delete, show, hide, reparent) and session markers, and (version 2)
- * the developer logs written with MoodyBluesLog.
+ * glTF space, so they apply directly to the scene GLB's nodes), a time-sorted list of lifecycle
+ * events (spawn, delete, show, hide, reparent) and session markers, and the developer logs
+ * written with MoodyBluesLog.
  *
- * Keys are stored in time blocks so a future viewer can fetch only part of a long session.
- * Each block repeats the previous key of every live track as a "lead-in"; this parser loads the
- * whole file, so it drops lead-ins and concatenates the blocks into one track per channel.
+ * Keys are stored in time blocks so a future viewer can fetch only part of a long session. Each
+ * block repeats the previous key of every live track as a "lead-in"; this parser loads the whole
+ * file, so it drops lead-ins and concatenates the blocks into one track per channel.
+ *
+ * Every offset and count is checked against the file size, so a damaged file fails with a clear
+ * ReplayFormatError instead of reading garbage.
  */
 
 export const REPLAY_FORMAT_VERSION = 2;
 
-/** Oldest version still readable. Version 1 files have no logs. */
-const MIN_REPLAY_FORMAT_VERSION = 1;
+export class ReplayFormatError extends Error {}
 
 export const ReplayObjectKind = {
+  /** In the scene GLB from the start (includes prefab templates). */
   Scene: 0,
+  /** Created during the session; the viewer clones its template. */
   Spawned: 1,
+  /** A descendant of a spawned object: the clone's copy of its template node. */
+  SpawnedPart: 2,
 } as const;
 export type ReplayObjectKind = (typeof ReplayObjectKind)[keyof typeof ReplayObjectKind];
 
@@ -31,16 +37,7 @@ export const ReplayChannel = {
 } as const;
 export type ReplayChannel = (typeof ReplayChannel)[keyof typeof ReplayChannel];
 
-export type ReplayEventType =
-  | 'Spawn'
-  | 'Delete'
-  | 'Show'
-  | 'Hide'
-  | 'Reparent'
-  | 'Connected'
-  | 'Disconnected'
-  | 'SessionEnded'
-  | 'DataGap';
+export type ReplayEventType = 'Spawn' | 'Delete' | 'Show' | 'Hide' | 'Reparent' | 'Connected' | 'Disconnected' | 'SessionEnded' | 'DataGap';
 
 const EVENT_TYPES: Record<number, ReplayEventType> = {
   1: 'Spawn',
@@ -53,9 +50,6 @@ const EVENT_TYPES: Record<number, ReplayEventType> = {
   18: 'SessionEnded',
   19: 'DataGap',
 };
-
-/** Events that change an object, as opposed to session markers. */
-export const OBJECT_EVENT_TYPES: ReadonlySet<ReplayEventType> = new Set(['Spawn', 'Delete', 'Show', 'Hide', 'Reparent']);
 
 export interface ReplayEvent {
   /** Seconds since the start of the session. */
@@ -128,6 +122,7 @@ export interface ReplayTrack {
 export interface ReplayObject {
   objectId: number;
   kind: ReplayObjectKind;
+  /** Spawned: the template it was cloned from. Spawned part: its template node. */
   templateObjectId: number;
   /** Parent at the start of the object's life (0 = scene root). */
   initialParentObjectId: number;
@@ -155,12 +150,11 @@ export interface Replay {
   objects: ReplayObject[];
   objectsById: Map<number, ReplayObject>;
   events: ReplayEvent[];
-  /** Developer logs, sorted by time. Empty for version 1 files. */
+  /** Developer logs, sorted by time. */
   logs: ReplayLog[];
 }
 
-const HEADER_SIZE_V1 = 64;
-const HEADER_SIZE_V2 = 80;
+export const HEADER_SIZE = 80;
 const OBJECT_ENTRY_SIZE = 20;
 const EVENT_ENTRY_SIZE = 16;
 const LOG_ENTRY_SIZE = 20;
@@ -189,17 +183,26 @@ class TrackBuilder {
 }
 
 export function parseReplay(buffer: ArrayBuffer): Replay {
+  const size = buffer.byteLength;
   const view = new DataView(buffer);
-  if (buffer.byteLength < HEADER_SIZE_V1 || String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3)) !== 'MBRP') {
-    throw new Error('Not a MoodyBlues replay file.');
+
+  /** Throws unless [offset, offset + length) lies inside the file. */
+  const need = (offset: number, length: number, what: string) => {
+    if (!Number.isFinite(offset) || offset < 0 || length < 0 || offset + length > size) {
+      throw new ReplayFormatError(`The replay file is damaged: ${what} lies outside the file.`);
+    }
+  };
+
+  if (size < 4 || String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3)) !== 'MBRP') {
+    throw new ReplayFormatError('This is not a MoodyBlues replay file.');
   }
+  need(0, HEADER_SIZE, 'the header');
 
   const version = view.getUint16(4, true);
-  if (version < MIN_REPLAY_FORMAT_VERSION || version > REPLAY_FORMAT_VERSION) {
-    throw new Error(`Unsupported replay format version ${version}; this viewer reads versions ${MIN_REPLAY_FORMAT_VERSION}-${REPLAY_FORMAT_VERSION}.`);
-  }
-  if (version >= 2 && buffer.byteLength < HEADER_SIZE_V2) {
-    throw new Error('Replay file is truncated.');
+  if (version !== REPLAY_FORMAT_VERSION) {
+    throw new ReplayFormatError(
+      `This replay uses format ${version}; this viewer reads format ${REPLAY_FORMAT_VERSION}. Rebuild the replay from the session's menu.`,
+    );
   }
 
   const flags = view.getUint16(6, true);
@@ -211,14 +214,26 @@ export function parseReplay(buffer: ArrayBuffer): Replay {
   const eventTableOffset = view.getUint32(36, true);
   const blockIndexOffset = view.getUint32(40, true);
   const endReasonByte = view.getUint8(60);
+  const logCount = view.getUint32(64, true);
+  const logTableOffset = view.getUint32(68, true);
+  const stringDataOffset = view.getUint32(72, true);
+  const stringDataLength = view.getUint32(76, true);
+
+  if (!Number.isFinite(durationSeconds) || durationSeconds < 0) throw new ReplayFormatError('The replay file is damaged: invalid duration.');
+  need(objectTableOffset, objectCount * OBJECT_ENTRY_SIZE, 'the object table');
+  need(eventTableOffset, eventCount * EVENT_ENTRY_SIZE, 'the event table');
+  need(logTableOffset, logCount * LOG_ENTRY_SIZE, 'the log table');
+  need(stringDataOffset, stringDataLength, 'the log text');
+  need(blockIndexOffset, blockCount * BLOCK_INDEX_ENTRY_SIZE, 'the block index');
 
   const objects: ReplayObject[] = [];
   const objectsById = new Map<number, ReplayObject>();
   for (let i = 0; i < objectCount; i++) {
     const o = objectTableOffset + i * OBJECT_ENTRY_SIZE;
+    const kind = view.getUint8(o + 2);
     const obj: ReplayObject = {
       objectId: view.getUint16(o, true),
-      kind: view.getUint8(o + 2) as ReplayObjectKind,
+      kind: (kind <= 2 ? kind : ReplayObjectKind.Scene) as ReplayObjectKind,
       templateObjectId: view.getUint16(o + 4, true),
       initialParentObjectId: view.getUint16(o + 6, true),
       spawnTime: view.getFloat64(o + 8, true),
@@ -244,23 +259,19 @@ export function parseReplay(buffer: ArrayBuffer): Replay {
   }
 
   const logs: ReplayLog[] = [];
-  if (version >= 2) {
-    const logCount = view.getUint32(64, true);
-    const logTableOffset = view.getUint32(68, true);
-    const stringDataOffset = view.getUint32(72, true);
-    const decoder = new TextDecoder('utf-8');
-    for (let i = 0; i < logCount; i++) {
-      const o = logTableOffset + i * LOG_ENTRY_SIZE;
-      const level = view.getUint8(o + 8);
-      const textOffset = view.getUint32(o + 12, true);
-      const textLength = view.getUint32(o + 16, true);
-      logs.push({
-        time: view.getFloat64(o, true),
-        level: (level >= 1 && level <= 3 ? level : LogLevel.Info) as LogLevel,
-        color: view.getUint8(o + 9),
-        text: decoder.decode(new Uint8Array(buffer, stringDataOffset + textOffset, textLength)),
-      });
-    }
+  const decoder = new TextDecoder('utf-8');
+  for (let i = 0; i < logCount; i++) {
+    const o = logTableOffset + i * LOG_ENTRY_SIZE;
+    const level = view.getUint8(o + 8);
+    const textOffset = view.getUint32(o + 12, true);
+    const textLength = view.getUint32(o + 16, true);
+    if (textOffset + textLength > stringDataLength) throw new ReplayFormatError('The replay file is damaged: a log points outside the log text.');
+    logs.push({
+      time: view.getFloat64(o, true),
+      level: (level >= 1 && level <= 3 ? level : LogLevel.Info) as LogLevel,
+      color: view.getUint8(o + 9),
+      text: decoder.decode(new Uint8Array(buffer, stringDataOffset + textOffset, textLength)),
+    });
   }
 
   const builders = new Map<number, TrackBuilder>(); // key = objectId * 4 + channel
@@ -268,15 +279,20 @@ export function parseReplay(buffer: ArrayBuffer): Replay {
     const idx = blockIndexOffset + b * BLOCK_INDEX_ENTRY_SIZE;
     const blockStart = view.getFloat64(idx, true);
     const blockOffset = view.getUint32(idx + 8, true);
+    const blockLength = view.getUint32(idx + 12, true);
+    need(blockOffset, Math.max(blockLength, 8), `block ${b}`);
+    const blockEnd = blockOffset + blockLength;
     const trackCount = view.getUint32(blockOffset, true);
     let p = blockOffset + 8;
 
     for (let t = 0; t < trackCount; t++) {
+      if (p + 8 > blockEnd) throw new ReplayFormatError(`The replay file is damaged: block ${b} is shorter than its tracks.`);
       const objectId = view.getUint16(p, true);
-      const channel = view.getUint8(p + 2) as ReplayChannel;
+      const channel = view.getUint8(p + 2);
       const leadIn = (view.getUint8(p + 3) & 1) !== 0;
       const keyCount = view.getUint32(p + 4, true);
       p += 8;
+      if (channel > 2) throw new ReplayFormatError(`The replay file is damaged: unknown channel ${channel}.`);
 
       const dim: 3 | 4 = channel === ReplayChannel.Rotation ? 4 : 3;
       const timesAt = p;
@@ -284,6 +300,7 @@ export function parseReplay(buffer: ArrayBuffer): Replay {
       const inAt = valuesAt + keyCount * dim * 4;
       const outAt = inAt + keyCount * dim * 4;
       p = outAt + keyCount * dim * 4;
+      if (p > blockEnd || (timesAt & 3) !== 0) throw new ReplayFormatError(`The replay file is damaged: a track in block ${b} overruns it.`);
 
       const key = objectId * 4 + channel;
       let builder = builders.get(key);

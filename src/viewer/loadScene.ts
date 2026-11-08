@@ -3,78 +3,85 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { apiUrl, getToken } from '../lib/api';
+import { downloadWithProgress, sceneFilePath } from '../api/queries';
 
 const DRACO_DECODER_PATH = '/decoders/draco/';
 const BASIS_TRANSCODER_PATH = '/decoders/basis/';
 
+export type Progress = (received: number, total: number | null) => void;
+
 /**
- * Downloads a scene revision's GLB: the optimized file once the backend has produced it,
- * otherwise the raw upload. `hash` selects a revision (a session passes the hash it was recorded
- * against); without it the latest revision is returned.
+ * Downloads and parses one scene version's GLB (the optimized file once the backend has built
+ * it). `hash` selects the version; a session passes the hash it was recorded in. Inactive
+ * GameObjects (`extras.isHidden`) start hidden.
  */
-export async function fetchSceneArrayBuffer(developerId: string, sceneId: string, hash?: string): Promise<ArrayBuffer> {
-  const token = getToken();
-  const query = hash ? `?hash=${encodeURIComponent(hash)}` : '';
-  const res = await fetch(apiUrl(`/api/scenes/${encodeURIComponent(developerId)}/${encodeURIComponent(sceneId)}/file${query}`), {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-  });
+export async function loadSceneGltf(
+  renderer: THREE.WebGLRenderer,
+  developerId: string,
+  sceneId: string,
+  hash: string | undefined,
+  onProgress?: Progress,
+  signal?: AbortSignal,
+): Promise<GLTF> {
+  const buffer = await downloadWithProgress(sceneFilePath(developerId, sceneId, hash), onProgress, signal);
 
-  if (!res.ok) {
-    throw new Error(`Failed to download scene (${res.status})`);
-  }
-
-  return res.arrayBuffer();
-}
-
-export interface GltfLoaderBundle {
-  loader: GLTFLoader;
-  dracoLoader: DRACOLoader;
-  ktx2Loader: KTX2Loader;
-}
-
-/** Builds a GLTFLoader wired up with self-hosted Draco (geometry) and KTX2/Basis Universal (texture) decoders. */
-export function createGltfLoader(renderer: THREE.WebGLRenderer): GltfLoaderBundle {
   const loader = new GLTFLoader();
+  const draco = new DRACOLoader().setDecoderPath(DRACO_DECODER_PATH);
+  const ktx2 = new KTX2Loader().setTranscoderPath(BASIS_TRANSCODER_PATH).detectSupport(renderer);
+  loader.setDRACOLoader(draco);
+  loader.setKTX2Loader(ktx2);
 
-  const dracoLoader = new DRACOLoader();
-  dracoLoader.setDecoderPath(DRACO_DECODER_PATH);
-  loader.setDRACOLoader(dracoLoader);
-
-  const ktx2Loader = new KTX2Loader();
-  ktx2Loader.setTranscoderPath(BASIS_TRANSCODER_PATH);
-  ktx2Loader.detectSupport(renderer);
-  loader.setKTX2Loader(ktx2Loader);
-
-  return { loader, dracoLoader, ktx2Loader };
+  try {
+    const gltf = await new Promise<GLTF>((resolve, reject) => loader.parse(buffer, '', resolve, reject));
+    gltf.scene.traverse((node) => {
+      if (node.userData?.isHidden === true) node.visible = false;
+    });
+    return gltf;
+  } finally {
+    draco.dispose();
+    ktx2.dispose();
+  }
 }
 
-/** Disposes GPU resources held by a loaded GLTF scene graph. */
+/** Frees the GPU resources of a loaded scene graph. */
 export function disposeObject3D(root: THREE.Object3D): void {
   root.traverse((node) => {
     const mesh = node as THREE.Mesh;
-    if (mesh.isMesh) {
-      mesh.geometry?.dispose();
-      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      for (const material of materials) {
-        if (!material) continue;
-        for (const value of Object.values(material)) {
-          if (value instanceof THREE.Texture) value.dispose();
-        }
-        material.dispose();
+    if (!mesh.isMesh) return;
+    mesh.geometry?.dispose();
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const material of materials) {
+      if (!material) continue;
+      for (const value of Object.values(material)) {
+        if (value instanceof THREE.Texture) value.dispose();
       }
+      material.dispose();
     }
   });
 }
 
-/** Disposes Draco/KTX2 worker pools created by createGltfLoader. */
-export function disposeGltfLoaderBundle(bundle: GltfLoaderBundle): void {
-  bundle.dracoLoader.dispose();
-  bundle.ktx2Loader.dispose();
-}
+/** Points the camera at an object so it fills the view, and moves the orbit target with it. */
+export function frameObject(
+  camera: THREE.PerspectiveCamera,
+  target: THREE.Vector3 | null,
+  object: THREE.Object3D,
+  options: { padding?: number; direction?: THREE.Vector3 } = {},
+): boolean {
+  const box = new THREE.Box3().setFromObject(object, true);
+  if (box.isEmpty()) return false;
+  const center = box.getCenter(new THREE.Vector3());
+  const radius = Math.max(box.getBoundingSphere(new THREE.Sphere()).radius, 0.05);
+  const distance = (radius / Math.sin((camera.fov * Math.PI) / 360)) * (options.padding ?? 1.15);
 
-export function parseGlb(loader: GLTFLoader, buffer: ArrayBuffer): Promise<GLTF> {
-  return new Promise((resolve, reject) => {
-    loader.parse(buffer, '', resolve, reject);
-  });
+  const direction = options.direction?.clone() ?? camera.position.clone().sub(target ?? center);
+  if (direction.lengthSq() < 1e-6) direction.set(1, 0.6, 1);
+  direction.normalize();
+
+  camera.position.copy(center).addScaledVector(direction, distance);
+  camera.near = Math.max(0.01, distance / 1000);
+  camera.far = Math.max(1000, distance * 20);
+  camera.lookAt(center);
+  camera.updateProjectionMatrix();
+  target?.copy(center);
+  return true;
 }

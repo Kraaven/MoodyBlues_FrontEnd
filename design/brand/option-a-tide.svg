@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="160" viewBox="0 0 480 160" fill="none">
+  <!-- Option A, "Tide": two offset waveforms. A recording signal, and the "blues" in the name. -->
+  <rect width="480" height="160" fill="#070A14"/>
+  <defs>
+    <linearGradient id="a-g" x1="24" y1="40" x2="120" y2="120" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5B7CFA"/>
+      <stop offset="0.55" stop-color="#7C4DFF"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+  </defs>
+  <rect x="32" y="40" width="80" height="80" rx="22" fill="#10172B" stroke="#24304F"/>
+  <path d="M44 74c8 0 10-12 18-12s10 24 18 24 10-24 18-24 6 6 6 6" stroke="url(#a-g)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M44 94c8 0 10-12 18-12s10 24 18 24 10-24 18-24 6 6 6 6" stroke="url(#a-g)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+  <text x="136" y="94" font-family="Inter, system-ui, sans-serif" font-size="34" font-weight="600" letter-spacing="-0.5" fill="#E6EAF5">moody<tspan fill="#8FA6FF">blues</tspan></text>
+</svg>

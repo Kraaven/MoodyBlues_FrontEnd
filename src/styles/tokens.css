@@ -1,0 +1,181 @@
+@import "tailwindcss";
+
+/*
+  MoodyBlues design tokens (DESIGN.md Section 5). Components use these, never raw hex values.
+  DESIGN.md's "text / text-2 / text-3" are the fg / fg-2 / fg-3 tokens here.
+*/
+@theme {
+  --font-sans: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-display: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+
+  /* Surfaces: a blue-black ramp, lit from above */
+  --color-bg: #05070e;
+  --color-surface-1: #0a0f1e;
+  --color-surface-2: #0f1629;
+  --color-surface-3: #151e36;
+  --color-line: #1e2a47;
+  --color-line-strong: #2a3a60;
+
+  /* Text */
+  --color-fg: #e6eaf5;
+  --color-fg-2: #a3adc7;
+  --color-fg-3: #7a86a8;
+
+  /* Accent */
+  --color-accent: #5b7cfa;
+  --color-accent-bright: #8fa6ff;
+  --color-accent-violet: #7c4dff;
+  --color-accent-cyan: #22d3ee;
+
+  /* State */
+  --color-live: #ff4d6d;
+  --color-ok: #3dd68c;
+  --color-warn: #f5b544;
+  --color-danger: #ff5c5c;
+
+  --radius-control: 6px;
+  --radius-card: 10px;
+  --radius-dialog: 14px;
+
+  --ease-out-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --animate-rise: rise 260ms var(--ease-out-soft) both;
+  --animate-fade: fade 180ms var(--ease-out-soft) both;
+  --animate-pulse-live: pulse-live 1.6s ease-in-out infinite;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes pulse-live {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgb(255 77 109 / 0.55); }
+    50% { opacity: 0.7; box-shadow: 0 0 0 5px rgb(255 77 109 / 0); }
+  }
+  @keyframes shimmer {
+    from { background-position: -200% 0; }
+    to { background-position: 200% 0; }
+  }
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 20px;
+  font-feature-settings: 'kern' 1, 'cv11' 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* The page atmosphere: an aurora fixed to the top of the page, and grain against banding. */
+.app-atmosphere {
+  background:
+    radial-gradient(60rem 28rem at 12% -8%, rgb(91 124 250 / 0.13), transparent 70%),
+    radial-gradient(44rem 22rem at 78% -12%, rgb(124 77 255 / 0.10), transparent 70%),
+    radial-gradient(36rem 18rem at 50% -14%, rgb(34 211 238 / 0.06), transparent 70%),
+    var(--color-bg);
+}
+
+.app-atmosphere::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Floating surfaces: one soft shadow plus a hairline highlight, as if lit from above. */
+.elevated {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.04),
+    0 12px 32px -8px rgb(0 0 0 / 0.6),
+    0 2px 6px rgb(0 0 0 / 0.35);
+}
+
+.glass {
+  background: rgb(10 15 30 / 0.72);
+  backdrop-filter: blur(14px) saturate(1.2);
+}
+
+.shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgb(91 124 250 / 0.22) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: var(--animate-shimmer);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: rgb(91 124 250 / 0.35);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-line);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-line-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Sign-in brand panel: a slowly drifting aurora (DESIGN.md 7.1). */
+.auth-aurora {
+  background:
+    radial-gradient(40% 50% at 20% 30%, rgb(91 124 250 / 0.35), transparent 70%),
+    radial-gradient(35% 45% at 75% 25%, rgb(124 77 255 / 0.28), transparent 70%),
+    radial-gradient(45% 40% at 55% 80%, rgb(34 211 238 / 0.16), transparent 70%),
+    linear-gradient(170deg, #0a0f1e, #05070e 70%);
+  background-size: 160% 160%;
+  animation: aurora-drift 28s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-drift {
+  from { background-position: 0% 0%; }
+  to { background-position: 100% 60%; }
+}
