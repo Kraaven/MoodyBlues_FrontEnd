@@ -15,9 +15,9 @@ const base =
 
 const variants: Record<ButtonVariant, string> = {
   primary:
-    'bg-accent text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.18),0_6px_18px_-6px_rgb(91_124_250/0.6)] hover:bg-[#6a89ff]',
-  secondary: 'border border-line-strong bg-surface-2 text-fg hover:border-accent/50 hover:bg-surface-3',
-  ghost: 'text-fg-2 hover:bg-surface-2 hover:text-fg',
+    'bg-blue text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.18),0_6px_18px_-6px_rgb(61_99_240/0.6)] hover:bg-[#5577f4]',
+  secondary: 'border border-rule-strong bg-ink-2 text-fg hover:border-blue/50 hover:bg-ink-3',
+  ghost: 'text-fg-2 hover:bg-ink-2 hover:text-fg',
   danger: 'bg-danger/90 text-white hover:bg-danger',
 };
 
@@ -82,7 +82,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
         'inline-flex shrink-0 items-center justify-center rounded-[var(--radius-control)] transition-colors duration-[120ms]',
         'disabled:pointer-events-none disabled:opacity-35',
         size === 'sm' ? 'h-8 w-8' : 'h-9 w-9',
-        active ? 'bg-accent/18 text-accent-bright' : 'text-fg-2 hover:bg-surface-2 hover:text-fg',
+        active ? 'bg-blue/18 text-blue-bright' : 'text-fg-2 hover:bg-ink-2 hover:text-fg',
         className,
       )}
       {...props}

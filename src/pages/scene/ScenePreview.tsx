@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { disposeObject3D, frameObject, loadSceneGltf } from './loadScene';
-import { Stage } from './Stage';
+import { disposeObject3D, frameObject } from '../../viewer/core/gltf';
+import { loadSceneGltf } from '../../stage/sceneSource';
+import { Stage } from '../../viewer/Stage';
 
 /**
  * The scene header's live preview (DESIGN.md 7.5): the version's GLB, slowly orbiting, no

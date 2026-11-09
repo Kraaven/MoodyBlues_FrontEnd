@@ -97,7 +97,7 @@ export default function SessionPlayerPage() {
     <AppShell crumbs={crumbs} fullBleed>
       <div className="flex h-full min-h-0">
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex h-12 shrink-0 items-center gap-3 border-b border-line px-4">
+          <div className="flex h-12 shrink-0 items-center gap-3 border-b border-rule px-4">
             {session.data && (
               <>
                 <SessionStatusChip status={session.data.status} />
@@ -180,11 +180,11 @@ function LoadingOverlay({ label, progress: [received, total] }: { label: string;
           {received > 0 && fraction === 1 ? 'Preparing playback…' : label}
           {received > 0 && fraction !== 1 && <span className="tabular text-fg-3"> · {formatBytes(received)}{total ? ` of ${formatBytes(total)}` : ''}</span>}
         </p>
-        <div className="h-1 overflow-hidden rounded-full bg-surface-3">
+        <div className="h-1 overflow-hidden rounded-full bg-ink-3">
           {fraction === null ? (
             <div className="shimmer h-full w-full" />
           ) : (
-            <div className="h-full rounded-full bg-gradient-to-r from-accent to-accent-cyan transition-[width] duration-200" style={{ width: `${fraction * 100}%` }} />
+            <div className="h-full rounded-full bg-gradient-to-r from-blue to-blue-bright transition-[width] duration-200" style={{ width: `${fraction * 100}%` }} />
           )}
         </div>
       </div>
@@ -196,7 +196,7 @@ function NotReady({ session }: { session: SessionDetail }) {
   const recompile = useRecompileSession();
   const notify = useToast();
 
-  let icon = <Hourglass className="h-5 w-5 text-accent-bright" />;
+  let icon = <Hourglass className="h-5 w-5 text-blue-bright" />;
   let title = '';
   let body: React.ReactNode = null;
   let action: React.ReactNode = null;
@@ -213,7 +213,7 @@ function NotReady({ session }: { session: SessionDetail }) {
       body = 'The recorded events are being turned into animation. This page updates by itself.';
       break;
     case 'WaitingForScene':
-      icon = <AlertTriangle className="h-5 w-5 text-warn" />;
+      icon = <AlertTriangle className="h-5 w-5 text-caution" />;
       title = 'Waiting for the scene';
       body = (
         <>
@@ -249,7 +249,7 @@ function NotReady({ session }: { session: SessionDetail }) {
   return (
     <Centered>
       <div className="max-w-md animate-rise text-center">
-        <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-full border border-line bg-surface-2">{icon}</div>
+        <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-full border border-rule bg-ink-2">{icon}</div>
         <p className="text-[16px] font-semibold text-fg">{title}</p>
         <div className="mt-2 text-sm text-fg-2">{body}</div>
         {(session.status === 'Queued' || session.status === 'Compiling') && <div className="shimmer mx-auto mt-5 h-1 w-48 rounded-full" />}
@@ -269,7 +269,7 @@ function ViewportOverlays({ playback }: { playback: Playback }) {
 
   return (
     <>
-      <div className="glass elevated absolute right-3 top-3 flex items-center gap-0.5 rounded-[var(--radius-card)] border border-line p-1">
+      <div className="glass elevated absolute right-3 top-3 flex items-center gap-0.5 rounded-[var(--radius-card)] border border-rule p-1">
         <IconButton label="Frame the whole scene" shortcut="A" size="sm" onClick={ui.frameAll}>
           <Maximize className="h-4 w-4" />
         </IconButton>
@@ -285,8 +285,8 @@ function ViewportOverlays({ playback }: { playback: Playback }) {
       </div>
 
       {selectedId !== null && (
-        <div className="glass elevated absolute bottom-3 left-3 flex animate-rise items-center gap-2 rounded-[var(--radius-card)] border border-line py-1 pl-3 pr-1">
-          <span className="h-2 w-2 rounded-full bg-accent-bright shadow-[0_0_8px_rgb(143_166_255/0.8)]" />
+        <div className="glass elevated absolute bottom-3 left-3 flex animate-rise items-center gap-2 rounded-[var(--radius-card)] border border-rule py-1 pl-3 pr-1">
+          <span className="h-2 w-2 rounded-full bg-blue-bright shadow-[0_0_8px_rgb(255_181_71/0.8)]" />
           <button type="button" className="text-left" onClick={() => ui.setInspectorTab('objects')}>
             <span className="block max-w-[260px] truncate text-[13px] font-medium text-fg">{name}</span>
             <span className="tabular block font-mono text-[11px] text-fg-3">#{selectedId}</span>

@@ -15,8 +15,10 @@ import { ErrorState, SectionLabel } from '../ui/States';
 import { SegmentTabs } from '../ui/Tabs';
 import { cn } from '../ui/cn';
 import { formatBytes, formatCount, plural, sceneTitle } from '../lib/format';
-import { disposeObject3D, frameObject, loadSceneGltf } from '../viewer/loadScene';
-import { SelectionOutline, Stage } from '../viewer/Stage';
+import { disposeObject3D, frameObject } from '../viewer/core/gltf';
+import { loadSceneGltf } from '../stage/sceneSource';
+import { SelectionOutline } from '../viewer/core/SelectionOutline';
+import { Stage } from '../viewer/Stage';
 import { colorHex, inspectScene, nodeType, TEXTURE_SLOTS, triangleCount, type SceneInspection } from './inspection';
 
 type Tab = 'hierarchy' | 'materials' | 'stats';
@@ -83,9 +85,9 @@ export default function SceneInspectorPage() {
                       Downloading the scene
                       {progress[0] > 0 && <span className="tabular text-fg-3"> · {formatBytes(progress[0])}</span>}
                     </p>
-                    <div className="h-1 overflow-hidden rounded-full bg-surface-3">
+                    <div className="h-1 overflow-hidden rounded-full bg-ink-3">
                       {progress[1] ? (
-                        <div className="h-full bg-gradient-to-r from-accent to-accent-cyan" style={{ width: `${(progress[0] / progress[1]) * 100}%` }} />
+                        <div className="h-full bg-gradient-to-r from-blue to-blue-bright" style={{ width: `${(progress[0] / progress[1]) * 100}%` }} />
                       ) : (
                         <div className="shimmer h-full" />
                       )}
@@ -93,11 +95,11 @@ export default function SceneInspectorPage() {
                   </div>
                 </div>
               )}
-              <div className="glass elevated absolute left-3 top-3 flex items-center gap-2 rounded-[var(--radius-card)] border border-line px-2.5 py-1.5">
+              <div className="glass elevated absolute left-3 top-3 flex items-center gap-2 rounded-[var(--radius-card)] border border-rule px-2.5 py-1.5">
                 <VersionChip version={version.version} current={version.isCurrent} />
                 <span className="text-[12px] text-fg-3">{formatBytes(version.sizeBytes)}</span>
               </div>
-              <div className="glass elevated absolute right-3 top-3 flex items-center gap-0.5 rounded-[var(--radius-card)] border border-line p-1">
+              <div className="glass elevated absolute right-3 top-3 flex items-center gap-0.5 rounded-[var(--radius-card)] border border-rule p-1">
                 <IconButton label="Frame the whole scene" size="sm" onClick={() => setFrameToken((n) => n + 1)}>
                   <Maximize className="h-4 w-4" />
                 </IconButton>
@@ -109,8 +111,8 @@ export default function SceneInspectorPage() {
           ) : null}
         </div>
 
-        <aside className="flex w-[360px] shrink-0 flex-col border-l border-line bg-surface-1">
-          <div className="border-b border-line p-2">
+        <aside className="flex w-[360px] shrink-0 flex-col border-l border-rule bg-ink-1">
+          <div className="border-b border-rule p-2">
             <SegmentTabs
               value={tab}
               onChange={setTab}
@@ -264,8 +266,8 @@ function HierarchyTab({ root, selected, onSelect }: { root: THREE.Object3D; sele
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="border-b border-line p-3">
-        <label className="flex h-8 items-center gap-2 rounded-[var(--radius-control)] border border-line-strong bg-surface-2 px-2.5 focus-within:border-accent">
+      <div className="border-b border-rule p-3">
+        <label className="flex h-8 items-center gap-2 rounded-[var(--radius-control)] border border-rule-strong bg-ink-2 px-2.5 focus-within:border-blue">
           <Search className="h-3.5 w-3.5 shrink-0 text-fg-3" />
           <input
             type="search"
@@ -291,7 +293,7 @@ function HierarchyTab({ root, selected, onSelect }: { root: THREE.Object3D; sele
                 onClick={() => onSelect(row.node === selected ? null : row.node)}
                 className={cn(
                   'absolute left-0 right-0 flex h-7 cursor-pointer items-center gap-1.5 pr-3 text-[13px]',
-                  row.node === selected ? 'bg-accent/15 text-fg shadow-[inset_2px_0_0_var(--color-accent)]' : 'text-fg-2 hover:bg-surface-2 hover:text-fg',
+                  row.node === selected ? 'bg-blue/15 text-fg shadow-[inset_2px_0_0_var(--color-blue)]' : 'text-fg-2 hover:bg-ink-2 hover:text-fg',
                   row.dim && 'opacity-45',
                 )}
                 style={{ transform: `translateY(${item.start}px)`, paddingLeft: 8 + row.depth * 14 }}
@@ -322,7 +324,7 @@ function HierarchyTab({ root, selected, onSelect }: { root: THREE.Object3D; sele
         </div>
       </div>
       {selected ? <NodeDetails node={selected} /> : (
-        <div className="flex shrink-0 items-center gap-2 border-t border-line p-4 text-[13px] text-fg-3">
+        <div className="flex shrink-0 items-center gap-2 border-t border-rule p-4 text-[13px] text-fg-3">
           <MousePointerClick className="h-4 w-4" />
           Click an object in the view or the list to inspect it.
         </div>
@@ -354,7 +356,7 @@ function NodeDetails({ node }: { node: THREE.Object3D }) {
   const extras = Object.entries(node.userData ?? {}).filter(([k]) => k !== 'objectId' && k !== 'isHidden');
 
   return (
-    <div className="max-h-[45%] shrink-0 space-y-4 overflow-y-auto border-t border-line p-4">
+    <div className="max-h-[45%] shrink-0 space-y-4 overflow-y-auto border-t border-rule p-4">
       <div>
         <p className="truncate text-[14px] font-semibold text-fg">{node.name || '(unnamed)'}</p>
         <p className="text-[12px] text-fg-3">
@@ -406,7 +408,7 @@ function MaterialsTab({ inspection, onSelect }: { inspection: SceneInspection; o
         const isOpen = open === material.uuid;
         const m = material as unknown as Record<string, unknown>;
         return (
-          <div key={material.uuid} className="rounded-[var(--radius-card)] border border-line bg-surface-2/50">
+          <div key={material.uuid} className="rounded-[var(--radius-card)] border border-rule bg-ink-2/50">
             <button type="button" onClick={() => setOpen(isOpen ? null : material.uuid)} className="flex w-full items-center gap-3 px-3 py-2 text-left">
               <span
                 className="h-7 w-7 shrink-0 rounded-full border border-white/15"
@@ -419,7 +421,7 @@ function MaterialsTab({ inspection, onSelect }: { inspection: SceneInspection; o
               {isOpen ? <ChevronDown className="h-3.5 w-3.5 text-fg-3" /> : <ChevronRight className="h-3.5 w-3.5 text-fg-3" />}
             </button>
             {isOpen && (
-              <div className="space-y-3 border-t border-line px-3 py-3">
+              <div className="space-y-3 border-t border-rule px-3 py-3">
                 <Rows
                   rows={[
                     ['Type', material.type],
@@ -442,7 +444,7 @@ function MaterialsTab({ inspection, onSelect }: { inspection: SceneInspection; o
                       key={mesh.uuid}
                       type="button"
                       onClick={() => onSelect(mesh)}
-                      className="max-w-full truncate rounded-[5px] border border-line-strong px-1.5 py-0.5 text-[11px] text-fg-2 hover:border-accent/50 hover:text-fg"
+                      className="max-w-full truncate rounded-[5px] border border-rule-strong px-1.5 py-0.5 text-[11px] text-fg-2 hover:border-blue/50 hover:text-fg"
                     >
                       {mesh.name || 'mesh'}
                     </button>

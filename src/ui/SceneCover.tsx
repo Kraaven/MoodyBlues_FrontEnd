@@ -33,5 +33,5 @@ function coverBackground(seed: string): string {
 
 export function SceneCover({ seed, className }: { seed: string; className?: string }) {
   const background = useMemo(() => coverBackground(seed), [seed]);
-  return <div aria-hidden="true" className={cn('rounded-[var(--radius-control)] border border-line', className)} style={{ background }} />;
+  return <div aria-hidden="true" className={cn('rounded-[var(--radius-control)] border border-rule', className)} style={{ background }} />;
 }

@@ -27,7 +27,7 @@ export function Tooltip({
           side={side}
           sideOffset={6}
           collisionPadding={8}
-          className="elevated z-[70] max-w-xs animate-fade rounded-[var(--radius-control)] border border-line bg-surface-2 px-2 py-1 text-[12px] leading-4 text-fg"
+          className="elevated z-[70] max-w-xs animate-fade rounded-[var(--radius-control)] border border-rule bg-ink-2 px-2 py-1 text-[12px] leading-4 text-fg"
         >
           {content}
         </T.Content>

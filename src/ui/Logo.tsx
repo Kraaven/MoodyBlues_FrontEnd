@@ -9,7 +9,7 @@ export function Logo({ size = 24, className }: { size?: number; className?: stri
       <defs>
         <radialGradient id={`${id}g`} cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(20 16) rotate(48) scale(56)">
           <stop stopColor="#8FA6FF" />
-          <stop offset="0.6" stopColor="#5B7CFA" />
+          <stop offset="0.6" stopColor="#3D63F0" />
           <stop offset="1" stopColor="#3B2A8C" />
         </radialGradient>
         <mask id={`${id}m`}>

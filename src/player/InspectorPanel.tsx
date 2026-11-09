@@ -38,11 +38,11 @@ export function InspectorPanel({
 
   if (!open) {
     return (
-      <aside className="flex w-10 shrink-0 flex-col items-center gap-1 border-l border-line bg-surface-1 py-2">
+      <aside className="flex w-10 shrink-0 flex-col items-center gap-1 border-l border-rule bg-ink-1 py-2">
         <IconButton label="Show the inspector" shortcut="\" size="sm" onClick={() => setOpen(true)}>
           <PanelRightOpen className="h-4 w-4" />
         </IconButton>
-        <div className="my-1 h-px w-5 bg-line" />
+        <div className="my-1 h-px w-5 bg-rule" />
         {RAIL_TABS.map((t) => (
           <IconButton key={t.id} label={t.label} size="sm" onClick={() => setTab(t.id)}>
             <t.icon className="h-4 w-4" />
@@ -55,12 +55,12 @@ export function InspectorPanel({
   const errors = replay?.logs.filter((l) => l.level === 3).length ?? 0;
 
   return (
-    <aside className="relative flex shrink-0 flex-col border-l border-line bg-surface-1" style={{ width }}>
+    <aside className="relative flex shrink-0 flex-col border-l border-rule bg-ink-1" style={{ width }}>
       <div
         role="separator"
         aria-orientation="vertical"
         aria-label="Resize the inspector"
-        className="absolute -left-1 inset-y-0 z-10 w-2 cursor-col-resize hover:bg-accent/30"
+        className="absolute -left-1 inset-y-0 z-10 w-2 cursor-col-resize hover:bg-blue/30"
         onPointerDown={(e) => {
           (e.target as HTMLElement).setPointerCapture(e.pointerId);
           drag.current = { x: e.clientX, width };
@@ -68,7 +68,7 @@ export function InspectorPanel({
         onPointerMove={(e) => drag.current && setWidth(drag.current.width + (drag.current.x - e.clientX))}
         onPointerUp={() => (drag.current = null)}
       />
-      <div className="flex items-center gap-2 border-b border-line p-2">
+      <div className="flex items-center gap-2 border-b border-rule p-2">
         <SegmentTabs
           className="flex-1"
           value={tab}

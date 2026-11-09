@@ -33,7 +33,7 @@ export function ConnectionControl({ project }: { project: ProjectDetail }) {
           <ConnectionField connectionString={project.connectionString} />
         </span>
       ) : (
-        <span className="text-warn">
+        <span className="text-caution">
           {hasKey ? 'not viewable for this older key; rotate to get one' : 'none yet, recordings are refused'}
         </span>
       )}

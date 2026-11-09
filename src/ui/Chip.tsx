@@ -5,19 +5,19 @@ import { cn } from './cn';
 export type ChipTone = 'neutral' | 'accent' | 'ok' | 'warn' | 'danger' | 'live';
 
 const tones: Record<ChipTone, string> = {
-  neutral: 'border-line-strong bg-surface-2 text-fg-2',
-  accent: 'border-accent/35 bg-accent/12 text-accent-bright',
+  neutral: 'border-rule-strong bg-ink-2 text-fg-2',
+  accent: 'border-blue/35 bg-blue/12 text-blue-bright',
   ok: 'border-ok/30 bg-ok/10 text-ok',
-  warn: 'border-warn/30 bg-warn/10 text-warn',
+  warn: 'border-caution/30 bg-caution/10 text-caution',
   danger: 'border-danger/35 bg-danger/10 text-[#ff8a8a]',
   live: 'border-live/35 bg-live/10 text-[#ff8ca0]',
 };
 
 const dots: Record<ChipTone, string> = {
   neutral: 'bg-fg-3',
-  accent: 'bg-accent-bright',
+  accent: 'bg-blue-bright',
   ok: 'bg-ok',
-  warn: 'bg-warn',
+  warn: 'bg-caution',
   danger: 'bg-danger',
   live: 'bg-live animate-pulse-live',
 };

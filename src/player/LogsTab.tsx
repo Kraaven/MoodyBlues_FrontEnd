@@ -69,7 +69,7 @@ export function LogsTab({ logs, playback }: { logs: ReplayLog[]; playback: Playb
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="space-y-2 border-b border-line p-3">
+      <div className="space-y-2 border-b border-rule p-3">
         <div className="flex gap-1">
           {LEVELS.map(({ level, label }) => (
             <button
@@ -79,7 +79,7 @@ export function LogsTab({ logs, playback }: { logs: ReplayLog[]; playback: Playb
               onClick={() => toggle(level)}
               className={cn(
                 'tabular flex h-7 items-center gap-1.5 rounded-[5px] border px-2 text-[12px] transition-colors duration-[120ms]',
-                enabled.has(level) ? 'border-line-strong bg-surface-2 text-fg' : 'border-transparent text-fg-3 line-through',
+                enabled.has(level) ? 'border-rule-strong bg-ink-2 text-fg' : 'border-transparent text-fg-3 line-through',
               )}
             >
               <LevelIcon level={level} color={level === LogLevel.Error ? '#ff5c5c' : level === LogLevel.Warning ? '#f5b544' : '#a3adc7'} />
@@ -88,7 +88,7 @@ export function LogsTab({ logs, playback }: { logs: ReplayLog[]; playback: Playb
             </button>
           ))}
         </div>
-        <label className="flex h-8 items-center gap-2 rounded-[var(--radius-control)] border border-line-strong bg-surface-2 px-2.5 focus-within:border-accent">
+        <label className="flex h-8 items-center gap-2 rounded-[var(--radius-control)] border border-rule-strong bg-ink-2 px-2.5 focus-within:border-blue">
           <Search className="h-3.5 w-3.5 shrink-0 text-fg-3" />
           <input
             type="search"
@@ -130,8 +130,8 @@ export function LogsTab({ logs, playback }: { logs: ReplayLog[]; playback: Playb
                     type="button"
                     onClick={() => playback.seek(log.time)}
                     className={cn(
-                      'flex w-full gap-2.5 border-b border-line/60 px-3 py-2 text-left transition-colors duration-[120ms] hover:bg-surface-2',
-                      item.index === active && 'bg-accent/[0.09] shadow-[inset_2px_0_0_var(--color-accent)]',
+                      'flex w-full gap-2.5 border-b border-rule/60 px-3 py-2 text-left transition-colors duration-[120ms] hover:bg-ink-2',
+                      item.index === active && 'bg-blue/[0.09] shadow-[inset_2px_0_0_var(--color-blue)]',
                     )}
                   >
                     <LevelIcon level={log.level} color={color} />
@@ -156,7 +156,7 @@ export function LogsTab({ logs, playback }: { logs: ReplayLog[]; playback: Playb
                               return next;
                             });
                           }}
-                          className="mt-0.5 inline-block text-[11px] text-accent-bright hover:underline"
+                          className="mt-0.5 inline-block text-[11px] text-blue-bright hover:underline"
                         >
                           {isOpen ? 'Show less' : 'Show more'}
                         </span>

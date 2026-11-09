@@ -52,7 +52,7 @@ export function SetupSteps({ connectionString }: { connectionString: string | nu
 
 function StepNumber({ n }: { n: number }) {
   return (
-    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-accent/40 bg-accent/10 font-mono text-[12px] text-accent-bright">
+    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-blue/40 bg-blue/10 font-mono text-[12px] text-blue-bright">
       {n}
     </span>
   );
@@ -96,12 +96,12 @@ export function ProjectPage() {
               </div>
             </EmptyState>
           ) : (
-            <ul className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface-1">
+            <ul className="overflow-hidden rounded-[var(--radius-card)] border border-rule bg-ink-1">
               {project.data.scenes.map((scene, i) => (
-                <li key={scene.sceneId} className="animate-rise border-b border-line last:border-b-0" style={{ animationDelay: `${Math.min(i, 8) * 20}ms` }}>
+                <li key={scene.sceneId} className="animate-rise border-b border-rule last:border-b-0" style={{ animationDelay: `${Math.min(i, 8) * 20}ms` }}>
                   <Link
                     to={`/projects/${project.data.id}/scenes/${encodeURIComponent(scene.sceneId)}`}
-                    className="group flex items-center gap-4 px-4 py-3 transition-colors duration-[120ms] hover:bg-surface-2"
+                    className="group flex items-center gap-4 px-4 py-3 transition-colors duration-[120ms] hover:bg-ink-2"
                   >
                     <SceneCover seed={scene.sceneId} className="h-12 w-[72px] shrink-0" />
                     <div className="min-w-0 flex-1">

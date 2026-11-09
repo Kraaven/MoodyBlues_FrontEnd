@@ -111,8 +111,8 @@ export function ObjectsTab({ playback }: { playback: Playback }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="border-b border-line p-3">
-        <label className="flex h-8 items-center gap-2 rounded-[var(--radius-control)] border border-line-strong bg-surface-2 px-2.5 focus-within:border-accent">
+      <div className="border-b border-rule p-3">
+        <label className="flex h-8 items-center gap-2 rounded-[var(--radius-control)] border border-rule-strong bg-ink-2 px-2.5 focus-within:border-blue">
           <Search className="h-3.5 w-3.5 shrink-0 text-fg-3" />
           <input
             type="search"
@@ -139,7 +139,7 @@ export function ObjectsTab({ playback }: { playback: Playback }) {
                 onClick={() => select(row.id === selectedId ? null : row.id)}
                 className={cn(
                   'absolute left-0 right-0 flex h-7 cursor-pointer items-center gap-1.5 pr-3 text-[13px] transition-colors duration-[120ms]',
-                  row.id === selectedId ? 'bg-accent/15 text-fg shadow-[inset_2px_0_0_var(--color-accent)]' : 'text-fg-2 hover:bg-surface-2 hover:text-fg',
+                  row.id === selectedId ? 'bg-blue/15 text-fg shadow-[inset_2px_0_0_var(--color-blue)]' : 'text-fg-2 hover:bg-ink-2 hover:text-fg',
                   !row.visible && 'opacity-45',
                 )}
                 style={{ transform: `translateY(${item.start}px)`, paddingLeft: 8 + row.depth * 14 }}
@@ -161,7 +161,7 @@ export function ObjectsTab({ playback }: { playback: Playback }) {
                 >
                   {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                 </button>
-                {row.kind === ReplayObjectKind.Scene ? <Icon className="h-3.5 w-3.5 shrink-0 text-fg-3" /> : <Sparkles className="h-3.5 w-3.5 shrink-0 text-accent-bright" />}
+                {row.kind === ReplayObjectKind.Scene ? <Icon className="h-3.5 w-3.5 shrink-0 text-fg-3" /> : <Sparkles className="h-3.5 w-3.5 shrink-0 text-blue-bright" />}
                 <span className="min-w-0 flex-1 truncate">{row.name}</span>
                 <span className="tabular font-mono text-[11px] text-fg-3">#{row.id}</span>
               </div>
@@ -215,7 +215,7 @@ function SelectedObject({ player, objectId, playback }: { player: ReplayPlayer; 
         : 'Scene object';
 
   return (
-    <div className="shrink-0 space-y-3 border-t border-line bg-surface-1 p-3">
+    <div className="shrink-0 space-y-3 border-t border-rule bg-ink-1 p-3">
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <p className="truncate text-[14px] font-semibold text-fg">{player.nameOf(objectId)}</p>

@@ -59,7 +59,7 @@ export function ProjectsPage() {
               key={project.id}
               to={`/projects/${project.id}`}
               style={{ animationDelay: `${Math.min(i, 8) * 20}ms` }}
-              className="group flex animate-rise flex-col justify-between gap-6 rounded-[var(--radius-card)] border border-line bg-surface-1 p-5 transition-[border-color,background-color] duration-[180ms] hover:border-accent/40 hover:bg-surface-2"
+              className="group flex animate-rise flex-col justify-between gap-6 rounded-[var(--radius-card)] border border-rule bg-ink-1 p-5 transition-[border-color,background-color] duration-[180ms] hover:border-blue/40 hover:bg-ink-2"
             >
               <div className="space-y-1">
                 <p className="truncate text-[16px] font-semibold text-fg">{project.name}</p>
@@ -67,7 +67,7 @@ export function ProjectsPage() {
               </div>
               <div className="flex items-center justify-between gap-3 text-[13px]">
                 <span className="text-fg-3">Created {formatDateTime(project.createdAtUtc)}</span>
-                {!project.ingestKeyPrefix && <span className="text-warn">No connection key</span>}
+                {!project.ingestKeyPrefix && <span className="text-caution">No connection key</span>}
               </div>
             </Link>
           ))}

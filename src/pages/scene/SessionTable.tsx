@@ -51,9 +51,9 @@ export function SessionTable({ sessions, sessionHref }: { sessions: SessionSumma
   };
 
   return (
-    <div className="overflow-x-auto rounded-[var(--radius-card)] border border-line bg-surface-1">
+    <div className="overflow-x-auto rounded-[var(--radius-card)] border border-rule bg-ink-1">
       <div role="table" aria-label="Sessions" className="min-w-[860px]">
-        <div role="row" className={cn(GRID, 'h-10 border-b border-line px-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-3')}>
+        <div role="row" className={cn(GRID, 'h-10 border-b border-rule px-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-3')}>
           <span>Status</span>
           <span>Recorded</span>
           <span>Duration</span>
@@ -75,8 +75,8 @@ export function SessionTable({ sessions, sessionHref }: { sessions: SessionSumma
               style={{ animationDelay: `${Math.min(i, 8) * 20}ms` }}
               className={cn(
                 GRID,
-                'group min-h-[52px] animate-rise cursor-pointer border-b border-line px-4 py-2 text-[13px] last:border-b-0',
-                'transition-colors duration-[120ms] hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none',
+                'group min-h-[52px] animate-rise cursor-pointer border-b border-rule px-4 py-2 text-[13px] last:border-b-0',
+                'transition-colors duration-[120ms] hover:bg-ink-2 focus-visible:bg-ink-2 focus-visible:outline-none',
               )}
             >
               <div className="min-w-0 space-y-1">
@@ -101,7 +101,7 @@ export function SessionTable({ sessions, sessionHref }: { sessions: SessionSumma
                   </Tooltip>
                 ) : (
                   <Tooltip content={issues.join(' ')}>
-                    <AlertTriangle className="h-4 w-4 text-warn" aria-label={issues.join(' ')} />
+                    <AlertTriangle className="h-4 w-4 text-caution" aria-label={issues.join(' ')} />
                   </Tooltip>
                 )}
               </span>
@@ -167,7 +167,7 @@ function LogCounts({ session }: { session: SessionSummary }) {
   return (
     <span className="tabular flex items-center gap-2 font-mono text-[12px]">
       {e > 0 && <span className="text-danger">{formatCount(e)} err</span>}
-      {w > 0 && <span className="text-warn">{formatCount(w)} warn</span>}
+      {w > 0 && <span className="text-caution">{formatCount(w)} warn</span>}
       {e === 0 && w === 0 && <span className="text-fg-2">{formatCount(i)} info</span>}
     </span>
   );
@@ -175,8 +175,8 @@ function LogCounts({ session }: { session: SessionSummary }) {
 
 export function SessionsEmpty({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-3 rounded-[var(--radius-card)] border border-dashed border-line-strong px-5 py-6 text-sm text-fg-2">
-      <Clapperboard className="h-5 w-5 shrink-0 text-accent-bright" />
+    <div className="flex items-center gap-3 rounded-[var(--radius-card)] border border-dashed border-rule-strong px-5 py-6 text-sm text-fg-2">
+      <Clapperboard className="h-5 w-5 shrink-0 text-blue-bright" />
       <div>{children}</div>
     </div>
   );

@@ -4,7 +4,7 @@ import { cn } from './cn';
 /** Page-level tabs that are routes (DESIGN.md 7.5: URL-addressable). */
 export function RouteTabs({ items }: { items: { to: string; label: string; count?: number; end?: boolean }[] }) {
   return (
-    <nav className="flex gap-1 border-b border-line" aria-label="Sections">
+    <nav className="flex gap-1 border-b border-rule" aria-label="Sections">
       {items.map((item) => (
         <NavLink
           key={item.to}
@@ -13,13 +13,13 @@ export function RouteTabs({ items }: { items: { to: string; label: string; count
           className={({ isActive }) =>
             cn(
               '-mb-px flex h-10 items-center gap-2 border-b-2 px-3 text-sm font-medium transition-colors duration-[120ms]',
-              isActive ? 'border-accent text-fg' : 'border-transparent text-fg-2 hover:text-fg',
+              isActive ? 'border-blue text-fg' : 'border-transparent text-fg-2 hover:text-fg',
             )
           }
         >
           {item.label}
           {item.count !== undefined && (
-            <span className="tabular rounded-full bg-surface-3 px-1.5 py-px font-mono text-[11px] text-fg-2">{item.count}</span>
+            <span className="tabular rounded-full bg-ink-3 px-1.5 py-px font-mono text-[11px] text-fg-2">{item.count}</span>
           )}
         </NavLink>
       ))}
@@ -40,7 +40,7 @@ export function SegmentTabs<T extends string>({
   className?: string;
 }) {
   return (
-    <div role="tablist" className={cn('flex gap-0.5 rounded-[var(--radius-control)] bg-surface-2 p-0.5', className)}>
+    <div role="tablist" className={cn('flex gap-0.5 rounded-[var(--radius-control)] bg-ink-2 p-0.5', className)}>
       {items.map((item) => {
         const active = item.id === value;
         return (
@@ -52,7 +52,7 @@ export function SegmentTabs<T extends string>({
             onClick={() => onChange(item.id)}
             className={cn(
               'flex h-7 flex-1 items-center justify-center gap-1.5 rounded-[5px] px-2 text-[13px] font-medium transition-colors duration-[120ms]',
-              active ? 'bg-surface-3 text-fg shadow-[inset_0_1px_0_rgb(255_255_255/0.05)]' : 'text-fg-2 hover:text-fg',
+              active ? 'bg-ink-3 text-fg shadow-[inset_0_1px_0_rgb(255_255_255/0.05)]' : 'text-fg-2 hover:text-fg',
             )}
           >
             {item.label}

@@ -22,7 +22,7 @@ export function Menu({ trigger, items, align = 'end' }: { trigger: ReactElement;
           align={align}
           sideOffset={6}
           collisionPadding={8}
-          className="elevated z-[65] min-w-[184px] animate-fade rounded-[var(--radius-card)] border border-line bg-surface-2 p-1"
+          className="elevated z-[65] min-w-[184px] animate-fade rounded-[var(--radius-card)] border border-rule bg-ink-2 p-1"
           onClick={(e) => e.stopPropagation()}
         >
           {items.map((item) => (
@@ -38,14 +38,14 @@ function MenuRow({ item }: { item: MenuItem }): ReactNode {
   const Icon = item.icon;
   return (
     <>
-      {item.separated && <M.Separator className="my-1 h-px bg-line" />}
+      {item.separated && <M.Separator className="my-1 h-px bg-rule" />}
       <M.Item
         disabled={item.disabled}
         onSelect={item.onSelect}
         className={cn(
           'flex h-8 cursor-default select-none items-center gap-2.5 rounded-[var(--radius-control)] px-2.5 text-[13px] outline-none',
           'data-[disabled]:pointer-events-none data-[disabled]:opacity-40',
-          item.danger ? 'text-danger data-[highlighted]:bg-danger/12' : 'text-fg data-[highlighted]:bg-surface-3',
+          item.danger ? 'text-danger data-[highlighted]:bg-danger/12' : 'text-fg data-[highlighted]:bg-ink-3',
         )}
       >
         {Icon && <Icon className="h-4 w-4 shrink-0 opacity-80" />}

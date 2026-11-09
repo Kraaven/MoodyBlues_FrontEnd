@@ -26,13 +26,13 @@ export function CopyField({ value, label, display, className }: { value: string;
         onClick={copy}
         aria-label={`Copy ${label}`}
         className={cn(
-          'group inline-flex h-8 min-w-0 max-w-full items-center gap-2 rounded-[var(--radius-control)] border border-line-strong bg-surface-2 pl-2.5 pr-2',
-          'font-mono text-[12px] text-fg-2 transition-colors duration-[120ms] hover:border-accent/50 hover:text-fg',
+          'group inline-flex h-8 min-w-0 max-w-full items-center gap-2 rounded-[var(--radius-control)] border border-rule-strong bg-ink-2 pl-2.5 pr-2',
+          'font-mono text-[12px] text-fg-2 transition-colors duration-[120ms] hover:border-blue/50 hover:text-fg',
           className,
         )}
       >
         <span className="truncate">{display ?? value}</span>
-        {copied ? <Check className="h-3.5 w-3.5 shrink-0 text-ok" /> : <Copy className="h-3.5 w-3.5 shrink-0 text-fg-3 group-hover:text-accent-bright" />}
+        {copied ? <Check className="h-3.5 w-3.5 shrink-0 text-ok" /> : <Copy className="h-3.5 w-3.5 shrink-0 text-fg-3 group-hover:text-blue-bright" />}
       </button>
     </Tooltip>
   );

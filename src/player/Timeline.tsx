@@ -20,13 +20,13 @@ export function Timeline({ playback, replay, disabled }: { playback: Playback; r
   const logs = replay?.logs ?? [];
 
   return (
-    <div className="shrink-0 border-t border-line bg-surface-1/95 px-4 pb-3 pt-2">
+    <div className="shrink-0 border-t border-rule bg-ink-1/95 px-4 pb-3 pt-2">
       <div className="flex h-9 items-center gap-2">
         <IconButton label={playing && !disabled ? 'Pause' : 'Play'} shortcut="Space" onClick={() => playback.toggle()} disabled={disabled}>
           {playing && !disabled ? <Pause className="h-4 w-4 fill-current" /> : <Play className="h-4 w-4 fill-current" />}
         </IconButton>
         <TimeReadout playback={playback} total={total} />
-        <div className="mx-2 h-5 w-px bg-line" aria-hidden="true" />
+        <div className="mx-2 h-5 w-px bg-rule" aria-hidden="true" />
         <div className="flex items-center gap-0.5" role="group" aria-label="Playback speed">
           {SPEEDS.map((s, i) => (
             <Tooltip key={s} content={`Speed ${s}× (${i + 1})`}>
@@ -37,7 +37,7 @@ export function Timeline({ playback, replay, disabled }: { playback: Playback; r
                 onClick={() => playback.setSpeed(s)}
                 className={cn(
                   'tabular h-7 rounded-[5px] px-2 font-mono text-[12px] transition-colors duration-[120ms] disabled:opacity-40',
-                  s === speed ? 'bg-accent/18 text-accent-bright' : 'text-fg-3 hover:text-fg',
+                  s === speed ? 'bg-blue/18 text-blue-bright' : 'text-fg-3 hover:text-fg',
                 )}
               >
                 {s}×
@@ -45,7 +45,7 @@ export function Timeline({ playback, replay, disabled }: { playback: Playback; r
             </Tooltip>
           ))}
         </div>
-        <div className="mx-2 h-5 w-px bg-line" aria-hidden="true" />
+        <div className="mx-2 h-5 w-px bg-rule" aria-hidden="true" />
         <IconButton label="Previous log" shortcut="[" size="sm" disabled={disabled || logs.length === 0} onClick={() => playback.seek(previousLogTime(logs, playback.time))}>
           <ChevronsLeft className="h-4 w-4" />
         </IconButton>
@@ -171,7 +171,7 @@ function Rail({ playback, replay, total, disabled, showLogs }: { playback: Playb
         onKeyDown={onKeyDown}
         className={cn('group relative mt-1 h-7 touch-none select-none', disabled ? 'cursor-default opacity-50' : 'cursor-pointer')}
       >
-        <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-surface-3">
+        <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-ink-3">
           {sessionMarks.offline.map((span, i) => (
             <div
               key={i}
@@ -180,7 +180,7 @@ function Rail({ playback, replay, total, disabled, showLogs }: { playback: Playb
               style={{ left: `${span.from * 100}%`, width: `${Math.max(0.3, (span.to - span.from) * 100)}%` }}
             />
           ))}
-          <div ref={playedRef} className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-accent to-accent-cyan" style={{ width: 0 }} />
+          <div ref={playedRef} className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-blue to-blue-bright" style={{ width: 0 }} />
         </div>
 
         {clusters.map((c) => (
@@ -193,12 +193,12 @@ function Rail({ playback, replay, total, disabled, showLogs }: { playback: Playb
 
         <div ref={headRef} className="pointer-events-none absolute inset-y-0 w-0" style={{ left: 0 }}>
           <div className="absolute inset-y-0 -left-px w-0.5 rounded-full bg-white shadow-[0_0_10px_2px_rgb(34_211_238/0.55)]" />
-          <div className="absolute left-0 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-accent shadow-[0_0_12px_rgb(91_124_250/0.8)] transition-transform group-hover:scale-110" />
+          <div className="absolute left-0 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-blue shadow-[0_0_12px_rgb(255_181_71/0.7)] transition-transform group-hover:scale-110" />
         </div>
 
         {hover && !disabled && (
           <div
-            className="elevated pointer-events-none absolute -top-8 -translate-x-1/2 rounded-[5px] border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-fg"
+            className="elevated pointer-events-none absolute -top-8 -translate-x-1/2 rounded-[5px] border border-rule bg-ink-2 px-1.5 py-0.5 font-mono text-[11px] text-fg"
             style={{ left: hover.x }}
           >
             {formatPlayhead(hover.time)}
@@ -247,7 +247,7 @@ function Marker({ cluster }: { cluster: Cluster }) {
   if (cluster.count > 1) {
     return (
       <span
-        className={cn(base, 'flex h-3.5 min-w-3.5 items-center justify-center rounded-full border px-0.5 font-mono text-[9px] leading-none text-bg')}
+        className={cn(base, 'flex h-3.5 min-w-3.5 items-center justify-center rounded-full border px-0.5 font-mono text-[9px] leading-none text-ink-0')}
         style={{ ...style, backgroundColor: cluster.color, borderColor: 'rgb(5 7 14 / 0.6)' }}
       >
         {cluster.count > 99 ? '99+' : cluster.count}

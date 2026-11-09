@@ -3,10 +3,12 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
-import { disposeObject3D, frameObject, loadSceneGltf, type Progress } from '../viewer/loadScene';
+import { disposeObject3D, frameObject, type Progress } from '../viewer/core/gltf';
+import { loadSceneGltf } from '../stage/sceneSource';
 import { ReplayPlayer } from '../viewer/replay/ReplayPlayer';
 import type { Replay } from '../viewer/replay/replayFile';
-import { SelectionOutline, Stage } from '../viewer/Stage';
+import { SelectionOutline } from '../viewer/core/SelectionOutline';
+import { Stage } from '../viewer/Stage';
 import { usePlayerUi, type Playback } from './playback';
 
 interface Props {

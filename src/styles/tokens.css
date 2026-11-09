@@ -1,38 +1,54 @@
 @import "tailwindcss";
 
 /*
-  MoodyBlues design tokens (DESIGN.md Section 5). Components use these, never raw hex values.
-  DESIGN.md's "text / text-2 / text-3" are the fg / fg-2 / fg-3 tokens here.
+  MoodyBlues design tokens (DESIGN.md Section 6). Components use these, never raw hex values.
+
+  Contrast, measured against WCAG relative luminance (ratio on ink-0 / ink-1 / ink-2 / ink-3):
+    fg           17.2 / 16.5 / 15.7 / 14.3
+    fg-2          9.2 /  8.9 /  8.4 /  7.7
+    fg-3          6.0 /  5.8 /  5.5 /  5.0
+    blue-bright   8.8 /  8.5 /  8.1 /  7.4
+    now          11.5 / 11.1 / 10.5 /  9.6
+    live          6.0 /  5.8 /  5.5 /  5.0     ok     10.8 / 10.4 /  9.9 /  9.0
+    wait          7.5 /  7.2 /  6.8 /  6.2     danger  6.6 /  6.3 /  6.0 /  5.5
+    caution      12.1 / 11.6 / 11.0 / 10.1
+  `blue` is 3.4 to 4.1 and FAILS 4.5:1 as text. It is a fill, ring or line colour only; links and
+  accent text use `blue-bright`. White on `blue` is 4.95, but `fg` on `blue` is 4.19, so text on
+  primary buttons is pure white (--color-on-blue).
 */
 @theme {
   --font-sans: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
   --font-display: 'Instrument Serif', Georgia, 'Times New Roman', serif;
 
-  /* Surfaces: a blue-black ramp, lit from above */
-  --color-bg: #05070e;
-  --color-surface-1: #0a0f1e;
-  --color-surface-2: #0f1629;
-  --color-surface-3: #151e36;
-  --color-line: #1e2a47;
-  --color-line-strong: #2a3a60;
+  /* Ink: the world. A blue-black ramp, lit from above. */
+  --color-ink-0: #04060d;
+  --color-ink-1: #080c18;
+  --color-ink-2: #0d1324;
+  --color-ink-3: #141c33;
+  --color-rule: #1b2542;
+  --color-rule-strong: #2b3a63;
 
   /* Text */
-  --color-fg: #e6eaf5;
-  --color-fg-2: #a3adc7;
-  --color-fg-3: #7a86a8;
+  --color-fg: #e8ecf8;
+  --color-fg-2: #a5afca;
+  --color-fg-3: #7f8bb0;
+  --color-on-blue: #ffffff;
 
-  /* Accent */
-  --color-accent: #5b7cfa;
-  --color-accent-bright: #8fa6ff;
-  --color-accent-violet: #7c4dff;
-  --color-accent-cyan: #22d3ee;
+  /* Blue: atmosphere and chrome */
+  --color-blue-deep: #1c3faa;
+  --color-blue: #3d63f0;
+  --color-blue-bright: #8ca8ff;
+
+  /* Now: the single warm colour. Where you are: playhead, selection, the followed object. */
+  --color-now: #ffb547;
 
   /* State */
-  --color-live: #ff4d6d;
+  --color-live: #ff3d7f;
   --color-ok: #3dd68c;
-  --color-warn: #f5b544;
-  --color-danger: #ff5c5c;
+  --color-wait: #a58bff;
+  --color-danger: #ff5a4f;
+  --color-caution: #f2c14e;
 
   --radius-control: 6px;
   --radius-card: 10px;
@@ -54,8 +70,8 @@
     to { opacity: 1; }
   }
   @keyframes pulse-live {
-    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgb(255 77 109 / 0.55); }
-    50% { opacity: 0.7; box-shadow: 0 0 0 5px rgb(255 77 109 / 0); }
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgb(255 61 127 / 0.55); }
+    50% { opacity: 0.7; box-shadow: 0 0 0 5px rgb(255 61 127 / 0); }
   }
   @keyframes shimmer {
     from { background-position: -200% 0; }
@@ -65,6 +81,8 @@
 
 :root {
   color-scheme: dark;
+  /* Progress (0 to 1) of the current view transition. Written by the Stage; read by view CSS. */
+  --view-p: 1;
 }
 
 html,
@@ -75,10 +93,10 @@ body,
 
 body {
   margin: 0;
-  background: var(--color-bg);
+  background: var(--color-ink-0);
   color: var(--color-fg);
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 13px;
   line-height: 20px;
   font-feature-settings: 'kern' 1, 'cv11' 1;
   -webkit-font-smoothing: antialiased;
@@ -88,23 +106,25 @@ body {
   box-sizing: border-box;
 }
 
-/* The page atmosphere: an aurora fixed to the top of the page, and grain against banding. */
+/*
+  Legacy page backdrop, used by pages not yet moved onto the Stage (DESIGN.md Section 17). It is
+  opaque, so it hides the Stage behind it. Removed view by view as each is rebuilt.
+*/
 .app-atmosphere {
   background:
-    radial-gradient(60rem 28rem at 12% -8%, rgb(91 124 250 / 0.13), transparent 70%),
-    radial-gradient(44rem 22rem at 78% -12%, rgb(124 77 255 / 0.10), transparent 70%),
-    radial-gradient(36rem 18rem at 50% -14%, rgb(34 211 238 / 0.06), transparent 70%),
-    var(--color-bg);
+    radial-gradient(60rem 28rem at 12% -8%, rgb(61 99 240 / 0.13), transparent 70%),
+    radial-gradient(44rem 22rem at 78% -12%, rgb(28 63 170 / 0.16), transparent 70%),
+    var(--color-ink-0);
 }
 
-.app-atmosphere::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.025;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+
+/* The Stage's stand-in when WebGL is unavailable or the context is lost (DESIGN.md 4.2). */
+.stage-fallback {
+  background:
+    radial-gradient(70rem 36rem at 18% -10%, rgb(61 99 240 / 0.22), transparent 70%),
+    radial-gradient(50rem 30rem at 85% 5%, rgb(28 63 170 / 0.28), transparent 70%),
+    radial-gradient(40rem 24rem at 55% 110%, rgb(140 168 255 / 0.1), transparent 70%),
+    linear-gradient(180deg, var(--color-ink-1), var(--color-ink-0) 70%);
 }
 
 .tabular {
@@ -120,23 +140,23 @@ body {
 }
 
 .glass {
-  background: rgb(10 15 30 / 0.72);
+  background: rgb(8 12 24 / 0.72);
   backdrop-filter: blur(14px) saturate(1.2);
 }
 
 .shimmer {
-  background: linear-gradient(90deg, transparent 0%, rgb(91 124 250 / 0.22) 50%, transparent 100%);
+  background: linear-gradient(90deg, transparent 0%, rgb(61 99 240 / 0.28) 50%, transparent 100%);
   background-size: 200% 100%;
   animation: var(--animate-shimmer);
 }
 
 :focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-blue);
   outline-offset: 2px;
 }
 
 ::selection {
-  background: rgb(91 124 250 / 0.35);
+  background: rgb(61 99 240 / 0.4);
 }
 
 ::-webkit-scrollbar {
@@ -147,11 +167,11 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-line);
+  background: var(--color-rule);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-line-strong);
+  background: var(--color-rule-strong);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -164,13 +184,12 @@ body {
   }
 }
 
-/* Sign-in brand panel: a slowly drifting aurora (DESIGN.md 7.1). */
+/* Sign-in brand panel (legacy until Phase 2 puts the Trace behind the form). */
 .auth-aurora {
   background:
-    radial-gradient(40% 50% at 20% 30%, rgb(91 124 250 / 0.35), transparent 70%),
-    radial-gradient(35% 45% at 75% 25%, rgb(124 77 255 / 0.28), transparent 70%),
-    radial-gradient(45% 40% at 55% 80%, rgb(34 211 238 / 0.16), transparent 70%),
-    linear-gradient(170deg, #0a0f1e, #05070e 70%);
+    radial-gradient(40% 50% at 20% 30%, rgb(61 99 240 / 0.35), transparent 70%),
+    radial-gradient(35% 45% at 75% 25%, rgb(28 63 170 / 0.4), transparent 70%),
+    linear-gradient(170deg, var(--color-ink-1), var(--color-ink-0) 70%);
   background-size: 160% 160%;
   animation: aurora-drift 28s ease-in-out infinite alternate;
 }

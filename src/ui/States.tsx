@@ -7,7 +7,7 @@ import { cn } from './cn';
 import { errorText } from '../api/client';
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div aria-hidden="true" className={cn('animate-pulse rounded-[var(--radius-control)] bg-surface-2', className)} />;
+  return <div aria-hidden="true" className={cn('animate-pulse rounded-[var(--radius-control)] bg-ink-2', className)} />;
 }
 
 export function EmptyState({
@@ -24,9 +24,9 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div className={cn('flex flex-col items-center rounded-[var(--radius-card)] border border-dashed border-line-strong px-6 py-12 text-center', className)}>
-      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full border border-line bg-surface-2">
-        <Icon className="h-5 w-5 text-accent-bright" />
+    <div className={cn('flex flex-col items-center rounded-[var(--radius-card)] border border-dashed border-rule-strong px-6 py-12 text-center', className)}>
+      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full border border-rule bg-ink-2">
+        <Icon className="h-5 w-5 text-blue-bright" />
       </div>
       <p className="text-[15px] font-semibold text-fg">{title}</p>
       {children && <div className="mt-1.5 max-w-md text-sm text-fg-2">{children}</div>}
@@ -62,7 +62,7 @@ export function ErrorState({
             </button>
           )}
           {showDetails && detail && (
-            <pre className="mt-1 max-h-48 overflow-auto rounded-[var(--radius-control)] bg-bg p-2 font-mono text-[11px] text-fg-3">{detail}</pre>
+            <pre className="mt-1 max-h-48 overflow-auto rounded-[var(--radius-control)] bg-ink-0 p-2 font-mono text-[11px] text-fg-3">{detail}</pre>
           )}
         </div>
         {onRetry && (
@@ -78,7 +78,7 @@ export function ErrorState({
 
 export function Kbd({ children }: { children: ReactNode }) {
   return (
-    <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded border border-line-strong bg-surface-2 px-1 font-mono text-[11px] text-fg-2 shadow-[inset_0_-1px_0_rgb(0_0_0/0.4)]">
+    <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded border border-rule-strong bg-ink-2 px-1 font-mono text-[11px] text-fg-2 shadow-[inset_0_-1px_0_rgb(0_0_0/0.4)]">
       {children}
     </kbd>
   );

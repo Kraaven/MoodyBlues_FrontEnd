@@ -24,7 +24,7 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
         <D.Content
           className={cn(
             'elevated fixed left-1/2 top-[18vh] z-[61] w-[calc(100vw-32px)] -translate-x-1/2 animate-rise',
-            'rounded-[var(--radius-dialog)] border border-line bg-surface-1 p-6 focus:outline-none',
+            'rounded-[var(--radius-dialog)] border border-rule bg-ink-1 p-6 focus:outline-none',
             width === 'sm' ? 'max-w-[440px]' : 'max-w-[560px]',
           )}
         >
@@ -121,7 +121,7 @@ export function ConfirmDialog({
     >
       <div className="space-y-4 text-sm text-fg-2">
         <div className="space-y-2">{body}</div>
-        {disabledReason && <p className="text-warn">{disabledReason}</p>}
+        {disabledReason && <p className="text-caution">{disabledReason}</p>}
         {typeToConfirm && !disabledReason && (
           <div className="space-y-1.5">
             <label className="block text-[13px] text-fg-2" htmlFor="confirm-name">

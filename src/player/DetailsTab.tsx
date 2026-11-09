@@ -77,7 +77,7 @@ export function DetailsTab({ session, replay, sceneHref, sessionsHref }: { sessi
         <SectionLabel>Recording health</SectionLabel>
         {rows.map((row) => (
           <div key={row.label} className="flex items-start gap-2.5">
-            {row.ok ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-ok/80" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warn" />}
+            {row.ok ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-ok/80" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-caution" />}
             <div className="min-w-0">
               <p className={row.ok ? 'text-[13px] text-fg-2' : 'text-[13px] text-fg'}>{row.label}</p>
               {!row.ok && row.detail && <p className="text-[12px] leading-4 text-fg-3">{row.detail}</p>}
@@ -103,7 +103,7 @@ export function DetailsTab({ session, replay, sceneHref, sessionsHref }: { sessi
           ))}
           <dt className="text-fg-3">Scene</dt>
           <dd className="text-right">
-            <Link to={sceneHref} className="text-accent-bright hover:underline">
+            <Link to={sceneHref} className="text-blue-bright hover:underline">
               Open scene
             </Link>
           </dd>

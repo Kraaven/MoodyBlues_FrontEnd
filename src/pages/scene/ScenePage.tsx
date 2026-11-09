@@ -16,7 +16,7 @@ import { RouteTabs } from '../../ui/Tabs';
 import { useToast } from '../../ui/Toast';
 import { formatBytes, formatCount, formatRecorded, plural, safeFilename, sceneTitle } from '../../lib/format';
 
-const ScenePreview = lazy(() => import('../../viewer/ScenePreview'));
+const ScenePreview = lazy(() => import('./ScenePreview'));
 
 /** Scenes above this size show their cover until the user asks for the 3D preview (DESIGN.md 7.5). */
 const AUTO_PREVIEW_MAX_BYTES = 25 * 1024 * 1024;
@@ -96,7 +96,7 @@ function SceneHeader({ project, scene, base }: { project: ProjectDetail; scene: 
   };
 
   return (
-    <section className="grid overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
+    <section className="grid overflow-hidden rounded-[var(--radius-card)] border border-rule bg-ink-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
       <div className="flex min-w-0 flex-col justify-between gap-6 p-6">
         <div className="min-w-0 space-y-3">
           {renaming ? (
@@ -141,7 +141,7 @@ function SceneHeader({ project, scene, base }: { project: ProjectDetail; scene: 
         </div>
       </div>
 
-      <div className="relative min-h-[240px] border-t border-line lg:border-l lg:border-t-0">
+      <div className="relative min-h-[240px] border-t border-rule lg:border-l lg:border-t-0">
         <SceneCover seed={scene.sceneId} className="absolute inset-0 rounded-none border-0" />
         {showPreview && current ? (
           <Suspense fallback={null}>
@@ -229,8 +229,8 @@ function SceneWarnings({ scene }: { scene: SceneDetail }) {
   return (
     <div className="mt-4 space-y-2">
       {warnings.map((w) => (
-        <div key={w} className="flex items-start gap-3 rounded-[var(--radius-card)] border border-warn/25 bg-warn/[0.06] px-4 py-3 text-[13px] text-fg-2">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warn" />
+        <div key={w} className="flex items-start gap-3 rounded-[var(--radius-card)] border border-caution/25 bg-caution/[0.06] px-4 py-3 text-[13px] text-fg-2">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-caution" />
           <p>{w}</p>
         </div>
       ))}
@@ -272,7 +272,7 @@ export function DeleteSceneDialog({
             This deletes {plural(versions, 'version')}, {plural(sessions, 'session')} and{' '}
             <span className="text-fg">{formatBytes(scene.totalBytes)}</span> of files. It cannot be undone.
           </p>
-          {live > 0 && <p className="text-warn">{plural(live, 'session is', 'sessions are')} recording right now. They will be stopped.</p>}
+          {live > 0 && <p className="text-caution">{plural(live, 'session is', 'sessions are')} recording right now. They will be stopped.</p>}
           <p>The next upload of this scene from Unity starts again at v1.</p>
         </>
       }

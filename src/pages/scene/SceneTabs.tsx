@@ -34,8 +34,8 @@ export function SessionsTab() {
     <div className="space-y-8">
       {scene.awaitingSceneSessionCount > 0 && (
         <section className="space-y-3">
-          <div className="flex items-start gap-3 rounded-[var(--radius-card)] border border-warn/25 bg-warn/[0.06] px-4 py-3">
-            <Hourglass className="mt-0.5 h-4 w-4 shrink-0 text-warn" />
+          <div className="flex items-start gap-3 rounded-[var(--radius-card)] border border-caution/25 bg-caution/[0.06] px-4 py-3">
+            <Hourglass className="mt-0.5 h-4 w-4 shrink-0 text-caution" />
             <div className="space-y-1 text-[13px]">
               <p className="font-semibold text-fg">Waiting for a scene version ({formatCount(scene.awaitingSceneSessionCount)})</p>
               <p className="text-fg-2">
@@ -149,8 +149,8 @@ function ArchivedVersion({ version: v }: { version: SceneVersion }) {
   };
 
   return (
-    <div className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface-1">
-      <div className={cn('flex items-center gap-3 px-4 py-3', open && 'border-b border-line')}>
+    <div className="overflow-hidden rounded-[var(--radius-card)] border border-rule bg-ink-1">
+      <div className={cn('flex items-center gap-3 px-4 py-3', open && 'border-b border-rule')}>
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
@@ -164,7 +164,7 @@ function ArchivedVersion({ version: v }: { version: SceneVersion }) {
           </span>
         </button>
         {v.processingStatus !== 'Ready' && <VersionStatusChip status={v.processingStatus} />}
-        {v.skippedMeshCount > 0 && <span className="text-[12px] text-warn">{plural(v.skippedMeshCount, 'mesh', 'meshes')} missing</span>}
+        {v.skippedMeshCount > 0 && <span className="text-[12px] text-caution">{plural(v.skippedMeshCount, 'mesh', 'meshes')} missing</span>}
         <Menu
           trigger={
             <IconButton label={`Actions for v${v.version}`} size="sm" tooltip={false}>
@@ -222,7 +222,7 @@ export function SettingsTab() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <section className="space-y-4 rounded-[var(--radius-card)] border border-line bg-surface-1 p-5">
+      <section className="space-y-4 rounded-[var(--radius-card)] border border-rule bg-ink-1 p-5">
         <h2 className="text-[16px] font-semibold text-fg">Scene</h2>
         <dl className="space-y-4 text-[13px]">
           <div className="space-y-1.5">
@@ -241,7 +241,7 @@ export function SettingsTab() {
         </dl>
       </section>
 
-      <section className="space-y-3 rounded-[var(--radius-card)] border border-line bg-surface-1 p-5">
+      <section className="space-y-3 rounded-[var(--radius-card)] border border-rule bg-ink-1 p-5">
         <h2 className="text-[16px] font-semibold text-fg">Storage</h2>
         <p className="text-[13px] text-fg-2">
           {plural(versions, 'version')} · {plural(sessions, 'session')} · <span className="text-fg">{formatBytes(scene.totalBytes)}</span> in total

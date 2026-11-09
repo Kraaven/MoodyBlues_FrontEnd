@@ -30,7 +30,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <T.Root
             key={item.id}
             onOpenChange={(open) => !open && setItems((prev) => prev.filter((i) => i.id !== item.id))}
-            className="elevated flex animate-rise items-start gap-3 rounded-[var(--radius-card)] border border-line bg-surface-2 px-4 py-3"
+            className="elevated flex animate-rise items-start gap-3 rounded-[var(--radius-card)] border border-rule bg-ink-2 px-4 py-3"
           >
             {item.tone === 'ok' ? (
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-ok" />

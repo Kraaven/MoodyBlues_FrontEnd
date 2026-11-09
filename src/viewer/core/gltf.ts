@@ -3,7 +3,6 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { downloadWithProgress, sceneFilePath } from '../api/queries';
 
 const DRACO_DECODER_PATH = '/decoders/draco/';
 const BASIS_TRANSCODER_PATH = '/decoders/basis/';
@@ -11,20 +10,10 @@ const BASIS_TRANSCODER_PATH = '/decoders/basis/';
 export type Progress = (received: number, total: number | null) => void;
 
 /**
- * Downloads and parses one scene version's GLB (the optimized file once the backend has built
- * it). `hash` selects the version; a session passes the hash it was recorded in. Inactive
- * GameObjects (`extras.isHidden`) start hidden.
+ * Parses one scene version's GLB (already downloaded). Inactive GameObjects (`extras.isHidden`)
+ * start hidden. Downloading is the caller's job, so this module stays free of the API client.
  */
-export async function loadSceneGltf(
-  renderer: THREE.WebGLRenderer,
-  developerId: string,
-  sceneId: string,
-  hash: string | undefined,
-  onProgress?: Progress,
-  signal?: AbortSignal,
-): Promise<GLTF> {
-  const buffer = await downloadWithProgress(sceneFilePath(developerId, sceneId, hash), onProgress, signal);
-
+export async function parseSceneGltf(renderer: THREE.WebGLRenderer, buffer: ArrayBuffer): Promise<GLTF> {
   const loader = new GLTFLoader();
   const draco = new DRACOLoader().setDecoderPath(DRACO_DECODER_PATH);
   const ktx2 = new KTX2Loader().setTranscoderPath(BASIS_TRANSCODER_PATH).detectSupport(renderer);

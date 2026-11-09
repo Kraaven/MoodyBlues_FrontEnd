@@ -8,9 +8,13 @@ import { ScenePage } from './pages/scene/ScenePage';
 import { ArchiveTab, SessionsTab, SettingsTab } from './pages/scene/SceneTabs';
 import { Logo } from './ui/Logo';
 
-// three.js and the replay engine load only on these routes (DESIGN.md 15).
+// three.js and the replay engine load only on these routes (DESIGN.md 12.3).
 const SessionPlayerPage = lazy(() => import('./player/SessionPlayerPage'));
 const SceneInspectorPage = lazy(() => import('./inspector/SceneInspectorPage'));
+// The persistent Stage loads in its own chunk, after the shell has painted (DESIGN.md 4.5).
+const StageHost = lazy(() => import('./stage/StageHost'));
+// Development only: drives the Stage by hand. Tree-shaken out of production builds.
+const StageLab = import.meta.env.DEV ? lazy(() => import('./stage/StageLab')) : null;
 
 function RouteFallback() {
   return (
@@ -28,27 +32,33 @@ function LegacyViewRedirect() {
 
 export default function App() {
   return (
-    <Suspense fallback={<RouteFallback />}>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+    <>
+      <Suspense fallback={null}>
+        <StageHost />
+      </Suspense>
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
+          {StageLab && <Route path="/_stage" element={<StageLab />} />}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
 
-        <Route element={<ProtectedRoute />}>
-          <Route path="/projects" element={<ProjectsPage />} />
-          <Route path="/projects/:projectId" element={<ProjectPage />} />
-          <Route path="/projects/:projectId/scenes/:sceneId" element={<ScenePage />}>
-            <Route index element={<SessionsTab />} />
-            <Route path="archive" element={<ArchiveTab />} />
-            <Route path="settings" element={<SettingsTab />} />
+          <Route element={<ProtectedRoute />}>
+            <Route path="/projects" element={<ProjectsPage />} />
+            <Route path="/projects/:projectId" element={<ProjectPage />} />
+            <Route path="/projects/:projectId/scenes/:sceneId" element={<ScenePage />}>
+              <Route index element={<SessionsTab />} />
+              <Route path="archive" element={<ArchiveTab />} />
+              <Route path="settings" element={<SettingsTab />} />
+            </Route>
+            <Route path="/projects/:projectId/scenes/:sceneId/inspect" element={<SceneInspectorPage />} />
+            <Route path="/projects/:projectId/scenes/:sceneId/view" element={<LegacyViewRedirect />} />
+            <Route path="/projects/:projectId/scenes/:sceneId/sessions/:sessionId" element={<SessionPlayerPage />} />
           </Route>
-          <Route path="/projects/:projectId/scenes/:sceneId/inspect" element={<SceneInspectorPage />} />
-          <Route path="/projects/:projectId/scenes/:sceneId/view" element={<LegacyViewRedirect />} />
-          <Route path="/projects/:projectId/scenes/:sceneId/sessions/:sessionId" element={<SessionPlayerPage />} />
-        </Route>
 
-        <Route path="/dashboard" element={<Navigate to="/projects" replace />} />
-        <Route path="*" element={<Navigate to="/projects" replace />} />
-      </Routes>
-    </Suspense>
+          <Route path="/dashboard" element={<Navigate to="/projects" replace />} />
+          <Route path="*" element={<Navigate to="/projects" replace />} />
+        </Routes>
+      </Suspense>
+    </>
   );
 }
