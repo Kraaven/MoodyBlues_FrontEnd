@@ -1,7 +1,6 @@
 /** Backend API contracts (MoodyBlues_Backend: *Contracts.cs). camelCase JSON. */
 
 export interface AuthResponse {
-  token: string;
   userId: string;
   email: string;
 }
@@ -17,6 +16,16 @@ export interface ProjectSummary {
   developerId: string;
   createdAtUtc: string;
   sceneCount: number;
+  /** Identifies the active ingest key ("mbk_" + 6 chars); null if the project has none yet. */
+  ingestKeyPrefix: string | null;
+  ingestKeyCreatedAtUtc: string | null;
+}
+
+/** POST /api/projects/{id}/ingest-key: a new key. The previous one stopped working. */
+export interface IngestKeyResponse {
+  connectionString: string;
+  ingestKeyPrefix: string;
+  ingestKeyCreatedAtUtc: string;
 }
 
 export type SceneProcessingStatus = 'Pending' | 'Processing' | 'Ready' | 'Failed';
@@ -39,6 +48,13 @@ export interface ProjectDetail {
   developerId: string;
   createdAtUtc: string;
   scenes: ProjectScene[];
+  ingestKeyPrefix: string | null;
+  ingestKeyCreatedAtUtc: string | null;
+  /**
+   * What the user pastes into Unity (`https://mbk_...@host`). Null when the project has no key,
+   * or its key predates stored keys; rotating gives it one.
+   */
+  connectionString: string | null;
 }
 
 export interface SceneVersion {

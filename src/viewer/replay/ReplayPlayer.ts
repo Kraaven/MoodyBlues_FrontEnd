@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { ReplayObjectKind, type Replay, type ReplayObject } from './replayFile';
 import { quaternionTrack, vectorTrack, visibilityTrack } from './replayTracks';
 
@@ -16,7 +17,8 @@ import { quaternionTrack, vectorTrack, visibilityTrack } from './replayTracks';
  *   Removed clones go to a per-template pool.
  * - **Spawned parts** (protocol v3). A clone's descendants are recorded objects of their own
  *   (kind 2): each is the clone's copy of one template node, found by walking the template and
- *   the clone in parallel. Their actions live and die with the clone.
+ *   the clone in parallel. Their actions live and die with the clone. Bones are ordinary parts,
+ *   and skinned templates are cloned with SkeletonUtils so each clone deforms with its own bones.
  * - **Reparenting.** Each frame, every object whose parent changes during the session is moved to
  *   the parent it has at the current time. Tracks hold local transforms, so `add()` (not
  *   `attach()`) is correct.
@@ -54,6 +56,9 @@ export class ReplayPlayer {
     this.mixer = new THREE.AnimationMixer(gltfScene);
 
     gltfScene.traverse((node) => {
+      // A skinned mesh's bounding sphere is computed once, from its pose at that moment; once
+      // the bones move the mesh can leave it and be culled while on screen.
+      if (isSkinned(node)) node.frustumCulled = false;
       const id = node.userData?.objectId;
       if (typeof id === 'number' && !this.sceneNodes.has(id)) {
         this.sceneNodes.set(id, node);
@@ -248,7 +253,11 @@ export class ReplayPlayer {
    * reports the template.
    */
   private cloneTemplate(template: THREE.Object3D): PooledClone {
-    const node = template.clone(true);
+    // SkeletonUtils.clone rebinds each cloned SkinnedMesh to the clone's own bones; a plain
+    // clone(true) would leave it bound to the template's skeleton, so it would not move. It keeps
+    // the hierarchy, so the parallel walk below still pairs nodes. It needs every bone inside the
+    // template, which Unity prefabs guarantee in practice.
+    const node = skeletonInside(template) ? cloneSkinned(template) : template.clone(true);
     const byTemplateId = new Map<number, THREE.Object3D>();
     const pairs: [THREE.Object3D, THREE.Object3D][] = [];
     const walk = (src: THREE.Object3D, dst: THREE.Object3D) => {
@@ -396,4 +405,22 @@ interface LiveClone {
 function isDescendant(node: THREE.Object3D, ancestor: THREE.Object3D): boolean {
   for (let n: THREE.Object3D | null = node.parent; n; n = n.parent) if (n === ancestor) return true;
   return false;
+}
+
+function isSkinned(node: THREE.Object3D): node is THREE.SkinnedMesh {
+  return (node as THREE.SkinnedMesh).isSkinnedMesh === true;
+}
+
+/** True if the subtree has skinned meshes and all of their bones are inside it. */
+function skeletonInside(root: THREE.Object3D): boolean {
+  let skinned = false;
+  let inside = true;
+  root.traverse((node) => {
+    if (!isSkinned(node)) return;
+    skinned = true;
+    for (const bone of node.skeleton.bones) {
+      if (bone !== root && !isDescendant(bone, root)) inside = false;
+    }
+  });
+  return skinned && inside;
 }

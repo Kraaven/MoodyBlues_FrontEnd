@@ -3,8 +3,8 @@ import { Check, Copy } from 'lucide-react';
 import { cn } from './cn';
 import { Tooltip } from './Tooltip';
 
-/** A monospace value with a copy button. */
-export function CopyField({ value, label, className }: { value: string; label: string; className?: string }) {
+/** A monospace value with a copy button. `display` replaces the shown text (e.g. masked); the full `value` is copied. */
+export function CopyField({ value, label, display, className }: { value: string; label: string; display?: string; className?: string }) {
   const [copied, setCopied] = useState(false);
 
   const copy = async (e: React.MouseEvent) => {
@@ -31,7 +31,7 @@ export function CopyField({ value, label, className }: { value: string; label: s
           className,
         )}
       >
-        <span className="truncate">{value}</span>
+        <span className="truncate">{display ?? value}</span>
         {copied ? <Check className="h-3.5 w-3.5 shrink-0 text-ok" /> : <Copy className="h-3.5 w-3.5 shrink-0 text-fg-3 group-hover:text-accent-bright" />}
       </button>
     </Tooltip>

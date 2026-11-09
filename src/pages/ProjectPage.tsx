@@ -2,30 +2,32 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ChevronRight, Mountain, Wrench } from 'lucide-react';
 import { useProject } from '../api/queries';
-import { API_BASE_URL } from '../api/client';
 import { AppShell, PageHeader } from '../shell/AppShell';
 import { Button } from '../ui/Button';
 import { VersionChip, VersionStatusChip } from '../ui/Chip';
-import { CopyField } from '../ui/CopyField';
 import { Dialog } from '../ui/Dialog';
 import { SceneCover } from '../ui/SceneCover';
 import { EmptyState, ErrorState, Skeleton } from '../ui/States';
 import { formatBytes, formatRecorded, sceneTitle } from '../lib/format';
+import { ConnectionControl, ConnectionField } from './Connection';
 
-/** The three steps from DESIGN.md 7.3, "Getting started". */
-export function SetupSteps({ developerId }: { developerId: string | null }) {
+/** The steps from DESIGN.md 7.3, "Getting started". `connectionString` is shown when the project has one. */
+export function SetupSteps({ connectionString }: { connectionString: string | null }) {
   return (
     <ol className="space-y-4 text-sm text-fg-2">
       <li className="flex gap-3">
         <StepNumber n={1} />
         <div className="min-w-0 space-y-2">
           <p>
-            In Unity, create a config: <span className="text-fg">Assets &gt; Create &gt; MoodyBlues &gt; Scene Config</span>. Set its
-            Developer ID and backend URL:
+            In Unity, open <span className="text-fg">MoodyBlues &gt; Settings</span>, paste this project's connection string and click{' '}
+            <span className="text-fg">Test Connection</span>. It is set once for the whole Unity project.
           </p>
           <div className="flex flex-wrap gap-2">
-            {developerId ? <CopyField value={developerId} label="Developer ID" /> : <span className="text-fg-3">(the project's Developer ID)</span>}
-            <CopyField value={API_BASE_URL} label="backend URL" />
+            {connectionString ? (
+              <ConnectionField connectionString={connectionString} />
+            ) : (
+              <span className="text-[13px] text-fg-3">(the connection string, from the project's page)</span>
+            )}
           </div>
         </div>
       </li>
@@ -33,13 +35,14 @@ export function SetupSteps({ developerId }: { developerId: string | null }) {
         <StepNumber n={2} />
         <p>
           Add <span className="font-mono text-[13px] text-fg">MoodyBluesSessionManager</span> and{' '}
-          <span className="font-mono text-[13px] text-fg">MoodyBluesRuntimeManager</span> to the scene, and assign the config.
+          <span className="font-mono text-[13px] text-fg">MoodyBluesRuntimeManager</span> to the scene. A Scene Config is optional; without
+          one the defaults are used.
         </p>
       </li>
       <li className="flex gap-3">
         <StepNumber n={3} />
         <p>
-          Build the game, or run <span className="text-fg">Tools &gt; MoodyBlues &gt; Export This Scene</span>. The scene appears here,
+          Build the game, or run <span className="text-fg">MoodyBlues &gt; Export This Scene</span>. The scene appears here,
           and every recording of it after that.
         </p>
       </li>
@@ -76,12 +79,7 @@ export function ProjectPage() {
         <>
           <PageHeader
             title={project.data.name}
-            meta={
-              <>
-                <span className="text-fg-3">Developer ID</span>
-                <CopyField value={project.data.developerId} label="Developer ID" />
-              </>
-            }
+            meta={<ConnectionControl project={project.data} />}
             actions={
               <Button variant="secondary" onClick={() => setSetupOpen(true)}>
                 <Wrench className="h-4 w-4" />
@@ -94,7 +92,7 @@ export function ProjectPage() {
           {project.data.scenes.length === 0 ? (
             <EmptyState icon={Mountain} title="No scenes yet">
               <div className="mt-4 text-left">
-                <SetupSteps developerId={project.data.developerId} />
+                <SetupSteps connectionString={project.data.connectionString} />
               </div>
             </EmptyState>
           ) : (
@@ -124,7 +122,7 @@ export function ProjectPage() {
           )}
 
           <Dialog open={setupOpen} onOpenChange={setSetupOpen} title="Record a Unity scene" width="md">
-            <SetupSteps developerId={project.data.developerId} />
+            <SetupSteps connectionString={project.data.connectionString} />
           </Dialog>
         </>
       )}

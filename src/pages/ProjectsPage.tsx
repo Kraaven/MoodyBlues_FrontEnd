@@ -6,11 +6,10 @@ import { useCreateProject, useProjects } from '../api/queries';
 import { errorText } from '../api/client';
 import { AppShell, PageHeader } from '../shell/AppShell';
 import { Button } from '../ui/Button';
-import { CopyField } from '../ui/CopyField';
 import { Dialog } from '../ui/Dialog';
 import { Field, FormError } from '../ui/Field';
 import { EmptyState, ErrorState, Skeleton } from '../ui/States';
-import { plural } from '../lib/format';
+import { formatDateTime, plural } from '../lib/format';
 import { SetupSteps } from './ProjectPage';
 
 export function ProjectsPage() {
@@ -21,7 +20,7 @@ export function ProjectsPage() {
     <AppShell crumbs={[{ label: 'Projects' }]}>
       <PageHeader
         title="Projects"
-        meta={<span>One project per Unity game. Each has a Developer ID for the scene config.</span>}
+        meta={<span>One project per Unity game. Its page has the connection string for Unity.</span>}
         actions={
           <Button onClick={() => setCreating(true)}>
             <Plus className="h-4 w-4" />
@@ -50,7 +49,7 @@ export function ProjectsPage() {
           }
         >
           <div className="mt-2 text-left">
-            <SetupSteps developerId={null} />
+            <SetupSteps connectionString={null} />
           </div>
         </EmptyState>
       ) : (
@@ -66,8 +65,9 @@ export function ProjectsPage() {
                 <p className="truncate text-[16px] font-semibold text-fg">{project.name}</p>
                 <p className="text-[13px] text-fg-2">{plural(project.sceneCount, 'scene')}</p>
               </div>
-              <div className="flex items-center justify-between gap-3">
-                <CopyField value={project.developerId} label="Developer ID" />
+              <div className="flex items-center justify-between gap-3 text-[13px]">
+                <span className="text-fg-3">Created {formatDateTime(project.createdAtUtc)}</span>
+                {!project.ingestKeyPrefix && <span className="text-warn">No connection key</span>}
               </div>
             </Link>
           ))}
@@ -84,6 +84,7 @@ function CreateProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const create = useCreateProject();
   const navigate = useNavigate();
 
+  // The project page shows the connection string and the setup steps.
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const project = await create.mutateAsync(name.trim()).catch(() => null);

@@ -3,6 +3,7 @@ import { apiFetch, apiJson, ApiError } from './client';
 import {
   CHANGING_STATUSES,
   type DeleteResponse,
+  type IngestKeyResponse,
   type ProjectDetail,
   type ProjectSummary,
   type SceneDetail,
@@ -63,6 +64,17 @@ export function useCreateProject() {
   return useMutation({
     mutationFn: (name: string) => apiJson<ProjectSummary>('/api/projects', { method: 'POST', body: { name } }),
     onSuccess: () => client.invalidateQueries({ queryKey: keys.projects }),
+  });
+}
+
+export function useRotateIngestKey(projectId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiJson<IngestKeyResponse>(`/api/projects/${enc(projectId)}/ingest-key`, { method: 'POST' }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: keys.project(projectId) });
+      void client.invalidateQueries({ queryKey: keys.projects });
+    },
   });
 }
 
@@ -220,7 +232,7 @@ export async function downloadWithProgress(
   return out.buffer;
 }
 
-/** Saves an authenticated download to disk (a plain link cannot carry the JWT). */
+/** Saves an authenticated download to disk (through fetch, so a refresh can happen first if needed). */
 export async function saveDownload(path: string, filename: string): Promise<void> {
   const res = await apiFetch(path);
   const url = URL.createObjectURL(await res.blob());

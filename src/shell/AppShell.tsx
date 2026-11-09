@@ -64,7 +64,7 @@ function AccountMenu() {
           <ChevronDown className="h-3.5 w-3.5" />
         </button>
       }
-      items={[{ label: 'Sign out', icon: LogOut, onSelect: logout }]}
+      items={[{ label: 'Sign out', icon: LogOut, onSelect: () => void logout() }]}
     />
   );
 }

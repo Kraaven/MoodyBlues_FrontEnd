@@ -218,7 +218,7 @@ function NotReady({ session }: { session: SessionDetail }) {
       body = (
         <>
           This session was recorded in a scene version that has not been uploaded. Export it from Unity with{' '}
-          <span className="text-fg">Tools &gt; MoodyBlues &gt; Export This Scene</span> and the replay is built automatically.
+          <span className="text-fg">MoodyBlues &gt; Export This Scene</span> and the replay is built automatically.
           <span className="mt-3 block break-all font-mono text-[11px] text-fg-3">Scene version hash {session.sceneHash}</span>
         </>
       );

@@ -61,6 +61,15 @@ export function formatAgo(iso: string, now = Date.now()): string {
   return rtf.format(-Math.round(hours / 24), 'day');
 }
 
+/**
+ * `https://mbk_Q7xZ2a…@host`: a connection string with most of its key hidden, for display.
+ * Anything that is not a connection string is returned unchanged.
+ */
+export function maskConnection(connectionString: string): string {
+  const match = /^(https?:\/\/)(mbk_[^@]{0,6})[^@]*@(.*)$/.exec(connectionString);
+  return match ? `${match[1]}${match[2]}…@${match[3]}` : connectionString;
+}
+
 export function sceneTitle(scene: { displayName: string | null; sceneId: string }): string {
   return scene.displayName?.trim() || scene.sceneId;
 }

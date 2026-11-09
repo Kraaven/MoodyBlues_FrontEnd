@@ -222,7 +222,7 @@ function SceneWarnings({ scene }: { scene: SceneDetail }) {
   if (current.skippedMeshCount > 0) {
     warnings.push(
       `${plural(current.skippedMeshCount, 'mesh', 'meshes')} could not be included in this export and will be missing from replays. ` +
-        'They need Read/Write in Unity: run Tools > MoodyBlues > Make Scene Meshes Readable, or export from the Editor with Tools > MoodyBlues > Export This Scene.',
+        'They need Read/Write in Unity: run MoodyBlues > Make Scene Meshes Readable, or export from the Editor with MoodyBlues > Export This Scene.',
     );
   }
   if (warnings.length === 0) return null;

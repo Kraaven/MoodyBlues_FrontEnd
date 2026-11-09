@@ -40,7 +40,7 @@ export function SessionsTab() {
               <p className="font-semibold text-fg">Waiting for a scene version ({formatCount(scene.awaitingSceneSessionCount)})</p>
               <p className="text-fg-2">
                 These sessions were recorded in a scene version that has not been uploaded. Export it from Unity with{' '}
-                <span className="text-fg">Tools &gt; MoodyBlues &gt; Export This Scene</span> and they are built automatically.
+                <span className="text-fg">MoodyBlues &gt; Export This Scene</span> and they are built automatically.
               </p>
             </div>
           </div>
