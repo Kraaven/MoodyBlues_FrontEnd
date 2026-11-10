@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Button } from '../ui/Button';
 import { releaseStageView, useStage, type StageView } from './store';
-import { StagePreloader } from './StagePreloader';
 import { reducedMotion } from './support';
 
 /**
@@ -43,7 +42,7 @@ export default function StageLab() {
     state.setView(VIEWS.overview);
     return () => {
       state.setStatsEnabled(false);
-      state.setLoading(null);
+      state.setLoading('lab', null);
       releaseStageView('lab');
       if (timer.current) window.clearInterval(timer.current);
     };
@@ -57,10 +56,10 @@ export default function StageLab() {
     let received = 0;
     timer.current = window.setInterval(() => {
       received = Math.min(total, received + total / 40);
-      useStage.getState().setLoading({ label: 'Downloading the scene', received, total });
+      useStage.getState().setLoading('lab', { label: 'Downloading the scene', received, total });
       if (received >= total) {
         window.clearInterval(timer.current!);
-        window.setTimeout(() => useStage.getState().setLoading(null), 1200);
+        window.setTimeout(() => useStage.getState().setLoading('lab', null), 1200);
       }
     }, 100);
   };
@@ -128,7 +127,6 @@ export default function StageLab() {
           </p>
         </section>
       </div>
-      <StagePreloader />
     </div>
   );
 }

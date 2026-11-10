@@ -6,6 +6,38 @@
 //   6 PrefabLibrary
 //     7 Beacon_Template (inactive; object 8 is spawned from it)
 
+import zlib from 'node:zlib';
+
+// A 32x32 colour checker as a PNG, so the inspector has a real image texture to show.
+function checkerPng() {
+  const size = 32;
+  const raw = Buffer.alloc((size * 3 + 1) * size);
+  for (let y = 0; y < size; y++) {
+    raw[y * (size * 3 + 1)] = 0;
+    for (let x = 0; x < size; x++) {
+      const on = ((x >> 3) + (y >> 3)) % 2 === 0;
+      const o = y * (size * 3 + 1) + 1 + x * 3;
+      raw[o] = on ? 255 : 40;
+      raw[o + 1] = on ? 181 : 70;
+      raw[o + 2] = on ? 71 : 160;
+    }
+  }
+  const chunk = (type, data) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type), data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(zlib.crc32(body) >>> 0);
+    return Buffer.concat([len, body, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(size, 0);
+  ihdr.writeUInt32BE(size, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 2;
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+}
+
 function unitCube() {
   const faces = [
     [[1, 0, 0], [[1, -1, -1], [1, 1, -1], [1, 1, 1], [1, -1, 1]]],
@@ -17,16 +49,18 @@ function unitCube() {
   ];
   const pos = [];
   const nor = [];
+  const uv = [];
   const idx = [];
   faces.forEach(([n, vs], f) => {
-    vs.forEach((v) => {
+    vs.forEach((v, k) => {
+      uv.push(k === 0 || k === 3 ? 0 : 1, k < 2 ? 1 : 0);
       pos.push(v[0] * 0.5, v[1] * 0.5, v[2] * 0.5);
       nor.push(...n);
     });
     const b = f * 4;
     idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
   });
-  return { pos, nor, idx };
+  return { pos, nor, uv, idx };
 }
 
 export function makeGlb() {
@@ -44,11 +78,15 @@ export function makeGlb() {
   };
   const pv = push(cube.pos, Float32Array, 34962);
   const nv = push(cube.nor, Float32Array, 34962);
+  const uvv = push(cube.uv, Float32Array, 34962);
   const iv = push(cube.idx, Uint16Array, 34963);
+  const png = checkerPng();
+  const imageView = push(png, Uint8Array);
   const accessors = [
     { bufferView: pv, componentType: 5126, count: 24, type: 'VEC3', min: [-0.5, -0.5, -0.5], max: [0.5, 0.5, 0.5] },
     { bufferView: nv, componentType: 5126, count: 24, type: 'VEC3' },
     { bufferView: iv, componentType: 5123, count: 36, type: 'SCALAR' },
+    { bufferView: uvv, componentType: 5126, count: 24, type: 'VEC2' },
   ];
 
   const colors = [
@@ -58,8 +96,12 @@ export function makeGlb() {
     [0.42, 0.85, 0.62, 1], // crate C
     [0.85, 0.85, 0.95, 1], // beacon
   ];
-  const materials = colors.map((c) => ({ pbrMetallicRoughness: { baseColorFactor: c, metallicFactor: 0.1, roughnessFactor: 0.65 } }));
-  const meshes = colors.map((_, i) => ({ primitives: [{ attributes: { POSITION: 0, NORMAL: 1 }, indices: 2, material: i }] }));
+  const textured = new Set([0, 3]);
+  const materials = colors.map((c, i) => ({
+    name: ['FloorMat', 'CrateBlue', 'CrateOrange', 'CrateGreen', 'BeaconMat'][i],
+    pbrMetallicRoughness: { baseColorFactor: c, metallicFactor: 0.1, roughnessFactor: 0.65, ...(textured.has(i) ? { baseColorTexture: { index: 0 } } : {}) },
+  }));
+  const meshes = colors.map((_, i) => ({ primitives: [{ attributes: { POSITION: 0, NORMAL: 1, TEXCOORD_0: 3 }, indices: 2, material: i }] }));
 
   const nodes = [
     { name: 'Arena', children: [1, 2, 3, 4], extras: { objectId: 1 } },
@@ -79,6 +121,8 @@ export function makeGlb() {
     nodes,
     meshes,
     materials,
+    textures: [{ source: 0, name: 'Checker' }],
+    images: [{ bufferView: imageView, mimeType: 'image/png', name: 'Checker' }],
     accessors,
     bufferViews: views,
     buffers: [{ byteLength: bin.length }],

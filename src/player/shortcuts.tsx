@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
 import type { ReplayLog } from '../viewer/replay/replayFile';
+import { panelActions } from '../panels/panelStore';
 import { Dialog } from '../ui/Dialog';
 import { Kbd } from '../ui/States';
 import { SPEEDS, TICK_SECONDS, usePlayerUi, type Playback } from './playback';
 import { nextLogTime, previousLogTime } from './logNav';
+import { unityPath } from './unityPath';
 
 /** DESIGN.md Section 12, in display order. */
 const SHORTCUTS: [string[], string][] = [
@@ -18,9 +20,15 @@ const SHORTCUTS: [string[], string][] = [
   [['A'], 'Frame the whole scene'],
   [['F'], 'Follow the selected object'],
   [['Esc'], 'Clear selection'],
-  [['\\'], 'Collapse / expand the inspector'],
+  [['C'], "Copy the selected object's Unity path"],
+  [['Alt', '1 to 4'], 'Open Logs, Objects, Details, Raw data'],
+  [['P'], 'Show / hide labels on the rail'],
+  [['\\'], 'Collapse / expand the dock'],
   [['?'], 'Show this list'],
 ];
+
+/** Alt + digit opens a panel (DESIGN.md 15.1). */
+const PANEL_KEYS: Record<string, string> = { '1': 'logs', '2': 'objects', '3': 'details', '4': 'raw' };
 
 function isTyping(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
@@ -33,8 +41,15 @@ export function usePlayerShortcuts(playback: Playback, logs: readonly ReplayLog[
   useEffect(() => {
     if (!enabled) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
+      if (e.ctrlKey || e.metaKey || isTyping(e.target)) return;
       const ui = usePlayerUi.getState();
+      if (e.altKey) {
+        const panel = PANEL_KEYS[e.key];
+        if (!panel) return;
+        panelActions('player').open(panel);
+        e.preventDefault();
+        return;
+      }
       const t = playback.time;
       switch (e.key) {
         case ' ':
@@ -102,8 +117,20 @@ export function usePlayerShortcuts(playback: Playback, logs: readonly ReplayLog[
           ui.select(null);
           break;
         case '\\':
-          ui.setInspectorOpen(!ui.inspectorOpen);
+          panelActions('player').toggleDock();
           break;
+        case 'p':
+        case 'P':
+          panelActions('player').toggleRail();
+          break;
+        case 'c':
+        case 'C': {
+          const player = playback.player;
+          const node = ui.selectedId !== null ? player?.getObject(ui.selectedId) : undefined;
+          if (!player || !node) return;
+          void navigator.clipboard.writeText(unityPath(node, player.sceneRoot)).catch(() => undefined);
+          break;
+        }
         case '?':
           ui.setShortcutsOpen(true);
           break;

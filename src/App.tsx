@@ -6,15 +6,21 @@ import { ProjectsPage } from './pages/ProjectsPage';
 import { ProjectPage } from './pages/ProjectPage';
 import { ScenePage } from './pages/scene/ScenePage';
 import { ArchiveTab, SessionsTab, SettingsTab } from './pages/scene/SceneTabs';
+import { StagePreloader } from './stage/StagePreloader';
+import { debugEnabled } from './debug/enabled';
 import { Logo } from './ui/Logo';
 
 // three.js and the replay engine load only on these routes (DESIGN.md 12.3).
 const SessionPlayerPage = lazy(() => import('./player/SessionPlayerPage'));
 const SceneInspectorPage = lazy(() => import('./inspector/SceneInspectorPage'));
 // The persistent Stage loads in its own chunk, after the shell has painted (DESIGN.md 4.5).
+// Development tools, loaded only with ?debug.
+const DebugPanel = lazy(() => import('./debug/DebugPanel'));
 const StageHost = lazy(() => import('./stage/StageHost'));
 // Development only: drives the Stage by hand. Tree-shaken out of production builds.
 const StageLab = import.meta.env.DEV ? lazy(() => import('./stage/StageLab')) : null;
+
+const debugOn = debugEnabled();
 
 function RouteFallback() {
   return (
@@ -36,6 +42,12 @@ export default function App() {
       <Suspense fallback={null}>
         <StageHost />
       </Suspense>
+      <StagePreloader />
+      {debugOn && (
+        <Suspense fallback={null}>
+          <DebugPanel />
+        </Suspense>
+      )}
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           {StageLab && <Route path="/_stage" element={<StageLab />} />}

@@ -1,15 +1,23 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ChevronRight, Mountain, Wrench } from 'lucide-react';
-import { useProject } from '../api/queries';
-import { AppShell, PageHeader } from '../shell/AppShell';
+import { useProject, useSessions } from '../api/queries';
+import type { ProjectScene } from '../api/types';
+import { ViewShell, PageHeader } from '../shell/ViewShell';
+import { useBrowseStage } from '../stage/browseStage';
+import { RecIndicator } from '../stage/RecIndicator';
 import { Button } from '../ui/Button';
 import { VersionChip, VersionStatusChip } from '../ui/Chip';
-import { Dialog } from '../ui/Dialog';
-import { SceneCover } from '../ui/SceneCover';
+import { Sheet } from '../ui/Sheet';
+import { SnapshotImage } from '../ui/SnapshotImage';
 import { EmptyState, ErrorState, Skeleton } from '../ui/States';
 import { formatBytes, formatRecorded, sceneTitle } from '../lib/format';
 import { ConnectionControl, ConnectionField } from './Connection';
+
+/** Scenes above this size are not loaded just because the pointer rested on them (DESIGN.md 4.5). */
+const HOVER_PREVIEW_MAX_BYTES = 25 * 1024 * 1024;
+/** How long the pointer must rest on a scene before the Stage shows it. */
+const HOVER_DELAY_MS = 600;
 
 /** The steps from DESIGN.md 7.3, "Getting started". `connectionString` is shown when the project has one. */
 export function SetupSteps({ connectionString }: { connectionString: string | null }) {
@@ -62,14 +70,49 @@ export function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const project = useProject(projectId);
   const [setupOpen, setSetupOpen] = useState(false);
+  const [hovered, setHovered] = useState<ProjectScene | null>(null);
+  const timers = useRef<{ enter?: number; leave?: number }>({});
 
-  const name = project.data?.name ?? 'Project';
+  const data = project.data;
+  const latest = data ? [...data.scenes].sort((a, b) => b.updatedAtUtc.localeCompare(a.updatedAtUtc))[0] : undefined;
+
+  // The Stage shows the scene the pointer rested on, otherwise the dimmed Trace.
+  useBrowseStage(hovered && data ? { developerId: data.developerId, sceneId: hovered.sceneId, hash: hovered.latestHash } : null);
+  useEffect(
+    () => () => {
+      window.clearTimeout(timers.current.enter);
+      window.clearTimeout(timers.current.leave);
+    },
+    [],
+  );
+
+  const sessions = useSessions(data?.developerId, latest?.sceneId, latest ? { version: latest.currentVersion } : null);
+  const recording = (sessions.data ?? []).filter((s) => s.status === 'Recording');
+
+  const onEnter = (scene: ProjectScene) => {
+    window.clearTimeout(timers.current.leave);
+    window.clearTimeout(timers.current.enter);
+    if (scene.sizeBytes > HOVER_PREVIEW_MAX_BYTES || scene.processingStatus !== 'Ready') return;
+    timers.current.enter = window.setTimeout(() => setHovered(scene), HOVER_DELAY_MS);
+  };
+  const onLeave = () => {
+    window.clearTimeout(timers.current.enter);
+    window.clearTimeout(timers.current.leave);
+    timers.current.leave = window.setTimeout(() => setHovered(null), 300);
+  };
+
+  const name = data?.name ?? 'Project';
+  const base = data && latest ? `/projects/${data.id}/scenes/${encodeURIComponent(latest.sceneId)}` : '';
+  const trailing =
+    recording.length > 0 ? (
+      <RecIndicator count={recording.length} to={recording.length === 1 ? `${base}/sessions/${encodeURIComponent(recording[0].id)}` : base} />
+    ) : undefined;
 
   return (
-    <AppShell crumbs={[{ label: 'Projects', to: '/projects' }, { label: name }]}>
+    <ViewShell crumbs={[{ label: 'Projects', to: '/projects' }, { label: name }]} trailing={trailing}>
       {project.isError ? (
         <ErrorState error={project.error} title="This project did not load" onRetry={() => project.refetch()} />
-      ) : project.isPending ? (
+      ) : !data ? (
         <div className="space-y-6">
           <Skeleton className="h-12 w-72" />
           <Skeleton className="h-[72px]" />
@@ -78,8 +121,8 @@ export function ProjectPage() {
       ) : (
         <>
           <PageHeader
-            title={project.data.name}
-            meta={<ConnectionControl project={project.data} />}
+            title={data.name}
+            meta={<ConnectionControl project={data} />}
             actions={
               <Button variant="secondary" onClick={() => setSetupOpen(true)}>
                 <Wrench className="h-4 w-4" />
@@ -88,22 +131,26 @@ export function ProjectPage() {
             }
           />
 
-          <h2 className="mb-3 text-[16px] font-semibold text-fg">Scenes</h2>
-          {project.data.scenes.length === 0 ? (
-            <EmptyState icon={Mountain} title="No scenes yet">
+          <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-3">Scenes</h2>
+          {data.scenes.length === 0 ? (
+            <EmptyState icon={Mountain} title="No scenes yet" className="bg-ink-1/70 backdrop-blur-sm">
               <div className="mt-4 text-left">
-                <SetupSteps connectionString={project.data.connectionString} />
+                <SetupSteps connectionString={data.connectionString} />
               </div>
             </EmptyState>
           ) : (
-            <ul className="overflow-hidden rounded-[var(--radius-card)] border border-rule bg-ink-1">
-              {project.data.scenes.map((scene, i) => (
+            <ul className="overflow-hidden rounded-[var(--radius-card)] border border-rule bg-ink-1/85 backdrop-blur-sm">
+              {data.scenes.map((scene, i) => (
                 <li key={scene.sceneId} className="animate-rise border-b border-rule last:border-b-0" style={{ animationDelay: `${Math.min(i, 8) * 20}ms` }}>
                   <Link
-                    to={`/projects/${project.data.id}/scenes/${encodeURIComponent(scene.sceneId)}`}
-                    className="group flex items-center gap-4 px-4 py-3 transition-colors duration-[120ms] hover:bg-ink-2"
+                    to={`/projects/${data.id}/scenes/${encodeURIComponent(scene.sceneId)}`}
+                    onMouseEnter={() => onEnter(scene)}
+                    onMouseLeave={onLeave}
+                    onFocus={() => onEnter(scene)}
+                    onBlur={onLeave}
+                    className="group flex items-center gap-4 px-4 py-3 transition-colors duration-[120ms] hover:bg-ink-2/90 focus-visible:bg-ink-2/90"
                   >
-                    <SceneCover seed={scene.sceneId} className="h-12 w-[72px] shrink-0" />
+                    <SnapshotImage hash={scene.latestHash} seed={scene.sceneId} className="h-[52px] w-[92px] shrink-0" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[15px] font-medium text-fg">{sceneTitle(scene)}</p>
                       <p className="mt-0.5 truncate text-[13px] text-fg-3">
@@ -121,11 +168,11 @@ export function ProjectPage() {
             </ul>
           )}
 
-          <Dialog open={setupOpen} onOpenChange={setSetupOpen} title="Record a Unity scene" width="md">
-            <SetupSteps connectionString={project.data.connectionString} />
-          </Dialog>
+          <Sheet open={setupOpen} onOpenChange={setSetupOpen} title="Record a Unity scene">
+            <SetupSteps connectionString={data.connectionString} />
+          </Sheet>
         </>
       )}
-    </AppShell>
+    </ViewShell>
   );
 }

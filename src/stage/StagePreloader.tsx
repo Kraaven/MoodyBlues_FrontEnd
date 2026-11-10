@@ -6,7 +6,8 @@ import { useStage } from './store';
  * gesture as playback, only slower. Set it with `useStage.getState().setLoading(...)`.
  */
 export function StagePreloader() {
-  const loading = useStage((s) => s.loading);
+  // The oldest download still running is the one shown.
+  const loading = useStage((s) => Object.values(s.loading)[0] ?? null);
   if (!loading) return null;
 
   const fraction = loading.total ? Math.min(1, loading.received / loading.total) : null;

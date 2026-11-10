@@ -9,6 +9,7 @@ import { SectionLabel } from '../ui/States';
 import { cn } from '../ui/cn';
 import { formatPlayhead } from '../lib/format';
 import { usePlaybackState, usePlayerUi, type Playback } from './playback';
+import { unityPath } from './unityPath';
 
 interface TreeRow {
   id: number;
@@ -181,6 +182,8 @@ function SelectedObject({ player, objectId, playback }: { player: ReplayPlayer; 
   const select = usePlayerUi((s) => s.select);
   const frameSelected = usePlayerUi((s) => s.frameSelected);
   const obj = player.replay.objectsById.get(objectId);
+  const node = player.getObject(objectId);
+  const path = node ? unityPath(node, player.sceneRoot) : null;
   const localRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<HTMLDivElement>(null);
 
@@ -222,6 +225,11 @@ function SelectedObject({ player, objectId, playback }: { player: ReplayPlayer; 
           <p className="text-[12px] text-fg-3">
             <span className="tabular font-mono">#{objectId}</span> · {kind}
           </p>
+          {path && (
+            <p className="mt-0.5 truncate font-mono text-[11px] text-fg-3" title={`${path} (press C to copy)`}>
+              {path}
+            </p>
+          )}
         </div>
         <IconButton label="Frame selection" size="sm" onClick={frameSelected}>
           <LocateFixed className="h-4 w-4" />
@@ -233,10 +241,10 @@ function SelectedObject({ player, objectId, playback }: { player: ReplayPlayer; 
           <X className="h-4 w-4" />
         </IconButton>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-2">
         <div className="space-y-1">
           <SectionLabel>Local</SectionLabel>
-          <div ref={localRef} className="tabular whitespace-pre font-mono text-[11px] leading-4 text-fg-2" />
+          <div ref={localRef} className="tabular overflow-x-auto whitespace-pre font-mono text-[11px] leading-4 text-fg-2" />
         </div>
         <div className="space-y-1">
           <SectionLabel>World</SectionLabel>

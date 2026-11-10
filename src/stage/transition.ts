@@ -97,6 +97,15 @@ export class PoseTransition {
     return this.duration <= 0 || this.elapsed >= this.duration;
   }
 
+  /** Forget the current pose and continue from `pose`: used when something else moved the camera. */
+  reset(pose: Pose): void {
+    this.current = pose;
+    this.from = pose;
+    this.to = pose;
+    this.elapsed = 0;
+    this.duration = 0;
+  }
+
   /** Begin moving to `to`. A duration of 0 jumps there (reduced motion, first view). */
   start(to: Pose, durationMs: number): void {
     this.from = this.current;

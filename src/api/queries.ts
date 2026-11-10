@@ -50,10 +50,14 @@ export function useProjects() {
   return useQuery({ queryKey: keys.projects, queryFn: () => apiJson<ProjectSummary[]>('/api/projects') });
 }
 
+/** Query options for one project, shared by the hook and by pages that load several at once. */
+export function projectQuery(projectId: string) {
+  return { queryKey: keys.project(projectId), queryFn: () => apiJson<ProjectDetail>(`/api/projects/${enc(projectId)}`) };
+}
+
 export function useProject(projectId: string | undefined) {
   return useQuery({
-    queryKey: keys.project(projectId ?? ''),
-    queryFn: () => apiJson<ProjectDetail>(`/api/projects/${enc(projectId!)}`),
+    ...projectQuery(projectId ?? ''),
     enabled: Boolean(projectId),
     refetchInterval: 15_000,
   });
@@ -150,13 +154,20 @@ export function sceneFilePath(developerId: string, sceneId: string, hash?: strin
 
 // ---- Sessions ---------------------------------------------------------------------------------
 
+/** Query options for a scene's sessions in one version, or those waiting for a scene. */
+export function sessionsQuery(developerId: string, sceneId: string, filter: SessionFilter) {
+  return {
+    queryKey: keys.sessions(developerId, sceneId, filter),
+    queryFn: () => {
+      const query = 'version' in filter ? `?version=${filter.version}` : '?awaitingScene=true';
+      return apiJson<SessionSummary[]>(`${scenePath(developerId, sceneId)}/sessions${query}`);
+    },
+  };
+}
+
 export function useSessions(developerId: string | undefined, sceneId: string | undefined, filter: SessionFilter | null) {
   return useQuery({
-    queryKey: keys.sessions(developerId ?? '', sceneId ?? '', filter ?? { version: 0 }),
-    queryFn: () => {
-      const query = filter && 'version' in filter ? `?version=${filter.version}` : '?awaitingScene=true';
-      return apiJson<SessionSummary[]>(`${scenePath(developerId!, sceneId!)}/sessions${query}`);
-    },
+    ...sessionsQuery(developerId ?? '', sceneId ?? '', filter ?? { version: 0 }),
     enabled: Boolean(developerId && sceneId && filter),
     refetchInterval: (query) =>
       query.state.data?.some((s) => CHANGING_STATUSES.has(s.status)) ? FAST_POLL_MS : SLOW_POLL_MS,

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, LogOut } from 'lucide-react';
+import { ChevronDown, ChevronLeft, LogOut } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
 import { Breadcrumb, type Crumb } from '../ui/Breadcrumb';
 import { Logo, Wordmark } from '../ui/Logo';
@@ -70,11 +70,20 @@ export function Chrome({ crumbs = [], variant = 'floating', trailing }: { crumbs
         {floating && <div aria-hidden="true" className="absolute inset-x-0 top-0 h-[88px] bg-gradient-to-b from-ink-0/95 via-ink-0/60 to-transparent" />}
         <div className={cn('relative flex items-center gap-3', floating ? 'px-4 py-3 sm:px-6' : 'h-11 px-3 sm:px-4')}>
           <Brand />
+          {!floating && crumbs.length > 1 && (
+            <Link
+              to={crumbs[crumbs.length - 2].to ?? '/projects'}
+              className="pointer-events-auto flex min-w-0 items-center gap-1 text-[13px] text-fg-2 hover:text-fg sm:hidden"
+            >
+              <ChevronLeft className="h-4 w-4 shrink-0" />
+              <span className="max-w-[110px] truncate">{crumbs[crumbs.length - 2].label}</span>
+            </Link>
+          )}
           {crumbs.length > 0 && (
             <div
               className={cn(
                 'pointer-events-auto min-w-0 overflow-hidden',
-                floating ? 'glass rounded-full border border-rule px-2 py-0.5' : 'ml-1 border-l border-rule pl-3',
+                floating ? 'glass rounded-full border border-rule px-2 py-0.5' : 'ml-1 hidden border-l border-rule pl-3 sm:block',
               )}
             >
               <Breadcrumb crumbs={crumbs} />

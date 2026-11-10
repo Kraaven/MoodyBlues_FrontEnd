@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Archive, ChevronDown, ChevronRight, Download, Hourglass, MoreHorizontal, Trash2, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { sceneFilePath, saveDownload, useDeleteArchive, useDeleteVersion, useSessions } from '../../api/queries';
 import { errorText } from '../../api/client';
-import type { SceneVersion } from '../../api/types';
+import type { SceneVersion, SessionSummary } from '../../api/types';
 import { Button, IconButton } from '../../ui/Button';
 import { VersionChip, VersionStatusChip } from '../../ui/Chip';
 import { ConfirmDialog } from '../../ui/Dialog';
@@ -13,8 +13,39 @@ import { EmptyState, ErrorState, SectionLabel, Skeleton } from '../../ui/States'
 import { useToast } from '../../ui/Toast';
 import { cn } from '../../ui/cn';
 import { formatBytes, formatCount, formatRecorded, plural, safeFilename, sceneTitle } from '../../lib/format';
-import { SessionTable, SessionsEmpty } from './SessionTable';
+import { useGlyphTimelines, useSessionIndexer } from './glyphs';
+import { SessionReel, SessionsEmpty } from './SessionReel';
 import { DeleteSceneDialog, useSceneContext } from './ScenePage';
+
+/**
+ * Offers to read the replays of sessions that only have a summary glyph, so each gets a true timeline
+ * (DESIGN.md 7.6). Never runs by itself.
+ */
+function IndexSessions({ sessions }: { sessions: SessionSummary[] }) {
+  const timelines = useGlyphTimelines(sessions);
+  const missing = useMemo(() => sessions.filter((s) => s.status === 'Ready' && !timelines.has(s.id)), [sessions, timelines]);
+  const { state, start, cancel } = useSessionIndexer(missing);
+  if (!state.running && missing.length === 0) return null;
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-[var(--radius-card)] border border-rule bg-ink-1/70 px-4 py-2.5 text-[12px] backdrop-blur-sm">
+      <p className="min-w-0 text-fg-3" role="status">
+        {state.running
+          ? `Reading replays: ${state.done} of ${state.total}${state.failed > 0 ? `, ${state.failed} failed` : ''}`
+          : `Reading the replays of ${plural(missing.length, 'session')} gives each a true timeline instead of a summary.`}
+      </p>
+      {state.running ? (
+        <Button size="sm" variant="ghost" onClick={cancel}>
+          Cancel
+        </Button>
+      ) : (
+        <Button size="sm" variant="secondary" onClick={() => void start()}>
+          Index sessions
+        </Button>
+      )}
+    </div>
+  );
+}
 
 function useSessionHref() {
   const { base } = useSceneContext();
@@ -47,7 +78,7 @@ export function SessionsTab() {
           {awaiting.isError ? (
             <ErrorState error={awaiting.error} onRetry={() => awaiting.refetch()} />
           ) : awaiting.data ? (
-            <SessionTable sessions={awaiting.data} sessionHref={href} />
+            <SessionReel sessions={awaiting.data} sessionHref={href} />
           ) : (
             <Skeleton className="h-24" />
           )}
@@ -65,7 +96,10 @@ export function SessionsTab() {
         ) : sessions.data.length === 0 ? (
           <SessionsEmpty>No sessions in this version yet. Play the scene with recording on and it appears here.</SessionsEmpty>
         ) : (
-          <SessionTable sessions={sessions.data} sessionHref={href} />
+          <>
+            <IndexSessions sessions={sessions.data} />
+            <SessionReel sessions={sessions.data} sessionHref={href} />
+          </>
         )}
       </section>
     </div>
@@ -149,7 +183,7 @@ function ArchivedVersion({ version: v }: { version: SceneVersion }) {
   };
 
   return (
-    <div className="overflow-hidden rounded-[var(--radius-card)] border border-rule bg-ink-1">
+    <div className="overflow-hidden rounded-[var(--radius-card)] border border-rule bg-ink-1/85 backdrop-blur-sm">
       <div className={cn('flex items-center gap-3 px-4 py-3', open && 'border-b border-rule')}>
         <button
           type="button"
@@ -187,7 +221,7 @@ function ArchivedVersion({ version: v }: { version: SceneVersion }) {
           ) : sessions.data.length === 0 ? (
             <SessionsEmpty>No sessions were recorded in this version.</SessionsEmpty>
           ) : (
-            <SessionTable sessions={sessions.data} sessionHref={href} />
+            <SessionReel sessions={sessions.data} sessionHref={href} />
           )}
         </div>
       )}
@@ -222,7 +256,7 @@ export function SettingsTab() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <section className="space-y-4 rounded-[var(--radius-card)] border border-rule bg-ink-1 p-5">
+      <section className="space-y-4 rounded-[var(--radius-card)] border border-rule bg-ink-1/85 backdrop-blur-sm p-5">
         <h2 className="text-[16px] font-semibold text-fg">Scene</h2>
         <dl className="space-y-4 text-[13px]">
           <div className="space-y-1.5">
@@ -241,7 +275,7 @@ export function SettingsTab() {
         </dl>
       </section>
 
-      <section className="space-y-3 rounded-[var(--radius-card)] border border-rule bg-ink-1 p-5">
+      <section className="space-y-3 rounded-[var(--radius-card)] border border-rule bg-ink-1/85 backdrop-blur-sm p-5">
         <h2 className="text-[16px] font-semibold text-fg">Storage</h2>
         <p className="text-[13px] text-fg-2">
           {plural(versions, 'version')} · {plural(sessions, 'session')} · <span className="text-fg">{formatBytes(scene.totalBytes)}</span> in total

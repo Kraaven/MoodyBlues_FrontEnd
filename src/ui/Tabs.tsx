@@ -51,7 +51,7 @@ export function SegmentTabs<T extends string>({
             aria-selected={active}
             onClick={() => onChange(item.id)}
             className={cn(
-              'flex h-7 flex-1 items-center justify-center gap-1.5 rounded-[5px] px-2 text-[13px] font-medium transition-colors duration-[120ms]',
+              'flex h-7 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-[5px] px-2 text-[13px] font-medium transition-colors duration-[120ms]',
               active ? 'bg-ink-3 text-fg shadow-[inset_0_1px_0_rgb(255_255_255/0.05)]' : 'text-fg-2 hover:text-fg',
             )}
           >

@@ -169,7 +169,11 @@ async function signIn(page, email = 'ada@studio.dev', password = 'hunter2hunter2
   await page.waitForURL('**/projects');
   await settle(page, 1200);
   await context.clearCookies();
-  await page.locator('a[href="/projects/p3"]').first().click();
+  // The lobby has already cached every project, so go somewhere that has to ask the server.
+  await page.evaluate(() => {
+    window.history.pushState({}, '', '/projects/p3/scenes/unknown-scene');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
   await page.waitForURL('**/login', { timeout: 15000 });
   await page.getByText('Your session expired. Sign in again.').waitFor({ timeout: 5000 });
   check('an expired session lands on /login with the notice', path(page) === '/login');

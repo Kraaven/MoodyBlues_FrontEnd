@@ -20,14 +20,14 @@ export function Timeline({ playback, replay, disabled }: { playback: Playback; r
   const logs = replay?.logs ?? [];
 
   return (
-    <div className="shrink-0 border-t border-rule bg-ink-1/95 px-4 pb-3 pt-2">
+    <div className="glass relative z-10 shrink-0 border-t border-rule px-4 pb-3 pt-2">
       <div className="flex h-9 items-center gap-2">
         <IconButton label={playing && !disabled ? 'Pause' : 'Play'} shortcut="Space" onClick={() => playback.toggle()} disabled={disabled}>
           {playing && !disabled ? <Pause className="h-4 w-4 fill-current" /> : <Play className="h-4 w-4 fill-current" />}
         </IconButton>
         <TimeReadout playback={playback} total={total} />
-        <div className="mx-2 h-5 w-px bg-rule" aria-hidden="true" />
-        <div className="flex items-center gap-0.5" role="group" aria-label="Playback speed">
+        <div className="mx-2 h-5 w-px bg-rule max-sm:hidden" aria-hidden="true" />
+        <div className="flex items-center gap-0.5 max-sm:overflow-x-auto" role="group" aria-label="Playback speed">
           {SPEEDS.map((s, i) => (
             <Tooltip key={s} content={`Speed ${s}× (${i + 1})`}>
               <button
@@ -45,11 +45,11 @@ export function Timeline({ playback, replay, disabled }: { playback: Playback; r
             </Tooltip>
           ))}
         </div>
-        <div className="mx-2 h-5 w-px bg-rule" aria-hidden="true" />
-        <IconButton label="Previous log" shortcut="[" size="sm" disabled={disabled || logs.length === 0} onClick={() => playback.seek(previousLogTime(logs, playback.time))}>
+        <div className="mx-2 h-5 w-px bg-rule max-sm:hidden" aria-hidden="true" />
+        <IconButton label="Previous log" className="max-sm:hidden" shortcut="[" size="sm" disabled={disabled || logs.length === 0} onClick={() => playback.seek(previousLogTime(logs, playback.time))}>
           <ChevronsLeft className="h-4 w-4" />
         </IconButton>
-        <IconButton label="Next log" shortcut="]" size="sm" disabled={disabled || logs.length === 0} onClick={() => playback.seek(nextLogTime(logs, playback.time))}>
+        <IconButton label="Next log" shortcut="]" size="sm" className="max-sm:hidden" disabled={disabled || logs.length === 0} onClick={() => playback.seek(nextLogTime(logs, playback.time))}>
           <ChevronsRight className="h-4 w-4" />
         </IconButton>
         <div className="flex-1" />
@@ -72,7 +72,7 @@ function TimeReadout({ playback, total }: { playback: Playback; total: number })
     [playback],
   );
   return (
-    <span className="tabular font-mono text-[13px] text-fg">
+    <span className="tabular whitespace-nowrap font-mono text-[13px] text-fg">
       <span ref={ref}>{formatPlayhead(playback.time)}</span>
       <span className="text-fg-3"> / {formatPlayhead(total)}</span>
     </span>
@@ -192,8 +192,8 @@ function Rail({ playback, replay, total, disabled, showLogs }: { playback: Playb
         ))}
 
         <div ref={headRef} className="pointer-events-none absolute inset-y-0 w-0" style={{ left: 0 }}>
-          <div className="absolute inset-y-0 -left-px w-0.5 rounded-full bg-white shadow-[0_0_10px_2px_rgb(34_211_238/0.55)]" />
-          <div className="absolute left-0 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-blue shadow-[0_0_12px_rgb(255_181_71/0.7)] transition-transform group-hover:scale-110" />
+          <div className="absolute inset-y-0 -left-px w-0.5 rounded-full bg-now shadow-[0_0_10px_2px_rgb(255_181_71/0.55)]" />
+          <div className="absolute left-0 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-ink-0 bg-now shadow-[0_0_12px_rgb(255_181_71/0.7)] transition-transform group-hover:scale-110" />
         </div>
 
         {hover && !disabled && (

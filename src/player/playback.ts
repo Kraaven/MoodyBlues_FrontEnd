@@ -111,7 +111,6 @@ export function usePlaybackState(playback: Playback): { playing: boolean; speed:
 }
 
 const LOGS_ON_TRACK_KEY = 'moodyblues.logsOnTrack';
-const INSPECTOR_WIDTH_KEY = 'moodyblues.inspectorWidth';
 
 function readStored<T>(key: string, fallback: T, parse: (v: string) => T): T {
   try {
@@ -130,14 +129,9 @@ function store(key: string, value: string) {
   }
 }
 
-export type InspectorTab = 'logs' | 'objects' | 'details';
-
 interface PlayerUiState {
   selectedId: number | null;
   follow: boolean;
-  inspectorOpen: boolean;
-  inspectorTab: InspectorTab;
-  inspectorWidth: number;
   logsOnTrack: boolean;
   showGrid: boolean;
   /** Bumped to ask the viewport to frame the whole scene / the selection. */
@@ -146,9 +140,6 @@ interface PlayerUiState {
   shortcutsOpen: boolean;
   select: (id: number | null) => void;
   setFollow: (follow: boolean) => void;
-  setInspectorOpen: (open: boolean) => void;
-  setInspectorTab: (tab: InspectorTab) => void;
-  setInspectorWidth: (width: number) => void;
   setLogsOnTrack: (on: boolean) => void;
   toggleGrid: () => void;
   frameAll: () => void;
@@ -157,12 +148,10 @@ interface PlayerUiState {
   reset: () => void;
 }
 
+/** What the person watching has chosen: the selection, the camera helpers and the dialogs. Panel layout lives in src/panels. */
 export const usePlayerUi = create<PlayerUiState>((set) => ({
   selectedId: null,
   follow: false,
-  inspectorOpen: true,
-  inspectorTab: 'logs',
-  inspectorWidth: readStored(INSPECTOR_WIDTH_KEY, 360, (v) => Math.min(480, Math.max(320, Number(v) || 360))),
   logsOnTrack: readStored(LOGS_ON_TRACK_KEY, true, (v) => v !== 'false'),
   showGrid: true,
   frameAllRequest: 0,
@@ -170,13 +159,6 @@ export const usePlayerUi = create<PlayerUiState>((set) => ({
   shortcutsOpen: false,
   select: (selectedId) => set((s) => ({ selectedId, follow: selectedId === null ? false : s.follow })),
   setFollow: (follow) => set({ follow }),
-  setInspectorOpen: (inspectorOpen) => set({ inspectorOpen }),
-  setInspectorTab: (inspectorTab) => set({ inspectorTab, inspectorOpen: true }),
-  setInspectorWidth: (width) => {
-    const inspectorWidth = Math.min(480, Math.max(320, Math.round(width)));
-    store(INSPECTOR_WIDTH_KEY, String(inspectorWidth));
-    set({ inspectorWidth });
-  },
   setLogsOnTrack: (logsOnTrack) => {
     store(LOGS_ON_TRACK_KEY, String(logsOnTrack));
     set({ logsOnTrack });
