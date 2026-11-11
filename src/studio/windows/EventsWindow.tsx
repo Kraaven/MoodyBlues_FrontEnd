@@ -173,7 +173,7 @@ export function EventsWindow({ replay, playback, label }: { replay: Replay; play
                     <span
                       className={cn(
                         'mt-1.5 flex items-start gap-2 break-words text-[16px] leading-6',
-                        entry.tone === 'error' ? 'text-[#ff9a8e]' : entry.tone === 'warn' ? 'text-accent' : 'text-fg',
+                        entry.tone === 'error' ? 'text-danger-soft' : entry.tone === 'warn' ? 'text-accent' : 'text-fg',
                         !isOpen && 'line-clamp-2',
                       )}
                     >

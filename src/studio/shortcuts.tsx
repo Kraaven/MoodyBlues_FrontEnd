@@ -9,7 +9,6 @@ import { useStudio } from './studioStore';
 import { windowActions } from './windows/windowStore';
 
 const GENERAL: [string[], string][] = [
-  [['R'], 'Cinema on / off'],
   [['A'], 'Frame the whole scene'],
   [['Shift', 'F'], 'Frame the selection'],
   [['Esc'], 'Clear the selection'],
@@ -44,13 +43,11 @@ export function useStudioShortcuts({
   windows,
   playback,
   logs,
-  onCinema,
 }: {
   scope: string;
   windows: string[];
   playback: Playback | null;
   logs: readonly ReplayLog[];
-  onCinema: () => void;
 }) {
   const windowKey = windows.join(',');
   useEffect(() => {
@@ -68,10 +65,6 @@ export function useStudioShortcuts({
       const t = playback?.time ?? 0;
       const ready = Boolean(playback?.player);
       switch (e.key) {
-        case 'r':
-        case 'R':
-          onCinema();
-          break;
         case 'a':
         case 'A':
           studio.frameAll();
@@ -171,7 +164,7 @@ export function useStudioShortcuts({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [scope, windowKey, playback, logs, onCinema]);
+  }, [scope, windowKey, playback, logs]);
 }
 
 function Table({ title, rows }: { title: string; rows: [string[], string][] }) {

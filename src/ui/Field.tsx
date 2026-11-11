@@ -78,7 +78,7 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field({ l
 export function FormError({ children }: { children: ReactNode }) {
   if (!children) return null;
   return (
-    <p role="alert" className="rounded-[var(--radius-control)] border border-danger/30 bg-danger/10 px-3.5 py-2.5 text-[13px] text-[#ffc0b8]">
+    <p role="alert" className="rounded-[var(--radius-control)] border border-danger/30 bg-danger/10 px-3.5 py-2.5 text-[13px] text-danger-soft">
       {children}
     </p>
   );

@@ -1,85 +1,75 @@
 import { useState } from 'react';
-import { ArrowUpRight, KeyRound, RotateCw } from 'lucide-react';
+import { ChevronRight, KeyRound, RotateCw } from 'lucide-react';
 import { useRotateIngestKey } from '../api/queries';
 import type { ProjectDetail } from '../api/types';
-import { useAuth } from '../auth/useAuth';
 import { Button } from '../ui/Button';
 import { CopyField } from '../ui/CopyField';
 import { ConfirmDialog, Dialog } from '../ui/Dialog';
 import { useToast } from '../ui/Toast';
 import { formatDateTime, maskConnection } from '../lib/format';
-import { useSetupGuide } from './SetupGuide';
+import { SetupSteps } from './SetupGuide';
 
 /**
  * Unity connection: the one value that links a Unity project to this dashboard. Shown masked, copied
- * in full. Rotate replaces it when it leaks, and locks out every build that still has the old one,
- * so it asks first.
+ * in full, with the setup steps one click away. Rotate replaces it when it leaks, and locks out every
+ * build that still has the old one, so it asks first.
  */
 export function ConnectionDialog({ project, open, onOpenChange }: { project: ProjectDetail; open: boolean; onOpenChange: (open: boolean) => void }) {
-  const { user } = useAuth();
   const rotate = useRotateIngestKey(project.id);
   const notify = useToast();
-  const showGuide = useSetupGuide((s) => s.show);
   const [confirming, setConfirming] = useState(false);
   const hasKey = Boolean(project.ingestKeyPrefix);
-  const workspace = user?.email.split('@')[0] ?? 'workspace';
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange} title="Unity connection" context={`${project.name} / ${workspace}`} width="md" display>
+      <Dialog open={open} onOpenChange={onOpenChange} title="Unity connection" context={project.name} width="md">
         {project.connectionString ? (
-          <div className="space-y-5">
-            <p className="text-[17px] leading-7 text-fg">
-              Paste this into <span className="whitespace-nowrap">MoodyBlues &rarr; Settings</span> in Unity.
+          <div className="space-y-4">
+            <p className="text-[14px] text-fg-2">
+              Paste this into <span className="text-fg">MoodyBlues &gt; Settings</span> in Unity, once per Unity project.
             </p>
             <CopyField value={project.connectionString} display={maskConnection(project.connectionString)} label="connection string" size="lg" />
-            <p className="text-[14px] text-fg-2">
-              Keep this private. Only share it with your team.
-              {project.ingestKeyCreatedAtUtc && <span className="text-fg-3"> Key created {formatDateTime(project.ingestKeyCreatedAtUtc)}.</span>}
+            <p className="text-[13px] text-fg-3">
+              Keep it private; share it only with your team.
+              {project.ingestKeyCreatedAtUtc && <> Created {formatDateTime(project.ingestKeyCreatedAtUtc)}.</>}
             </p>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="flex items-start gap-3 rounded-[var(--radius-card)] border border-caution/30 bg-caution/8 p-4">
-              <KeyRound className="mt-0.5 h-5 w-5 shrink-0 text-caution" />
-              <p className="text-[14px] text-fg-2">
-                {hasKey
-                  ? 'This project has a key from before keys could be shown again. Rotate it to get a connection string you can copy.'
-                  : 'This project has no connection key yet. Until it has one, recordings and scene uploads from Unity are refused.'}
-              </p>
-            </div>
+          <div className="flex items-start gap-3 rounded-[var(--radius-card)] border border-caution/30 bg-caution/8 p-4">
+            <KeyRound className="mt-0.5 h-5 w-5 shrink-0 text-caution" />
+            <p className="text-[14px] text-fg-2">
+              {hasKey
+                ? 'This project has a key from before keys could be shown again. Rotate it to get a connection string you can copy.'
+                : 'This project has no connection key yet. Until it has one, recordings and scene uploads from Unity are refused.'}
+            </p>
           </div>
         )}
 
-        <div className="mt-9 space-y-5">
+        <details className="group mt-6 border-t border-rule pt-4">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[14px] text-fg-2 transition-colors hover:text-fg [&::-webkit-details-marker]:hidden">
+            <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
+            Setup steps
+          </summary>
+          <div className="mt-5">
+            <SetupSteps current={1} compact />
+          </div>
+        </details>
+
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
           {project.connectionString ? (
-            <Button size="lg" className="w-full justify-start" onClick={() => onOpenChange(false)}>
-              Done
-            </Button>
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setConfirming(true)}>
+                <RotateCw className="h-3.5 w-3.5" />
+                Rotate key
+              </Button>
+              <Button onClick={() => onOpenChange(false)}>Done</Button>
+            </>
           ) : (
-            <Button size="lg" className="w-full justify-start" loading={rotate.isPending} onClick={() => setConfirming(true)}>
+            <Button loading={rotate.isPending} onClick={() => setConfirming(true)}>
               <KeyRound className="h-4 w-4" />
               {hasKey ? 'Rotate key' : 'Create connection key'}
             </Button>
           )}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                onOpenChange(false);
-                showGuide(project.connectionString);
-              }}
-              className="inline-flex items-center gap-1 text-[15px] text-accent hover:text-accent-hover"
-            >
-              Installation guide <ArrowUpRight className="h-4 w-4" />
-            </button>
-            {project.connectionString && (
-              <button type="button" onClick={() => setConfirming(true)} className="inline-flex items-center gap-1.5 text-[13px] text-fg-3 transition-colors hover:text-[#ff9a8e]">
-                <RotateCw className="h-3.5 w-3.5" />
-                Rotate key
-              </button>
-            )}
-          </div>
         </div>
       </Dialog>
 

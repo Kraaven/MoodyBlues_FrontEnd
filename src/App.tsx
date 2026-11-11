@@ -6,8 +6,6 @@ import { LobbyPage } from './pages/LobbyPage';
 import { NewProjectPage } from './pages/NewProjectPage';
 import { ProjectPage } from './pages/ProjectPage';
 import { ScenePage } from './pages/scene/ScenePage';
-import { CurrentVersionTab, SettingsTab, VersionHistoryTab } from './pages/scene/SceneTabs';
-import { SetupGuideDialog } from './shell/SetupGuide';
 import { StagePreloader } from './stage/StagePreloader';
 import { debugEnabled } from './debug/enabled';
 import { Mark } from './ui/Logo';
@@ -35,9 +33,10 @@ function LegacyInspectRedirect() {
   return <Navigate to={`/projects/${projectId}/scenes/${sceneId}/view${version ? `?version=${version}` : ''}`} replace />;
 }
 
-function LegacyArchiveRedirect() {
+/** The scene page used to have History and Settings tabs; both now live on the page itself. */
+function LegacySceneRedirect() {
   const { projectId, sceneId } = useParams();
-  return <Navigate to={`/projects/${projectId}/scenes/${sceneId}/history`} replace />;
+  return <Navigate to={`/projects/${projectId}/scenes/${sceneId}`} replace />;
 }
 
 export default function App() {
@@ -47,7 +46,6 @@ export default function App() {
         <StageHost />
       </Suspense>
       <StagePreloader />
-      <SetupGuideDialog />
       {debugOn && (
         <Suspense fallback={null}>
           <DebugPanel />
@@ -62,12 +60,10 @@ export default function App() {
             <Route path="/projects" element={<LobbyPage />} />
             <Route path="/projects/new" element={<NewProjectPage />} />
             <Route path="/projects/:projectId" element={<ProjectPage />} />
-            <Route path="/projects/:projectId/scenes/:sceneId" element={<ScenePage />}>
-              <Route index element={<CurrentVersionTab />} />
-              <Route path="history" element={<VersionHistoryTab />} />
-              <Route path="settings" element={<SettingsTab />} />
-              <Route path="archive" element={<LegacyArchiveRedirect />} />
-            </Route>
+            <Route path="/projects/:projectId/scenes/:sceneId" element={<ScenePage />} />
+            <Route path="/projects/:projectId/scenes/:sceneId/history" element={<LegacySceneRedirect />} />
+            <Route path="/projects/:projectId/scenes/:sceneId/settings" element={<LegacySceneRedirect />} />
+            <Route path="/projects/:projectId/scenes/:sceneId/archive" element={<LegacySceneRedirect />} />
             <Route path="/projects/:projectId/scenes/:sceneId/view" element={<StudioPage />} />
             <Route path="/projects/:projectId/scenes/:sceneId/sessions/:sessionId" element={<StudioPage />} />
             <Route path="/projects/:projectId/scenes/:sceneId/inspect" element={<LegacyInspectRedirect />} />

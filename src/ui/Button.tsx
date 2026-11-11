@@ -20,7 +20,7 @@ const variants: Record<ButtonVariant, string> = {
   secondary: 'border border-rule-strong bg-ink-3 text-fg hover:border-fg-3/60 hover:bg-ink-4',
   quiet: 'border border-rule bg-ink-1/60 text-fg hover:border-rule-strong hover:bg-ink-3',
   ghost: 'text-fg-2 hover:bg-ink-3 hover:text-fg',
-  danger: 'border border-danger/40 bg-danger/12 text-[#ffb1a8] hover:bg-danger/20',
+  danger: 'border border-danger/40 bg-danger/12 text-danger-soft hover:bg-danger/20',
 };
 
 const sizes: Record<ButtonSize, string> = {

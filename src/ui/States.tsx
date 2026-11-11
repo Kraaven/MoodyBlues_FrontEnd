@@ -82,17 +82,3 @@ export function Kbd({ children }: { children: ReactNode }) {
   );
 }
 
-/** "PROJECT / APERTURE": a mono uppercase label. */
-export function Overline({ children, className, accent = false }: { children: ReactNode; className?: string; accent?: boolean }) {
-  return <p className={cn('eyebrow', accent && 'text-accent', className)}>{children}</p>;
-}
-
-/** Label on the left, a mono value on the right: the facts in every panel. */
-export function FactRow({ label, children, className }: { label: ReactNode; children: ReactNode; className?: string }) {
-  return (
-    <div className={cn('flex min-w-0 items-baseline justify-between gap-4 py-2', className)}>
-      <dt className="shrink-0 text-[14px] text-fg-2">{label}</dt>
-      <dd className="tabular min-w-0 truncate text-right font-mono text-[13px] text-fg">{children}</dd>
-    </div>
-  );
-}

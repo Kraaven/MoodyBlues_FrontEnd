@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="160" viewBox="0 0 480 160" fill="none">
+  <!-- Alternative: a playhead. A line through time with the "now" dot. -->
+  <rect width="480" height="160" fill="#1b1b1a"/>
+  <path d="M80 36v88" stroke="#4a4946" stroke-width="4" stroke-linecap="round"/>
+  <path d="M80 36v54" stroke="#f5b544" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="80" cy="90" r="14" fill="#f5b544"/>
+  <text x="140" y="94" font-family="Inter, system-ui, sans-serif" font-size="34" font-weight="600" letter-spacing="-0.5" fill="#efece6">MoodyBlues</text>
+</svg>

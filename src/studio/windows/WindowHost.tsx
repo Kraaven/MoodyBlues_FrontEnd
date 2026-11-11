@@ -14,24 +14,33 @@ export interface WindowDef {
   title: string;
   icon: LucideIcon;
   /** Rail buttons are grouped; a rule separates the groups. */
-  group: 'scene' | 'session';
+  group: 'recordings' | 'scene' | 'session';
   shortcut?: string;
   render: () => ReactNode;
 }
 
-/** The tool rail: one icon per window, floating at the right edge of the view. */
-export function WindowRail({ scope, windows, className }: { scope: string; windows: WindowDef[]; className?: string }) {
+export interface RailTool {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  onClick: () => void;
+  active?: boolean;
+  hint?: string;
+}
+
+/** The tool rail: one icon per window, then a few view controls, floating at the right edge of the view. */
+export function WindowRail({ scope, windows, tools = [], className }: { scope: string; windows: WindowDef[]; tools?: RailTool[]; className?: string }) {
   const layout = useWindowLayout(scope, windows.map((w) => w.id));
   const actions = windowActions(scope);
   const phone = useMediaQuery('(max-width: 767px)');
-  const groups = (['scene', 'session'] as const).map((g) => windows.filter((w) => w.group === g)).filter((g) => g.length > 0);
+  const groups = (['recordings', 'scene', 'session'] as const).map((g) => windows.filter((w) => w.group === g)).filter((g) => g.length > 0);
 
   return (
     <nav
       aria-label="Tools"
       className={cn(
-        'glass elevated pointer-events-auto flex gap-1 rounded-[12px] border border-rule-strong/60 p-1.5',
-        phone ? 'flex-row overflow-x-auto' : 'flex-col',
+        'glass elevated pointer-events-auto flex max-h-full gap-1 rounded-[12px] border border-rule-strong/60 p-1.5',
+        phone ? 'flex-row overflow-x-auto' : 'flex-col overflow-y-auto',
         className,
       )}
     >
@@ -58,6 +67,26 @@ export function WindowRail({ scope, windows, className }: { scope: string; windo
           })}
         </div>
       ))}
+      {tools.length > 0 && (
+        <div className={cn('flex gap-1', phone ? 'flex-row border-l border-rule pl-1' : 'flex-col border-t border-rule pt-1')}>
+          {tools.map((tool) => (
+            <Tooltip key={tool.id} side={phone ? 'top' : 'left'} content={tool.hint ? `${tool.label} (${tool.hint})` : tool.label}>
+              <button
+                type="button"
+                aria-label={tool.label}
+                aria-pressed={tool.active}
+                onClick={tool.onClick}
+                className={cn(
+                  'flex h-11 w-11 shrink-0 items-center justify-center rounded-[8px] transition-colors duration-[140ms]',
+                  tool.active ? 'bg-accent/18 text-accent' : 'text-fg-2 hover:bg-ink-4 hover:text-fg',
+                )}
+              >
+                <tool.icon className="h-[19px] w-[19px]" strokeWidth={1.6} />
+              </button>
+            </Tooltip>
+          ))}
+        </div>
+      )}
     </nav>
   );
 }

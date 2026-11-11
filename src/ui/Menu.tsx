@@ -59,7 +59,7 @@ function MenuRow({ item }: { item: MenuItem }): ReactNode {
         className={cn(
           'flex h-9 cursor-default select-none items-center gap-2.5 rounded-[var(--radius-control)] px-2.5 text-[13px] outline-none',
           'data-[disabled]:pointer-events-none data-[disabled]:opacity-40',
-          item.danger ? 'text-[#ff9a8e] data-[highlighted]:bg-danger/12' : 'text-fg data-[highlighted]:bg-ink-4',
+          item.danger ? 'text-danger-soft data-[highlighted]:bg-danger/12' : 'text-fg data-[highlighted]:bg-ink-4',
         )}
       >
         {Icon && <Icon className="h-4 w-4 shrink-0 opacity-75" />}

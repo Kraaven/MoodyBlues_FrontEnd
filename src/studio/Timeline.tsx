@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronsLeft, ChevronsRight, Pause, Play, Share, SquareTerminal } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, Pause, Play } from 'lucide-react';
 import { LogLevel, logColorHex, type Replay, type ReplayLog } from '../viewer/replay/replayFile';
 import { nextLogTime, previousLogTime } from '../player/logNav';
 import { SPEEDS, usePlaybackState, type Playback } from '../player/playback';
@@ -23,16 +23,10 @@ export function Timeline({
   playback,
   replay,
   disabled,
-  logsOpen,
-  onToggleLogs,
-  onShare,
 }: {
   playback: Playback;
   replay: Replay | null;
   disabled?: boolean;
-  logsOpen: boolean;
-  onToggleLogs: () => void;
-  onShare: () => void;
 }) {
   const { playing, speed, duration } = usePlaybackState(playback);
   const total = replay?.durationSeconds ?? duration;
@@ -71,22 +65,6 @@ export function Timeline({
           </IconButton>
         </div>
         <div className="flex-1" />
-        <button
-          type="button"
-          onClick={onToggleLogs}
-          aria-pressed={logsOpen}
-          className={cn(
-            'inline-flex h-10 min-w-[44px] items-center gap-2.5 rounded-[8px] px-3 text-[15px] transition-colors sm:min-w-[120px] sm:px-4',
-            logsOpen ? 'bg-accent/16 text-accent' : 'bg-ink-4/70 text-fg hover:bg-ink-4',
-          )}
-        >
-          <SquareTerminal className="h-[18px] w-[18px]" strokeWidth={1.6} />
-          <span className="hidden sm:inline">Logs</span>
-        </button>
-        <button type="button" onClick={onShare} disabled={disabled} className="inline-flex h-10 items-center gap-2.5 rounded-[8px] px-3 text-[15px] text-fg transition-colors hover:bg-ink-4 disabled:opacity-40">
-          <Share className="h-[18px] w-[18px]" strokeWidth={1.6} />
-          <span className="hidden sm:inline">Share</span>
-        </button>
       </div>
       <Rail playback={playback} replay={replay} total={total} disabled={disabled} />
     </div>

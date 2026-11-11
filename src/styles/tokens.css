@@ -51,6 +51,7 @@
   --color-work: #9db8de;
   --color-wait: #b8a1ff;
   --color-danger: #ff6d5e;
+  --color-danger-soft: #ff9a8e; /* danger as text on graphite */
   --color-caution: #e8bb52;
 
   /* Axis labels, as Unity draws its gizmo */

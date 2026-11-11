@@ -10,7 +10,7 @@ const text: Record<Tone, string> = {
   ok: 'text-ok',
   work: 'text-work',
   wait: 'text-wait',
-  danger: 'text-[#ff9a8e]',
+  danger: 'text-danger-soft',
   live: 'text-live',
   caution: 'text-caution',
 };

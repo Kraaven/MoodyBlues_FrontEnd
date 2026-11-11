@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="160" viewBox="0 0 480 160" fill="none">
+  <!-- Shipped mark: a crescent whose cut-out is a play triangle. Replay, after hours. Amber on graphite. -->
+  <rect width="480" height="160" fill="#1b1b1a"/>
+  <defs><mask id="m"><rect width="24" height="24" fill="#fff"/><circle cx="16" cy="8.6" r="8.4" fill="#000"/><path d="M5.8 12.6v4.8l4-2.4z" fill="#000" stroke="#000" stroke-width="0.8" stroke-linejoin="round"/></mask></defs>
+  <g transform="translate(40 40) scale(3.33)"><circle cx="12" cy="12" r="10" fill="#f5b544" mask="url(#m)"/></g>
+  <text x="140" y="94" font-family="Inter, system-ui, sans-serif" font-size="34" font-weight="600" letter-spacing="-0.5" fill="#efece6">MoodyBlues</text>
+</svg>

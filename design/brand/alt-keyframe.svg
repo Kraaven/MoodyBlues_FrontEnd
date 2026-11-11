@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="160" viewBox="0 0 480 160" fill="none">
+  <!-- Alternative: a keyframe diamond trailing its own motion. -->
+  <rect width="480" height="160" fill="#1b1b1a"/>
+  <rect x="44" y="72" width="16" height="16" rx="3" transform="rotate(45 52 80)" fill="#f5b544" opacity="0.25"/>
+  <rect x="62" y="70" width="20" height="20" rx="3" transform="rotate(45 72 80)" fill="#f5b544" opacity="0.5"/>
+  <rect x="84" y="66" width="28" height="28" rx="4" transform="rotate(45 98 80)" fill="#f5b544"/>
+  <text x="140" y="94" font-family="Inter, system-ui, sans-serif" font-size="34" font-weight="600" letter-spacing="-0.5" fill="#efece6">MoodyBlues</text>
+</svg>

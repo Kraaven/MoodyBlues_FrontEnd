@@ -1,17 +1,3 @@
-import { create } from 'zustand';
-import { Dialog } from '../ui/Dialog';
-import { Button } from '../ui/Button';
-import { CopyField } from '../ui/CopyField';
-import { maskConnection } from '../lib/format';
-
-/** The Unity quickstart, reachable from anywhere ("Need a hand?", the Unity connection dialog). */
-export const useSetupGuide = create<{ open: boolean; connectionString: string | null; show: (connectionString?: string | null) => void; hide: () => void }>((set) => ({
-  open: false,
-  connectionString: null,
-  show: (connectionString = null) => set({ open: true, connectionString }),
-  hide: () => set({ open: false }),
-}));
-
 export const SETUP_STEPS = [
   {
     title: 'Create your project',
@@ -37,7 +23,7 @@ export const SETUP_STEPS = [
   },
 ];
 
-/** The numbered steps, joined by a line, as on the create-project page. */
+/** The numbered steps, joined by a line. Shown inline on an empty project and in the connection dialog. */
 export function SetupSteps({ current = 0, compact = false }: { current?: number; compact?: boolean }) {
   return (
     <ol className="relative">
@@ -62,20 +48,3 @@ export function SetupSteps({ current = 0, compact = false }: { current?: number;
   );
 }
 
-export function SetupGuideDialog() {
-  const { open, connectionString, hide } = useSetupGuide();
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && hide()} title="Record a Unity scene" context="Unity quickstart" width="md" display>
-      <SetupSteps current={1} compact />
-      {connectionString && (
-        <div className="mt-7 space-y-2">
-          <p className="eyebrow">Connection string</p>
-          <CopyField value={connectionString} display={maskConnection(connectionString)} label="connection string" className="w-full" />
-        </div>
-      )}
-      <div className="mt-8 flex justify-end">
-        <Button onClick={hide}>Done</Button>
-      </div>
-    </Dialog>
-  );
-}

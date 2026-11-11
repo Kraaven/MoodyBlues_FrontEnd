@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
@@ -38,15 +38,13 @@ import { useStage, type StageView } from '../stage/store';
 import { useStageRegion } from '../stage/useStageInset';
 import { useStageView } from '../stage/useStageView';
 import { Button, IconButton } from '../ui/Button';
-import { SessionStatusLabel, versionLabel } from '../ui/Chip';
-import { Mark } from '../ui/Logo';
+import { versionLabel } from '../ui/Chip';
 import { ErrorState } from '../ui/States';
 import { useToast } from '../ui/Toast';
 import { cn } from '../ui/cn';
-import { formatAgo, formatCaptured, formatCompact, formatCount, formatDuration, sceneTitle, sessionHandle } from '../lib/format';
+import { formatAgo, formatCaptured, sceneTitle, sessionHandle } from '../lib/format';
 import { useMediaQuery } from '../lib/useMediaQuery';
 import { useWindowTitle } from '../lib/useWindowTitle';
-import { CinemaButton, RecordingsDrawer } from './Cinema';
 import { ShortcutsDialog, useStudioShortcuts } from './shortcuts';
 import { useStudio } from './studioStore';
 import { Timeline } from './Timeline';
@@ -59,24 +57,22 @@ import { MaterialsWindow } from './windows/MaterialsWindow';
 import { RawWindow } from './windows/RawWindow';
 import { TexturesWindow } from './windows/TexturesWindow';
 import { ViewSettingsWindow } from './windows/ViewSettingsWindow';
-import { FloatingWindows, WindowDock, WindowRail, type WindowDef } from './windows/WindowHost';
-import { isShown } from './windows/windowLayout';
-import { useWindowLayout, windowActions } from './windows/windowStore';
+import { RecordingsWindow } from './windows/RecordingsWindow';
+import { FloatingWindows, WindowDock, WindowRail, type RailTool, type WindowDef } from './windows/WindowHost';
 
 const IDLE: StageView = { id: 'studio', content: 'none', dim: 0 };
 
 /**
  * The 3D studio: one scene version in the persistent Stage with the tool windows over it, and, in
- * Cinema, its recordings, a timeline and the events of the session being watched.
+ * a recordings window and, when a session is open, its timeline and events.
  *
- * `/scenes/:sceneId/view?version=N[&cinema]` inspects a version; `/scenes/:sceneId/sessions/:id?t=`
- * plays a session (always in Cinema). Both are this page, so moving between them is a camera move
+ * `/scenes/:sceneId/view?version=N` inspects a version; `/scenes/:sceneId/sessions/:id?t=`
+ * plays a session. Both are this page, so moving between them is a camera move
  * over the same loaded scene, never a reload.
  */
 export default function StudioPage() {
   const { projectId, sceneId, sessionId } = useParams<{ projectId: string; sceneId: string; sessionId?: string }>();
-  const [params, setParams] = useSearchParams();
-  const navigate = useNavigate();
+  const [params] = useSearchParams();
   const notify = useToast();
   const phone = useMediaQuery('(max-width: 767px)');
   const project = useProject(projectId);
@@ -89,7 +85,6 @@ export default function StudioPage() {
 
   const base = `/projects/${projectId}/scenes/${encodeURIComponent(sceneId ?? '')}`;
   const scope = sessionId ? 'session' : 'scene';
-  const cinema = Boolean(sessionId) || params.has('cinema');
 
   // ---- Which scene version is on screen ------------------------------------------------------
   const versions = useMemo(() => (scene.data ? [scene.data.current, ...scene.data.archived].filter((v): v is SceneVersion => v !== null) : []), [scene.data]);
@@ -157,26 +152,9 @@ export default function StudioPage() {
   useStageView(view);
   useStageRegion(region);
 
-  // ---- Cinema -------------------------------------------------------------------------------------
+  // ---- Recordings ---------------------------------------------------------------------------------
   const sessions = useSessions(developerId, scene.data?.sceneId, version ? { version: version.version } : null);
-  const [drawer, setDrawer] = useState(!sessionId);
-  useEffect(() => setDrawer(cinema && !sessionId), [cinema, sessionId]);
-  const recordingsOpen = cinema && drawer;
   const sessionHref = useCallback((id: string) => `${base}/sessions/${encodeURIComponent(id)}`, [base]);
-
-  const toggleCinema = useCallback(() => {
-    const v = version?.version;
-    if (sessionId) navigate(`${base}/view${v !== undefined && !version?.isCurrent ? `?version=${v}` : ''}`);
-    else if (params.has('cinema')) {
-      const next = new URLSearchParams(params);
-      next.delete('cinema');
-      setParams(next, { replace: true });
-    } else {
-      const next = new URLSearchParams(params);
-      next.set('cinema', '1');
-      setParams(next, { replace: true });
-    }
-  }, [sessionId, navigate, base, version, params, setParams]);
 
   const share = async () => {
     const url = new URL(window.location.href);
@@ -194,13 +172,13 @@ export default function StudioPage() {
   const sessionLabel = detail ? `${sessionHandle(detail.id)} / ${formatCaptured(detail.createdAtUtc)}` : '';
   const windows: WindowDef[] = useMemo(() => {
     const list: WindowDef[] = [
-      { id: 'hierarchy', title: 'Hierarchy', icon: Network, group: 'scene', render: () => <HierarchyWindow /> },
-      { id: 'inspector', title: 'Inspector', icon: Info, group: 'scene', render: () => <InspectorWindow /> },
-      { id: 'materials', title: 'Materials', icon: Palette, group: 'scene', render: () => <MaterialsWindow sceneName={name} /> },
-      { id: 'textures', title: 'Textures', icon: Image, group: 'scene', render: () => <TexturesWindow /> },
-      { id: 'geometry', title: 'Geometry', icon: Box, group: 'scene', render: () => <GeometryWindow version={version} /> },
-      { id: 'view', title: 'View settings', icon: SlidersHorizontal, group: 'scene', render: () => <ViewSettingsWindow scope={scope} /> },
-      { id: 'raw', title: 'Raw data', icon: Braces, group: 'scene', render: () => <RawWindow session={detail ?? null} /> },
+      {
+        id: 'recordings',
+        title: 'Recordings',
+        icon: ListVideo,
+        group: 'recordings',
+        render: () => <RecordingsWindow sessions={sessions.data} version={version?.version ?? null} currentId={sessionId ?? null} sessionHref={sessionHref} />,
+      },
     ];
     if (sessionId) {
       list.push(
@@ -208,7 +186,7 @@ export default function StudioPage() {
           id: 'events',
           title: 'Events & logs',
           icon: SquareTerminal,
-          group: 'session',
+          group: 'recordings',
           render: () =>
             replay.data ? (
               <EventsWindow replay={replay.data} playback={playback} label={sessionLabel} />
@@ -216,15 +194,22 @@ export default function StudioPage() {
               <p className="px-6 py-6 text-[14px] text-fg-2">The events appear once the replay is built.</p>
             ),
         },
-        { id: 'details', title: 'Session details', icon: Activity, group: 'session', render: () => (detail ? <DetailsWindow session={detail} replay={replay.data ?? null} sceneHref={base} /> : null) },
+        { id: 'details', title: 'Session details', icon: Activity, group: 'recordings', render: () => (detail ? <DetailsWindow session={detail} replay={replay.data ?? null} sceneHref={base} /> : null) },
       );
     }
+    list.push(
+      { id: 'hierarchy', title: 'Hierarchy', icon: Network, group: 'scene', render: () => <HierarchyWindow /> },
+      { id: 'inspector', title: 'Inspector', icon: Info, group: 'scene', render: () => <InspectorWindow /> },
+      { id: 'materials', title: 'Materials', icon: Palette, group: 'scene', render: () => <MaterialsWindow sceneName={name} /> },
+      { id: 'textures', title: 'Textures', icon: Image, group: 'scene', render: () => <TexturesWindow /> },
+      { id: 'geometry', title: 'Geometry', icon: Box, group: 'scene', render: () => <GeometryWindow version={version} /> },
+      { id: 'view', title: 'View settings', icon: SlidersHorizontal, group: 'scene', render: () => <ViewSettingsWindow scope={scope} /> },
+      { id: 'raw', title: 'Raw data', icon: Braces, group: 'scene', render: () => <RawWindow session={detail ?? null} /> },
+    );
     return list.map((w, i) => ({ ...w, shortcut: `Alt+${i + 1}` }));
-  }, [name, version, scope, detail, sessionId, replay.data, playback, sessionLabel, base]);
-  const layout = useWindowLayout(scope, windows.map((w) => w.id));
-  const logsOpen = isShown(layout, 'events');
+  }, [name, version, scope, detail, sessionId, replay.data, playback, sessionLabel, base, sessions.data, sessionHref]);
 
-  useStudioShortcuts({ scope, windows: windows.map((w) => w.id), playback: replay.data ? playback : null, logs: replay.data?.logs ?? [], onCinema: toggleCinema });
+  useStudioShortcuts({ scope, windows: windows.map((w) => w.id), playback: replay.data ? playback : null, logs: replay.data?.logs ?? [] });
 
   useEffect(() => {
     const onChange = () => setFullscreen(Boolean(document.fullscreenElement));
@@ -235,74 +220,74 @@ export default function StudioPage() {
   useWindowTitle(detail ? `${sessionHandle(detail.id)} · ${name}` : `${name} in 3D`);
 
   const error = project.error ?? scene.error ?? session.error;
-  const live = (sessions.data ?? []).some((s) => s.status === 'Recording');
-  const showTimeline = cinema;
-  const backHref = version && !version.isCurrent ? `${base}/history` : base;
+  const showTimeline = Boolean(sessionId);
+  const backHref = version && !version.isCurrent ? `${base}?version=${version.version}` : base;
+
+  const tools: RailTool[] = [
+    { id: 'frame', label: 'Frame the whole scene', hint: 'A', icon: Focus, onClick: () => useStudio.getState().frameAll() },
+    ...(phone
+      ? []
+      : [
+          {
+            id: 'fullscreen',
+            label: fullscreen ? 'Leave full screen' : 'Full screen',
+            icon: fullscreen ? Shrink : Expand,
+            onClick: () => (document.fullscreenElement ? void document.exitFullscreen() : void document.documentElement.requestFullscreen?.().catch(() => undefined)),
+          },
+          { id: 'keys', label: 'Keyboard shortcuts', hint: '?', icon: Keyboard, onClick: () => useStudio.getState().setShortcutsOpen(true) },
+        ]),
+  ];
 
   return (
     <div className="fixed inset-0 flex overflow-hidden">
       <div className="relative min-w-0 flex-1">
         <StageSurface className="absolute inset-0 z-0 touch-none" />
-        {/* The part of the view the 3D centres in: it moves as Cinema's panels come and go, and the camera glides with it. */}
+        {/* The part of the view the 3D centres in. */}
         <div
           ref={region}
           aria-hidden="true"
           className="pointer-events-none absolute transition-[left,bottom,right,top] duration-[420ms] ease-[var(--ease-out-soft)]"
-          style={{ left: recordingsOpen && !phone ? 416 : 0, right: phone ? 0 : 88, top: phone ? 120 : 88, bottom: showTimeline ? (phone ? 200 : 172) : phone ? 120 : 64 }}
+          style={{ left: 0, right: phone ? 0 : 88, top: 72, bottom: showTimeline ? (phone ? 168 : 136) : phone ? 96 : 24 }}
         />
         <StageNotice />
 
         <div className="pointer-events-none absolute inset-0 z-10 p-4 sm:p-6">
-          {/* Top left: where you are. */}
-          <div className="pointer-events-auto absolute left-4 top-4 flex w-[min(320px,calc(100%-32px))] flex-col gap-2 sm:left-6 sm:top-6">
-            <Link to={backHref} className="glass group flex h-[60px] items-center gap-4 rounded-[10px] border border-rule-strong/60 px-4 transition-colors hover:border-fg-3/60">
-              <ArrowLeft className="h-5 w-5 shrink-0 text-fg transition-transform group-hover:-translate-x-0.5" />
-              <span className="min-w-0">
-                <span className="block truncate text-[16px] font-medium leading-5 text-fg">{name}</span>
-                <span className="mt-1 block truncate font-mono text-[12px] text-fg-3">
-                  {project.data?.name ?? '…'} <span className="mx-1 opacity-60">/</span> {version ? versionLabel(version.version) : '…'}
-                  {version && !version.isCurrent && ' · archived'}
-                </span>
+          {/* Top left: where you are, and the way back. */}
+          <Link
+            to={backHref}
+            className="glass group pointer-events-auto absolute left-4 top-4 flex h-14 w-[min(320px,calc(100%-88px))] items-center gap-3.5 rounded-[10px] border border-rule-strong/60 px-4 transition-colors hover:border-fg-3/60 sm:left-6 sm:top-6"
+          >
+            <ArrowLeft className="h-5 w-5 shrink-0 text-fg transition-transform group-hover:-translate-x-0.5" />
+            <span className="min-w-0">
+              <span className="block truncate text-[15px] font-medium leading-5 text-fg">{name}</span>
+              <span className="block truncate text-[12px] text-fg-3">
+                {detail ? (
+                  <>
+                    <span className="font-mono text-accent">{sessionHandle(detail.id)}</span> · {formatCaptured(detail.createdAtUtc)}
+                  </>
+                ) : (
+                  <>
+                    {project.data?.name ?? '…'} · {version ? versionLabel(version.version) : '…'}
+                    {version && !version.isCurrent && ' · archived'}
+                  </>
+                )}
               </span>
-            </Link>
-            {detail && !recordingsOpen && <SessionCard session={detail} onRecordings={() => setDrawer(true)} onClose={() => navigate(`${base}/view?${version && !version.isCurrent ? `version=${version.version}&` : ''}cinema=1`)} />}
-          </div>
+            </span>
+          </Link>
 
-          {/* Top centre: Cinema. */}
-          <div className="absolute left-1/2 top-4 -translate-x-1/2 max-sm:top-[172px] sm:top-6">
-            <CinemaButton active={cinema} count={sessions.data?.length ?? null} live={live} onToggle={toggleCinema} />
-          </div>
-
-          {/* Top right. */}
-          <div className="pointer-events-auto absolute right-4 top-4 flex items-center gap-2 sm:right-6 sm:top-6">
-            <IconButton label="Keyboard shortcuts" shortcut="?" className="glass h-12 w-12 border border-rule-strong/60 max-sm:hidden" onClick={() => useStudio.getState().setShortcutsOpen(true)}>
-              <Keyboard className="h-5 w-5" strokeWidth={1.6} />
-            </IconButton>
-            <IconButton label={sessionId ? 'Copy a link to this moment' : 'Copy a link'} className="glass h-12 w-12 border border-rule-strong/60" onClick={() => void share()}>
+          {/* Top right: share. */}
+          <div className="pointer-events-auto absolute right-4 top-4 sm:right-6 sm:top-6">
+            <IconButton label={sessionId ? 'Copy a link to this moment' : 'Copy a link'} className="glass h-11 w-11 border border-rule-strong/60" onClick={() => void share()}>
               <Share className="h-5 w-5" strokeWidth={1.6} />
             </IconButton>
           </div>
 
-          {/* Left: the recordings, in Cinema. */}
-          <div className="absolute bottom-[184px] left-4 top-[96px] w-0 sm:left-6 sm:top-[100px]">
-            <RecordingsDrawer
-              open={recordingsOpen}
-              sessions={sessions.data}
-              version={version?.version ?? null}
-              sceneName={name}
-              currentId={sessionId ?? null}
-              sessionHref={sessionHref}
-              historyHref={`${base}/history`}
-              onClose={() => setDrawer(false)}
-            />
-          </div>
-
           {/* Right: the tools. */}
           <div
-            className={cn('pointer-events-none absolute z-20', phone ? 'inset-x-4 flex justify-center' : 'right-6 top-1/2 -translate-y-1/2')}
-            style={phone ? { bottom: showTimeline ? 196 : 64 } : undefined}
+            className={cn('pointer-events-none absolute z-20', phone ? 'inset-x-4 flex justify-center' : 'right-6 flex items-start justify-end')}
+            style={phone ? { bottom: showTimeline ? 176 : 24 } : { top: 80, bottom: showTimeline ? 148 : 24 }}
           >
-            <WindowRail scope={scope} windows={windows} />
+            <WindowRail scope={scope} windows={windows} tools={tools} />
           </div>
 
           {/* States the scene or session can be in. */}
@@ -318,67 +303,17 @@ export default function StudioPage() {
             }}
           />
 
-          {/* Bottom: what is selected, the timeline, and the footer. */}
-          <BottomLeft cinema={Boolean(sessionId)} name={name} timelineShown={showTimeline} />
-          <div className="pointer-events-auto absolute bottom-[60px] right-4 flex gap-2 sm:right-6" style={{ bottom: showTimeline ? 188 : 60 }}>
-            <IconButton label="Frame the whole scene" shortcut="A" className="glass h-12 w-12 border border-rule-strong/60" onClick={() => useStudio.getState().frameAll()}>
-              <Focus className="h-5 w-5" strokeWidth={1.6} />
-            </IconButton>
-            <IconButton
-              label={fullscreen ? 'Leave full screen' : 'Full screen'}
-              className="glass h-12 w-12 border border-rule-strong/60 max-sm:hidden"
-              onClick={() => (document.fullscreenElement ? void document.exitFullscreen() : void document.documentElement.requestFullscreen?.().catch(() => undefined))}
-            >
-              {fullscreen ? <Shrink className="h-5 w-5" strokeWidth={1.6} /> : <Expand className="h-5 w-5" strokeWidth={1.6} />}
-            </IconButton>
-          </div>
+          <SelectionCard timelineShown={showTimeline} />
 
-          <div
-            className={cn(
-              'pointer-events-auto absolute inset-x-4 bottom-[56px] transition-[transform,opacity] duration-[460ms] ease-[var(--ease-out-soft)] sm:inset-x-6',
-              showTimeline ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-[calc(100%+80px)] opacity-0',
-            )}
-            aria-hidden={!showTimeline}
-          >
-            {sessionId ? (
-              <Timeline
-                playback={playback}
-                replay={replay.data ?? null}
-                disabled={!replay.data || sceneState.status !== 'ready'}
-                logsOpen={logsOpen}
-                onToggleLogs={() => windowActions('session').toggle('events')}
-                onShare={() => void share()}
-              />
-            ) : (
-              <div className="glass elevated flex h-[108px] items-center justify-between gap-6 rounded-[12px] border border-rule-strong/60 px-6">
-                <div className="flex items-center gap-4">
-                  <ListVideo className="h-6 w-6 text-accent" strokeWidth={1.5} />
-                  <div>
-                    <p className="text-[16px] text-fg">Choose a recording to watch it here.</p>
-                    <p className="text-[13px] text-fg-3">Every session recorded against {version ? versionLabel(version.version) : 'this version'} plays on this scene.</p>
-                  </div>
-                </div>
-                {!recordingsOpen && (
-                  <Button variant="secondary" onClick={() => setDrawer(true)}>
-                    Show recordings
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>
-
-          <footer className="pointer-events-auto absolute inset-x-4 bottom-3 flex h-8 items-center gap-6 sm:inset-x-6 sm:bottom-4">
-            <Link to="/projects" aria-label="MoodyBlues home">
-              <Mark className="text-[26px]" live={live} />
-            </Link>
-            <p className="hidden truncate font-mono text-[12px] text-fg-3 md:block">
-              Drag to orbit <span className="mx-2.5 opacity-50">·</span> Shift + drag to pan <span className="mx-2.5 opacity-50">·</span> Scroll to zoom
-            </p>
-          </footer>
+          {sessionId && (
+            <div className="pointer-events-auto absolute inset-x-4 bottom-4 sm:inset-x-6">
+              <Timeline playback={playback} replay={replay.data ?? null} disabled={!replay.data || sceneState.status !== 'ready'} />
+            </div>
+          )}
         </div>
 
         <div className="pointer-events-none absolute inset-0 z-20">
-          <div className="absolute inset-0" style={{ bottom: showTimeline ? 176 : 56, top: 0 }}>
+          <div className="absolute inset-0" style={{ bottom: showTimeline ? 136 : 16, top: 0 }}>
             <FloatingWindows scope={scope} windows={windows} />
           </div>
         </div>
@@ -389,83 +324,33 @@ export default function StudioPage() {
     </div>
   );
 }
-
-function SessionCard({ session, onRecordings, onClose }: { session: SessionDetail; onRecordings: () => void; onClose: () => void }) {
-  return (
-    <div className="glass flex animate-rise items-center gap-3 rounded-[10px] border border-rule-strong/60 py-2.5 pl-4 pr-1.5">
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[15px] text-fg">
-          <span className="font-mono text-[13px] text-accent">{sessionHandle(session.id)}</span> <span className="mx-1 text-fg-3">/</span> {formatCaptured(session.createdAtUtc)}
-        </p>
-        <p className="mt-0.5 flex items-center gap-2.5 text-[13px] text-fg-3">
-          <SessionStatusLabel status={session.status} />
-          {session.durationSeconds > 0 && <span className="font-mono text-[12px]">{formatDuration(session.durationSeconds)}</span>}
-        </p>
-      </div>
-      <IconButton label="All recordings" size="sm" onClick={onRecordings}>
-        <ListVideo className="h-[18px] w-[18px]" strokeWidth={1.6} />
-      </IconButton>
-      <IconButton label="Close this recording" size="sm" onClick={onClose}>
-        <X className="h-[18px] w-[18px]" />
-      </IconButton>
-    </div>
-  );
-}
-
-/** Bottom left: the selected object while there is one, else the scene's name and size. */
-function BottomLeft({ cinema, name, timelineShown }: { cinema: boolean; name: string; timelineShown: boolean }) {
+/** Bottom left: the selected object, while there is one. */
+function SelectionCard({ timelineShown }: { timelineShown: boolean }) {
   const selected = useStudio((s) => s.selected);
   const selectedId = useStudio((s) => s.selectedId);
   const follow = useStudio((s) => s.follow);
   const player = useStudio((s) => s.player);
-  const ref = useStage((s) => s.view.scene);
-  const summary = useStage((s) => (ref ? s.summaries[`${ref.developerId}/${ref.sceneId}/${ref.hash}`] : undefined));
-  const bottom = timelineShown ? 186 : 58;
+  const bottom = timelineShown ? 148 : 24;
 
-  if (selected) {
-    return (
-      <div className="glass pointer-events-auto absolute left-4 flex max-w-[min(440px,calc(100%-160px))] animate-rise items-center gap-3 rounded-[10px] border border-accent/30 py-2 pl-4 pr-1.5 sm:left-6" style={{ bottom }}>
-        <span className="h-2 w-2 shrink-0 rounded-full bg-accent shadow-[0_0_10px_rgb(245_181_68/0.8)]" />
-        <button type="button" className="min-w-0 text-left" onClick={() => useStudio.getState().frameSelected()} title="Frame it (Shift+F)">
-          <span className="block truncate text-[14px] text-fg">{selected.name || (selectedId !== null && player ? player.nameOf(selectedId) : 'Selection')}</span>
-          <span className="block truncate font-mono text-[11px] text-fg-3">{selectedId !== null ? `#${selectedId}` : 'not tracked'}</span>
-        </button>
-        {player && (
-          <IconButton label={follow ? 'Stop following' : 'Follow'} shortcut="F" size="sm" active={follow} onClick={() => useStudio.getState().setFollow(!follow)}>
-            <Crosshair className="h-4 w-4" />
-          </IconButton>
-        )}
-        <IconButton label="Clear selection" shortcut="Esc" size="sm" onClick={() => useStudio.getState().select(null)}>
-          <X className="h-4 w-4" />
-        </IconButton>
-      </div>
-    );
-  }
-
-  if (cinema) {
-    return (
-      <p className="pointer-events-none absolute left-4 hidden font-mono text-[12px] text-fg-3 sm:left-6 md:block" style={{ bottom: bottom + 4 }}>
-        Events are marked on the timeline. Open logs for detail.
-      </p>
-    );
-  }
-
+  if (!selected) return null;
   return (
-    <div className="pointer-events-none absolute left-4 sm:left-6" style={{ bottom }}>
-      <p className="eyebrow text-fg">{name}</p>
-      <p className="mt-1.5 font-mono text-[12px] text-fg-3">
-        {summary ? (
-          <>
-            {formatCount(summary.nodes)} objects <span className="mx-1.5 opacity-60">/</span> {formatCompact(summary.triangles)} triangles
-          </>
-        ) : (
-          'Loading…'
-        )}
-      </p>
+    <div className="glass pointer-events-auto absolute left-4 flex max-w-[min(440px,calc(100%-160px))] animate-rise items-center gap-3 rounded-[10px] border border-accent/30 py-2 pl-4 pr-1.5 sm:left-6" style={{ bottom }}>
+      <span className="h-2 w-2 shrink-0 rounded-full bg-accent" />
+      <button type="button" className="min-w-0 text-left" onClick={() => useStudio.getState().frameSelected()} title="Frame it (Shift+F)">
+        <span className="block truncate text-[14px] text-fg">{selected.name || (selectedId !== null && player ? player.nameOf(selectedId) : 'Selection')}</span>
+        <span className="block truncate font-mono text-[11px] text-fg-3">{selectedId !== null ? `#${selectedId}` : 'not tracked'}</span>
+      </button>
+      {player && (
+        <IconButton label={follow ? 'Stop following' : 'Follow'} shortcut="F" size="sm" active={follow} onClick={() => useStudio.getState().setFollow(!follow)}>
+          <Crosshair className="h-4 w-4" />
+        </IconButton>
+      )}
+      <IconButton label="Clear selection" shortcut="Esc" size="sm" onClick={() => useStudio.getState().select(null)}>
+        <X className="h-4 w-4" />
+      </IconButton>
     </div>
   );
 }
-
 function CentreState({
   error,
   sceneError,
