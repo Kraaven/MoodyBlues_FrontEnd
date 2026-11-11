@@ -1,21 +1,48 @@
 import { Grid } from '@react-three/drei';
 import { PALETTE } from './palette';
 
-/** The infinite ground grid that fades out with distance. */
-export function Ground({ y = 0, fadeDistance = 60, strength = 1 }: { y?: number; fadeDistance?: number; strength?: number }) {
+/**
+ * The floor: an infinite grid that fades with distance and, under it, an invisible plane that only
+ * catches shadows, so a scene sits on the ground instead of floating in it.
+ */
+export function Ground({
+  y = 0,
+  fadeDistance = 60,
+  cellSize = 1,
+  grid = true,
+  shadows = false,
+  extent = 200,
+}: {
+  y?: number;
+  fadeDistance?: number;
+  cellSize?: number;
+  grid?: boolean;
+  shadows?: boolean;
+  extent?: number;
+}) {
   return (
-    <Grid
-      position={[0, y, 0]}
-      infiniteGrid
-      cellSize={1}
-      sectionSize={5}
-      cellColor={PALETTE.rule}
-      sectionColor={PALETTE.ruleStrong}
-      cellThickness={0.6 * strength}
-      sectionThickness={1 * strength}
-      fadeDistance={fadeDistance}
-      fadeStrength={1.5}
-      followCamera={false}
-    />
+    <>
+      {grid && (
+        <Grid
+          position={[0, y + 0.001, 0]}
+          infiniteGrid
+          cellSize={cellSize}
+          sectionSize={cellSize * 5}
+          cellColor={PALETTE.grid}
+          sectionColor={PALETTE.gridStrong}
+          cellThickness={0.55}
+          sectionThickness={0.9}
+          fadeDistance={fadeDistance}
+          fadeStrength={1.6}
+          followCamera={false}
+        />
+      )}
+      {shadows && (
+        <mesh rotation-x={-Math.PI / 2} position={[0, y, 0]} receiveShadow renderOrder={-1}>
+          <planeGeometry args={[extent, extent]} />
+          <shadowMaterial transparent opacity={0.42} depthWrite={false} />
+        </mesh>
+      )}
+    </>
   );
 }

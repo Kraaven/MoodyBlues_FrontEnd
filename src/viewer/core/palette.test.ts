@@ -16,6 +16,6 @@ describe('palette', () => {
   });
 
   it('turns a hex string into a number', () => {
-    expect(hex('#ffb547')).toBe(0xffb547);
+    expect(hex('#f5b544')).toBe(0xf5b544);
   });
 });

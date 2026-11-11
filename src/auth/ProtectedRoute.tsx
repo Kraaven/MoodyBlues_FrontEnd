@@ -1,6 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from './useAuth';
-import { Logo } from '../ui/Logo';
+import { Mark } from '../ui/Logo';
 
 export function ProtectedRoute() {
   const { user, isLoading } = useAuth();
@@ -8,8 +8,8 @@ export function ProtectedRoute() {
 
   if (isLoading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <Logo size={36} className="animate-pulse" />
+      <div className="flex min-h-dvh items-center justify-center">
+        <Mark className="animate-pulse text-[40px]" />
       </div>
     );
   }

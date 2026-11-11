@@ -12,49 +12,60 @@ function hash(text: string): number {
   return h >>> 0;
 }
 
-/** Three smooth curves with a dot at the head of each: a tiny Trace, seeded from the scene id. */
-function placeholderCurves(seed: string): { d: string; head: [number, number]; warm: boolean }[] {
+const COS = Math.cos(Math.PI / 6);
+const SIN = 0.5;
+const iso = (x: number, y: number, z: number): [number, number] => [(x - z) * COS, (x - 6 + z - 6) * SIN - y];
+
+interface Block {
+  faces: { d: string; shade: number }[];
+  depth: number;
+}
+
+/** A few isometric blocks on a slab, seeded from the scene id: a stand-in until the real snapshot. */
+function placeholderBlocks(seed: string): Block[] {
   let h = hash(seed);
   const next = () => {
     h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d) >>> 0;
     return h / 0xffffffff;
   };
-  return Array.from({ length: 3 }, (_, i) => {
-    const y0 = 18 + next() * 54;
-    const points = Array.from({ length: 4 }, (_, k) => [10 + k * 46 + next() * 14, 10 + next() * 70] as const);
-    const d =
-      `M 8 ${y0.toFixed(1)} ` +
-      points.map(([x, y]) => `S ${(x - 18).toFixed(1)} ${y.toFixed(1)}, ${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
-    const last = points[points.length - 1];
-    return { d, head: [last[0], last[1]] as [number, number], warm: i === 2 && next() > 0.5 };
-  });
+  const box = (x: number, y: number, z: number, w: number, hgt: number, d: number): Block => {
+    const p = (a: number, b: number, c: number) => iso(a, b, c).map((n) => n.toFixed(1)).join(' ');
+    const top = `M${p(x, y + hgt, z)} L${p(x + w, y + hgt, z)} L${p(x + w, y + hgt, z + d)} L${p(x, y + hgt, z + d)} Z`;
+    const left = `M${p(x, y, z + d)} L${p(x + w, y, z + d)} L${p(x + w, y + hgt, z + d)} L${p(x, y + hgt, z + d)} Z`;
+    const right = `M${p(x + w, y, z)} L${p(x + w, y, z + d)} L${p(x + w, y + hgt, z + d)} L${p(x + w, y + hgt, z)} Z`;
+    return { faces: [{ d: top, shade: 1 }, { d: left, shade: 0.62 }, { d: right, shade: 0.45 }], depth: x + z + y * 0.01 };
+  };
+  const blocks: Block[] = [box(0, 0, 0, 12, 1, 12)];
+  const cells = 3 + Math.floor(next() * 4);
+  for (let i = 0; i < cells; i++) {
+    const w = 2 + Math.floor(next() * 4);
+    const d = 2 + Math.floor(next() * 4);
+    const x = Math.floor(next() * (12 - w));
+    const z = Math.floor(next() * (12 - d));
+    blocks.push(box(x, 1, z, w, 1 + Math.floor(next() * 6), d));
+  }
+  return blocks.sort((a, b) => a.depth - b.depth);
 }
 
 /**
- * A scene's thumbnail (DESIGN.md 7.4): the image captured the first time this browser opened that
- * version, or, until then, a small generated placeholder.
+ * A scene's thumbnail: the image captured the first time this browser opened that version, or, until
+ * then, a small isometric placeholder generated from the scene's id.
  */
 export function SnapshotImage({ hash: sceneHash, seed, className }: { hash?: string | null; seed: string; className?: string }) {
   const url = useSnapshot(sceneHash);
-  const curves = useMemo(() => placeholderCurves(seed), [seed]);
+  const blocks = useMemo(() => placeholderBlocks(seed), [seed]);
 
   return (
-    <div aria-hidden="true" className={cn('relative overflow-hidden rounded-[var(--radius-control)] border border-rule bg-ink-2', className)}>
+    <div aria-hidden="true" className={cn('world-grid relative overflow-hidden rounded-[var(--radius-control)]', className)}>
       {url ? (
         <img src={url} alt="" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
       ) : (
-        <svg viewBox="0 0 200 90" preserveAspectRatio="xMidYMid slice" className="absolute inset-0 h-full w-full">
-          <defs>
-            <linearGradient id="snap-bg" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="#0d1324" />
-              <stop offset="1" stopColor="#04060d" />
-            </linearGradient>
-          </defs>
-          <rect width="200" height="90" fill="url(#snap-bg)" />
-          {curves.map((c, i) => (
+        <svg viewBox="-12.5 -12 25 19" preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full p-[8%]">
+          {blocks.map((b, i) => (
             <g key={i}>
-              <path d={c.d} fill="none" stroke={c.warm ? '#ffb547' : '#8ca8ff'} strokeWidth="1" opacity="0.55" />
-              <circle cx={c.head[0]} cy={c.head[1]} r="2" fill={c.warm ? '#ffb547' : '#8ca8ff'} />
+              {b.faces.map((f, k) => (
+                <path key={k} d={f.d} fill={`rgb(${Math.round(150 * f.shade + 30)} ${Math.round(146 * f.shade + 30)} ${Math.round(138 * f.shade + 30)} / 0.55)`} stroke="rgb(255 255 255 / 0.08)" strokeWidth="0.06" />
+              ))}
             </g>
           ))}
         </svg>

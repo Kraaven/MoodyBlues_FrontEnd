@@ -2,97 +2,82 @@ import type { ReactNode } from 'react';
 import type { SceneProcessingStatus, SessionStatus } from '../api/types';
 import { cn } from './cn';
 
-export type ChipTone = 'neutral' | 'accent' | 'ok' | 'warn' | 'danger' | 'live';
+export type Tone = 'neutral' | 'accent' | 'ok' | 'work' | 'wait' | 'danger' | 'live' | 'caution';
 
-const tones: Record<ChipTone, string> = {
-  neutral: 'border-rule-strong bg-ink-2 text-fg-2',
-  accent: 'border-blue/35 bg-blue/12 text-blue-bright',
-  ok: 'border-ok/30 bg-ok/10 text-ok',
-  warn: 'border-caution/30 bg-caution/10 text-caution',
-  danger: 'border-danger/35 bg-danger/10 text-[#ff8a8a]',
-  live: 'border-live/35 bg-live/10 text-[#ff8ca0]',
+const text: Record<Tone, string> = {
+  neutral: 'text-fg-2',
+  accent: 'text-accent',
+  ok: 'text-ok',
+  work: 'text-work',
+  wait: 'text-wait',
+  danger: 'text-[#ff9a8e]',
+  live: 'text-live',
+  caution: 'text-caution',
 };
 
-const dots: Record<ChipTone, string> = {
+const fill: Record<Tone, string> = {
   neutral: 'bg-fg-3',
-  accent: 'bg-blue-bright',
+  accent: 'bg-accent',
   ok: 'bg-ok',
-  warn: 'bg-caution',
+  work: 'bg-work',
+  wait: 'bg-wait',
   danger: 'bg-danger',
-  live: 'bg-live animate-pulse-live',
+  live: 'bg-live',
+  caution: 'bg-caution',
 };
 
-export function Chip({
-  tone = 'neutral',
-  dot = false,
-  mono = false,
-  working = false,
-  className,
-  children,
-}: {
-  tone?: ChipTone;
-  dot?: boolean;
-  mono?: boolean;
-  /** Animated shimmer for in-progress states (DESIGN.md 5.1). */
-  working?: boolean;
-  className?: string;
-  children: ReactNode;
-}) {
+/** A small filled tag: "Latest", "Archived". */
+export function Tag({ tone = 'neutral', children, className }: { tone?: Tone; children: ReactNode; className?: string }) {
   return (
     <span
       className={cn(
-        'relative inline-flex h-6 shrink-0 items-center gap-1.5 overflow-hidden rounded-full border px-2 text-[12px] font-medium leading-none',
-        mono && 'font-mono',
-        tones[tone],
+        'inline-flex h-6 shrink-0 items-center rounded-[4px] px-2 text-[12px] font-medium leading-none',
+        tone === 'accent' ? 'bg-accent/16 text-accent' : tone === 'neutral' ? 'bg-ink-4 text-fg-2' : cn('bg-ink-3', text[tone]),
         className,
       )}
     >
-      {working && <span aria-hidden="true" className="shimmer absolute inset-0" />}
-      {dot && <span aria-hidden="true" className={cn('relative h-1.5 w-1.5 rounded-full', dots[tone])} />}
-      <span className="relative">{children}</span>
+      {children}
     </span>
   );
 }
 
-const SESSION: Record<SessionStatus, { label: string; tone: ChipTone; working?: boolean }> = {
+/** A status as a dot and a label. The dot pulses for live and sweeps for work in progress. */
+export function Status({ tone, label, className, compact = false }: { tone: Tone; label: string; className?: string; compact?: boolean }) {
+  return (
+    <span className={cn('inline-flex min-w-0 items-center gap-2 text-[13px]', text[tone], className)} title={compact ? label : undefined}>
+      <span aria-hidden="true" className={cn('relative h-2 w-2 shrink-0 rounded-full', fill[tone], tone === 'live' && 'animate-pulse-live', tone === 'work' && 'animate-pulse')} />
+      <span className={cn('truncate', compact && 'sr-only')}>{label}</span>
+    </span>
+  );
+}
+
+export const SESSION_STATUS: Record<SessionStatus, { label: string; tone: Tone }> = {
   Recording: { label: 'Recording', tone: 'live' },
-  Queued: { label: 'Queued', tone: 'accent', working: true },
-  Compiling: { label: 'Building replay', tone: 'accent', working: true },
+  Queued: { label: 'Queued', tone: 'work' },
+  Compiling: { label: 'Building', tone: 'work' },
   Ready: { label: 'Ready', tone: 'ok' },
   Failed: { label: 'Failed', tone: 'danger' },
-  WaitingForScene: { label: 'Waiting for scene', tone: 'warn' },
+  WaitingForScene: { label: 'Waiting for scene', tone: 'wait' },
 };
 
-export function SessionStatusChip({ status }: { status: SessionStatus }) {
-  const s = SESSION[status] ?? SESSION.Queued;
-  return (
-    <Chip tone={s.tone} dot working={s.working}>
-      {s.label}
-    </Chip>
-  );
+export function SessionStatusLabel({ status, compact }: { status: SessionStatus; compact?: boolean }) {
+  const s = SESSION_STATUS[status] ?? SESSION_STATUS.Queued;
+  return <Status tone={s.tone} label={s.label} compact={compact} />;
 }
 
-const VERSION: Record<SceneProcessingStatus, { label: string; tone: ChipTone; working?: boolean }> = {
-  Pending: { label: 'Optimizing', tone: 'accent', working: true },
-  Processing: { label: 'Optimizing', tone: 'accent', working: true },
+const VERSION: Record<SceneProcessingStatus, { label: string; tone: Tone }> = {
+  Pending: { label: 'Optimizing', tone: 'work' },
+  Processing: { label: 'Optimizing', tone: 'work' },
   Ready: { label: 'Ready', tone: 'ok' },
-  Failed: { label: 'Optimization failed', tone: 'warn' },
+  Failed: { label: 'Not optimized', tone: 'caution' },
 };
 
-export function VersionStatusChip({ status }: { status: SceneProcessingStatus }) {
+export function VersionStatus({ status }: { status: SceneProcessingStatus }) {
   const s = VERSION[status] ?? VERSION.Pending;
-  return (
-    <Chip tone={s.tone} dot working={s.working}>
-      {s.label}
-    </Chip>
-  );
+  return <Status tone={s.tone} label={s.label} />;
 }
 
-export function VersionChip({ version, current }: { version: number; current?: boolean }) {
-  return (
-    <Chip tone={current ? 'accent' : 'neutral'} mono>
-      v{version}
-      {current ? ' · current' : ''}
-    </Chip>
-  );
+/** `v.012`: how a scene version is written everywhere. */
+export function versionLabel(version: number): string {
+  return `v.${String(version).padStart(3, '0')}`;
 }

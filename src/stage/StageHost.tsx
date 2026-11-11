@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
+import * as THREE from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { Atmosphere } from '../viewer/core/Atmosphere';
 import { StudioEnvironment } from '../viewer/core/StudioEnvironment';
@@ -8,19 +9,19 @@ import { debugEnabled } from '../debug/enabled';
 import { useToast } from '../ui/Toast';
 import { cn } from '../ui/cn';
 import { CameraRig } from './CameraRig';
+import { DemoScene } from './DemoScene';
 import { SceneContent } from './SceneContent';
 import { DEFAULT_CAMERA, useStage } from './store';
 import { reducedMotion, webglSupported } from './support';
 import { Trace } from './Trace';
 
-// The player's content (replay engine and picking) loads only when a session is opened.
-const ReplayContent = lazy(() => import('../player/ReplayContent'));
-const InspectContent = lazy(() => import('../inspector/InspectContent'));
-// Debug toggles only load with ?debug (DESIGN.md 9.6).
+// The studio (inspection and replay) loads only when a scene is opened in 3D.
+const StudioContent = lazy(() => import('../studio/StudioContent'));
+// Debug toggles only load with ?debug.
 const DebugEffects = lazy(() => import('../debug/DebugEffects'));
 const debugOn = debugEnabled();
 
-/** Frame statistics for the dev lab and the Debug panel; only runs while something asked for them. */
+/** Frame statistics for the Debug panel and the scene stats; only runs while something asked for them. */
 function StatsReporter() {
   const window = useRef({ time: 0, frames: 0, max: 0 });
   useFrame(({ gl }, delta) => {
@@ -52,14 +53,15 @@ function StatsReporter() {
 }
 
 /**
- * Orbit, pan and zoom, listening on the view's StageSurface (DESIGN.md 4.1). Present only for views
- * that asked for free control and placed a surface. With idle orbit it turns slowly, stops the moment
- * the user touches it, and starts again four seconds after they let go.
+ * Orbit, pan and zoom, listening on the view's StageSurface. Present only for views that asked for
+ * free control and placed a surface. With idle orbit it turns slowly, stops the moment the user
+ * touches it, and starts again four seconds after they let go. Shift + drag pans.
  */
 function StageControls() {
   const surface = useStage((s) => s.surface);
   const control = useStage((s) => s.view.control);
   const idleOrbit = useStage((s) => s.view.idleOrbit ?? false);
+  const zoom = useStage((s) => s.view.zoom ?? true);
   const controls = useRef<OrbitControlsImpl | null>(null);
   const timer = useRef<number | null>(null);
   const turning = idleOrbit && !reducedMotion();
@@ -79,8 +81,10 @@ function StageControls() {
       domElement={surface}
       enableDamping
       dampingFactor={0.08}
+      enableZoom={zoom}
+      maxPolarAngle={Math.PI * 0.495}
       autoRotate={turning}
-      autoRotateSpeed={0.45}
+      autoRotateSpeed={0.35}
       onStart={() => {
         if (timer.current) window.clearTimeout(timer.current);
         if (controls.current) controls.current.autoRotate = false;
@@ -98,18 +102,12 @@ function StageControls() {
 function Content() {
   const content = useStage((s) => s.view.content);
   if (content === 'trace') return <Trace />;
+  if (content === 'demo') return <DemoScene />;
   if (content === 'scene') return <SceneContent />;
-  if (content === 'replay') {
+  if (content === 'studio') {
     return (
       <Suspense fallback={null}>
-        <ReplayContent />
-      </Suspense>
-    );
-  }
-  if (content === 'inspect') {
-    return (
-      <Suspense fallback={null}>
-        <InspectContent />
+        <StudioContent />
       </Suspense>
     );
   }
@@ -117,14 +115,13 @@ function Content() {
 }
 
 /**
- * The one persistent WebGL canvas (DESIGN.md 4.1). It sits behind the whole app and is never
- * unmounted while the app is open. Views choose what it shows through `useStageView`.
+ * The one persistent WebGL canvas. It sits behind the whole app and is never unmounted while the app
+ * is open. Views choose what it shows through `useStageView`, and pages show it through a
+ * StageWindow.
  *
  * Without WebGL, or while the context is lost, a plain gradient takes its place and the rest of the
- * app carries on.
- *
- * The canvas is created the first time a view wants to draw, not at startup, so a phone on the
- * sign-in screen, or a page that does not use the Stage yet, spends no GPU work at all.
+ * app carries on. The canvas is created the first time a view wants to draw, so a page that never
+ * shows 3D spends no GPU work at all.
  */
 export default function StageHost() {
   const status = useStage((s) => s.status);
@@ -144,20 +141,23 @@ export default function StageHost() {
   }, []);
 
   return (
-    <div aria-hidden="true" className="stage-fallback pointer-events-none fixed inset-0 -z-10">
+    <div aria-hidden="true" className={cn('pointer-events-none fixed inset-0 -z-10', active && status !== 'ok' && 'stage-fallback')}>
       {supported.current && started && (
         <div
           className={cn('absolute inset-0', status !== 'ok' && 'invisible', !active && 'transition-opacity duration-[600ms]')}
           // While drawing, the camera rig animates the opacity through --stage-dim. While paused it
           // cannot, so the store's value is used and CSS does the fade.
-          style={{ opacity: active ? 'var(--stage-dim, 1)' : dim }}
+          style={{ opacity: active ? 'var(--stage-dim, 1)' : Math.min(dim, 0) }}
         >
           <Canvas
             frameloop={active ? 'always' : 'never'}
-            dpr={[1, 1.5]}
+            dpr={[1, 1.75]}
+            shadows={{ type: THREE.PCFSoftShadowMap }}
             camera={{ position: DEFAULT_CAMERA.position, fov: DEFAULT_CAMERA.fov, near: 0.1, far: 2000 }}
             gl={{ antialias: true, alpha: false, powerPreference: 'high-performance', preserveDrawingBuffer: false }}
             onCreated={({ gl }) => {
+              gl.toneMapping = THREE.ACESFilmicToneMapping;
+              gl.toneMappingExposure = 1.05;
               const element = gl.domElement;
               element.addEventListener('webglcontextlost', (event) => {
                 event.preventDefault();

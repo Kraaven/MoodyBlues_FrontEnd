@@ -4,9 +4,9 @@ import * as THREE from 'three';
 
 /**
  * A small studio of emissive panels turned into an environment map, so PBR materials exported from
- * Unity read correctly without hand-tuned lights. The idea (and the layout: four overhead panels
- * around a dark floor) is from glb-viewer-core's StudioLightScene (MIT, OHZI Interactive Studio);
- * the colours are ours: cool panels with one warmer key.
+ * Unity read correctly without hand-tuned lights. The idea (four overhead panels around a dark
+ * floor) is from glb-viewer-core's StudioLightScene (MIT, OHZI Interactive Studio); the colours are
+ * ours: a warm key, neutral fills and a cool rim, like an overcast afternoon.
  */
 function buildStudio(): THREE.Scene {
   const studio = new THREE.Scene();
@@ -18,15 +18,15 @@ function buildStudio(): THREE.Scene {
     studio.add(mesh);
   };
   const height = 5;
-  panel([3, 3, 3], [5, height, 5], '#dfe8ff', 5);
-  panel([3, 3, 3], [-5, height, 5], '#b9ccff', 4);
-  panel([3, 3, 3], [5, height, -5], '#c8d6ff', 4);
-  panel([5, 3, 5], [-5, height, -5], '#fff1de', 5); // the warm key
-  panel([10, 0.1, 10], [0, -1, 0], '#1a2340', 0.5);
+  panel([5, 3, 5], [-5, height, 5], '#fff0dc', 5.5); // warm key, front left
+  panel([3, 3, 3], [5, height, 5], '#f4f1ea', 3.5);
+  panel([3, 3, 3], [-5, height, -5], '#ece9e4', 3);
+  panel([3, 3, 3], [5, height, -5], '#d9e4f2', 3.5); // cool rim
+  panel([12, 0.1, 12], [0, -1, 0], '#2a2b2e', 0.6);
   return studio;
 }
 
-export function StudioEnvironment({ intensity = 0.4 }: { intensity?: number }) {
+export function StudioEnvironment({ intensity = 0.55 }: { intensity?: number }) {
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
 

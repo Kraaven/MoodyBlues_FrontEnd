@@ -3,14 +3,15 @@ import { releaseStageView, useStage, type StageView } from './store';
 
 /**
  * Tells the Stage what this view needs while it is mounted. Pass a constant object (or one that
- * only changes when the view really changes); it is compared by value.
+ * only changes when the view really changes); it is compared by value. `null` leaves the Stage to
+ * another component of the same page.
  */
-export function useStageView(view: StageView): void {
-  const key = JSON.stringify(view);
+export function useStageView(view: StageView | null): void {
+  const key = view ? JSON.stringify(view) : null;
   useEffect(() => {
-    useStage.getState().setView(JSON.parse(key) as StageView);
-    return () => releaseStageView(view.id);
-    // `key` is the value comparison of `view`.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!key) return;
+    const next = JSON.parse(key) as StageView;
+    useStage.getState().setView(next);
+    return () => releaseStageView(next.id);
   }, [key]);
 }

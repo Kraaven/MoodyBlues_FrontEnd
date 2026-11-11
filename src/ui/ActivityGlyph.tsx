@@ -5,7 +5,7 @@ import { Tooltip } from './Tooltip';
 import { cn } from './cn';
 
 export const GLYPH_WIDTH = 160;
-export const GLYPH_HEIGHT = 20;
+export const GLYPH_HEIGHT = 22;
 
 interface Props {
   session: SessionSummary;
@@ -39,7 +39,7 @@ export function ActivityGlyph({ session, longestSeconds, timeline, className }: 
         viewBox={`0 0 ${GLYPH_WIDTH} ${GLYPH_HEIGHT}`}
         className={cn('shrink-0 overflow-visible', className)}
       >
-        <rect x="0" y="0" width={GLYPH_WIDTH} height={GLYPH_HEIGHT} rx="3" className="fill-ink-2" />
+        <rect x="0" y="0" width={GLYPH_WIDTH} height={GLYPH_HEIGHT} rx="3" className="fill-ink-0/70" />
         {!ready ? <Unavailable status={session.status} /> : timeline ? <TimelineForm timeline={timeline} /> : <SummaryForm session={session} longestSeconds={longestSeconds} />}
       </svg>
     </Tooltip>
@@ -71,7 +71,7 @@ function describeUnavailable(s: SessionSummary): string {
 }
 
 function Unavailable({ status }: { status: SessionSummary['status'] }) {
-  const colour = status === 'Recording' ? 'stroke-live' : status === 'Failed' ? 'stroke-danger' : status === 'WaitingForScene' ? 'stroke-wait' : 'stroke-blue-bright';
+  const colour = status === 'Recording' ? 'stroke-live' : status === 'Failed' ? 'stroke-danger' : status === 'WaitingForScene' ? 'stroke-wait' : 'stroke-work';
   return (
     <line
       x1="6"
@@ -98,8 +98,8 @@ function SummaryForm({ session: s, longestSeconds }: { session: SessionSummary; 
 
   return (
     <g>
-      <rect x="2" y="2" width={width} height={GLYPH_HEIGHT - 8} rx="2" className="fill-blue" opacity={0.25 + density * 0.6} />
-      <rect x="2" y={GLYPH_HEIGHT - 5} width={width} height="3" rx="1.5" className="fill-ink-3" />
+      <rect x="2" y="2" width={width} height={GLYPH_HEIGHT - 8} rx="2" className="fill-fg-2" opacity={0.25 + density * 0.6} />
+      <rect x="2" y={GLYPH_HEIGHT - 5} width={width} height="3" rx="1.5" className="fill-ink-4" />
       {errorW > 0 && <rect x="2" y={GLYPH_HEIGHT - 5} width={Math.max(2, errorW)} height="3" rx="1.5" className="fill-danger" />}
       {warnW > 0 && <rect x={2 + errorW} y={GLYPH_HEIGHT - 5} width={Math.max(2, warnW)} height="3" rx="1.5" className="fill-caution" />}
     </g>
@@ -119,10 +119,10 @@ function TimelineForm({ timeline: t }: { timeline: GlyphTimeline }) {
       ))}
       {t.activity.map((v, i) => {
         const h = 2 + v * (GLYPH_HEIGHT - 10);
-        return <rect key={i} x={2 + i * barW + 0.4} y={GLYPH_HEIGHT - 3 - h} width={Math.max(1, barW - 0.8)} height={h} className="fill-blue" opacity={0.35 + v * 0.55} />;
+        return <rect key={i} x={2 + i * barW + 0.4} y={GLYPH_HEIGHT - 3 - h} width={Math.max(1, barW - 0.8)} height={h} className="fill-fg-2" opacity={0.35 + v * 0.55} />;
       })}
       {t.spawns.map((p, i) => (
-        <line key={`s${i}`} x1={x(p)} x2={x(p)} y1="2" y2="6" strokeWidth="1" className="stroke-blue-bright" />
+        <line key={`s${i}`} x1={x(p)} x2={x(p)} y1="2" y2="6" strokeWidth="1" className="stroke-accent" />
       ))}
       {t.warnings.map((p, i) => (
         <circle key={`w${i}`} cx={x(p)} cy="5" r="2" className="fill-caution" />

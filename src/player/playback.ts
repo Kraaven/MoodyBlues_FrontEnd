@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { create } from 'zustand';
 import type { ReplayPlayer } from '../viewer/replay/ReplayPlayer';
 
 /** One capture tick at the client's default 40 Hz: the frame-step size. */
@@ -109,63 +108,3 @@ export function usePlaybackState(playback: Playback): { playing: boolean; speed:
   useEffect(() => playback.subscribeState(() => force((n) => n + 1)), [playback]);
   return { playing: playback.playing, speed: playback.speed, ready: playback.player !== null, duration: playback.duration };
 }
-
-const LOGS_ON_TRACK_KEY = 'moodyblues.logsOnTrack';
-
-function readStored<T>(key: string, fallback: T, parse: (v: string) => T): T {
-  try {
-    const v = localStorage.getItem(key);
-    return v === null ? fallback : parse(v);
-  } catch {
-    return fallback;
-  }
-}
-
-function store(key: string, value: string) {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // Storage unavailable: the setting lasts for this visit only.
-  }
-}
-
-interface PlayerUiState {
-  selectedId: number | null;
-  follow: boolean;
-  logsOnTrack: boolean;
-  showGrid: boolean;
-  /** Bumped to ask the viewport to frame the whole scene / the selection. */
-  frameAllRequest: number;
-  frameSelectedRequest: number;
-  shortcutsOpen: boolean;
-  select: (id: number | null) => void;
-  setFollow: (follow: boolean) => void;
-  setLogsOnTrack: (on: boolean) => void;
-  toggleGrid: () => void;
-  frameAll: () => void;
-  frameSelected: () => void;
-  setShortcutsOpen: (open: boolean) => void;
-  reset: () => void;
-}
-
-/** What the person watching has chosen: the selection, the camera helpers and the dialogs. Panel layout lives in src/panels. */
-export const usePlayerUi = create<PlayerUiState>((set) => ({
-  selectedId: null,
-  follow: false,
-  logsOnTrack: readStored(LOGS_ON_TRACK_KEY, true, (v) => v !== 'false'),
-  showGrid: true,
-  frameAllRequest: 0,
-  frameSelectedRequest: 0,
-  shortcutsOpen: false,
-  select: (selectedId) => set((s) => ({ selectedId, follow: selectedId === null ? false : s.follow })),
-  setFollow: (follow) => set({ follow }),
-  setLogsOnTrack: (logsOnTrack) => {
-    store(LOGS_ON_TRACK_KEY, String(logsOnTrack));
-    set({ logsOnTrack });
-  },
-  toggleGrid: () => set((s) => ({ showGrid: !s.showGrid })),
-  frameAll: () => set((s) => ({ frameAllRequest: s.frameAllRequest + 1 })),
-  frameSelected: () => set((s) => ({ frameSelectedRequest: s.frameSelectedRequest + 1 })),
-  setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
-  reset: () => set({ selectedId: null, follow: false, shortcutsOpen: false }),
-}));

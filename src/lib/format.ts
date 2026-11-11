@@ -14,23 +14,50 @@ export function plural(count: number, one: string, many = `${one}s`): string {
   return `${formatCount(count)} ${count === 1 ? one : many}`;
 }
 
-/** `12:04`, or `1:02:03` past an hour. */
+/** `02:34`, or `1:02:03` past an hour. */
 export function formatDuration(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds));
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
-  const mm = String(m).padStart(h > 0 ? 2 : 1, '0');
+  const mm = String(m).padStart(2, '0');
   return h > 0 ? `${h}:${mm}:${String(sec).padStart(2, '0')}` : `${mm}:${String(sec).padStart(2, '0')}`;
 }
 
-/** Playhead time with hundredths: `00:42.10`. */
-export function formatPlayhead(seconds: number): string {
+/** Playhead time: `00:42.36`, or with `decimals` 3 `00:42.360`, or 0 `02:34`. */
+export function formatPlayhead(seconds: number, decimals: 0 | 2 | 3 = 2): string {
   const t = Math.max(0, seconds);
   const m = Math.floor(t / 60);
   const s = Math.floor(t % 60);
-  const cs = Math.floor((t % 1) * 100);
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
+  const head = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  if (decimals === 0) return head;
+  const scale = decimals === 3 ? 1000 : 100;
+  const frac = Math.floor((t % 1) * scale);
+  return `${head}.${String(frac).padStart(decimals, '0')}`;
+}
+
+/** "Today, 10:42", "Yesterday, 16:52", "Tue, 18:30" within a week, else "Nov 06, 14:32". */
+export function formatCaptured(iso: string, now = new Date()): string {
+  const date = new Date(iso);
+  const time = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOfDay(now) - startOfDay(date)) / 86_400_000);
+  if (days === 0) return `Today, ${time}`;
+  if (days === 1) return `Yesterday, ${time}`;
+  if (days > 1 && days < 7) return `${date.toLocaleDateString(undefined, { weekday: 'short' })}, ${time}`;
+  return `${date.toLocaleDateString(undefined, { month: 'short', day: '2-digit' })}, ${time}`;
+}
+
+/** A short, stable handle for a session: the first six characters of its id, `#3f9c2a`. */
+export function sessionHandle(id: string): string {
+  return `#${id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6).toLowerCase()}`;
+}
+
+/** 186400 → "186.4k". */
+export function formatCompact(value: number): string {
+  if (value < 1000) return String(value);
+  if (value < 1_000_000) return `${(value / 1000).toFixed(value < 10_000 ? 2 : 1).replace(/\.?0+$/, '')}k`;
+  return `${(value / 1_000_000).toFixed(2).replace(/\.?0+$/, '')}M`;
 }
 
 export function formatDateTime(iso: string): string {

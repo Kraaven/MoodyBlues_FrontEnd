@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { clone as cloneWithSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { disposeObject3D } from '../viewer/core/gltf';
 import { loadSceneGltf } from './sceneSource';
-import type { SceneRef } from './store';
+import { refKey, type SceneRef } from './store';
 
 /**
  * Downloaded scene versions, shared between views (DESIGN.md 4.4: going from a scene into one of
@@ -39,7 +39,7 @@ const entries = new Map<string, Entry>();
 const MAX_IDLE = 2;
 
 export function sceneKey(ref: SceneRef): string {
-  return `${ref.developerId}/${ref.sceneId}/${ref.hash}`;
+  return refKey(ref);
 }
 
 export interface SceneLease {

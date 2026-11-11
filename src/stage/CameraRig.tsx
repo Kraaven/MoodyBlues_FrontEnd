@@ -41,6 +41,7 @@ export function CameraRig() {
   const lastDim = useRef({ current: '' });
   const lastFov = useRef(0);
   const lastOffset = useRef('');
+  const inset = useRef({ left: 0, right: 0, top: 0, bottom: 0 });
 
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
@@ -120,13 +121,24 @@ export function CameraRig() {
       camera.updateProjectionMatrix();
     }
 
-    // Centre the projection in the part of the window the view left free (panels, a text column).
-    const { left, right, top, bottom } = state.inset;
-    const key = `${left}|${right}|${top}|${bottom}|${size.width}|${size.height}`;
+    // Centre the projection in the part of the window the view left free (panels, a card on a page).
+    // A view change glides there with the camera; scrolling and resizing follow at once.
+    const goal = state.inset;
+    const shown = inset.current;
+    const k = state.insetSmooth && !calm ? 1 - Math.exp(-delta * 7) : 1;
+    shown.left += (goal.left - shown.left) * k;
+    shown.right += (goal.right - shown.right) * k;
+    shown.top += (goal.top - shown.top) * k;
+    shown.bottom += (goal.bottom - shown.bottom) * k;
+    if (Math.abs(goal.left - shown.left) + Math.abs(goal.right - shown.right) + Math.abs(goal.top - shown.top) + Math.abs(goal.bottom - shown.bottom) < 0.5) {
+      Object.assign(shown, goal);
+    }
+    const { left, right, top, bottom } = shown;
+    const key = `${left.toFixed(1)}|${right.toFixed(1)}|${top.toFixed(1)}|${bottom.toFixed(1)}|${size.width}|${size.height}`;
     if (key !== lastOffset.current) {
       lastOffset.current = key;
       const persp = camera as THREE.PerspectiveCamera;
-      if (left === 0 && right === 0 && top === 0 && bottom === 0) persp.clearViewOffset();
+      if (Math.abs(left) + Math.abs(right) + Math.abs(top) + Math.abs(bottom) < 0.5) persp.clearViewOffset();
       else persp.setViewOffset(size.width, size.height, -(left - right) / 2, -(top - bottom) / 2, size.width, size.height);
       persp.updateProjectionMatrix();
     }

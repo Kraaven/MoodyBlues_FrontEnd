@@ -10,39 +10,51 @@ interface DialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
+  /** A mono line under the title: "Aperture / v.012". */
+  context?: ReactNode;
   description?: ReactNode;
   children?: ReactNode;
   footer?: ReactNode;
-  width?: 'sm' | 'md';
+  width?: 'sm' | 'md' | 'lg';
+  /** Title in the display face, large. For dialogs that are a destination (Unity connection). */
+  display?: boolean;
 }
 
-export function Dialog({ open, onOpenChange, title, description, children, footer, width = 'sm' }: DialogProps) {
+export function Dialog({ open, onOpenChange, title, context, description, children, footer, width = 'sm', display = false }: DialogProps) {
   return (
     <D.Root open={open} onOpenChange={onOpenChange}>
       <D.Portal>
-        <D.Overlay className="fixed inset-0 z-[60] animate-fade bg-[#02030a]/70 backdrop-blur-[2px]" />
+        <D.Overlay className="fixed inset-0 z-[60] animate-fade bg-[#0d0d0c]/70 backdrop-blur-[3px]" />
         <D.Content
           className={cn(
-            'elevated fixed left-1/2 top-[18vh] z-[61] w-[calc(100vw-32px)] -translate-x-1/2 animate-rise',
-            'rounded-[var(--radius-dialog)] border border-rule bg-ink-1 p-6 focus:outline-none',
-            width === 'sm' ? 'max-w-[440px]' : 'max-w-[560px]',
+            'elevated fixed left-1/2 top-1/2 z-[61] max-h-[calc(100dvh-32px)] w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto',
+            'rounded-[var(--radius-dialog)] border border-rule-strong/70 bg-ink-2 focus:outline-none',
+            'data-[state=open]:animate-[dialog-in_260ms_var(--ease-out-soft)]',
+            display ? 'p-8 sm:p-10' : 'p-6',
+            width === 'sm' ? 'max-w-[460px]' : width === 'md' ? 'max-w-[580px]' : 'max-w-[760px]',
           )}
         >
-          <div className="mb-4 flex items-start justify-between gap-4">
-            <div className="space-y-1">
-              <D.Title className="text-base font-semibold text-fg">{title}</D.Title>
+          <div className={cn('flex items-start justify-between gap-4', display ? 'mb-7' : 'mb-5')}>
+            <div className="min-w-0 space-y-1.5">
+              <D.Title className={cn('text-fg', display ? 'display text-[34px] leading-[40px] sm:text-[40px] sm:leading-[46px]' : 'text-[17px] font-semibold leading-6')}>
+                {title}
+              </D.Title>
+              {context && <p className="font-mono text-[13px] text-fg-3">{context}</p>}
               {description ? (
-                <D.Description className="text-sm text-fg-2">{description}</D.Description>
+                <D.Description className="pt-1 text-[14px] text-fg-2">{description}</D.Description>
               ) : (
                 <D.Description className="sr-only">{title}</D.Description>
               )}
             </div>
-            <D.Close className="-m-1 rounded-[var(--radius-control)] p-1 text-fg-3 transition-colors hover:text-fg" aria-label="Close">
-              <X className="h-4 w-4" />
+            <D.Close
+              className="-mr-2 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-fg-3 transition-colors hover:bg-ink-3 hover:text-fg"
+              aria-label="Close"
+            >
+              <X className={display ? 'h-6 w-6' : 'h-[18px] w-[18px]'} />
             </D.Close>
           </div>
           {children}
-          {footer && <div className="mt-6 flex justify-end gap-2">{footer}</div>}
+          {footer && <div className="mt-7 flex flex-wrap justify-end gap-2">{footer}</div>}
         </D.Content>
       </D.Portal>
     </D.Root>
@@ -53,7 +65,7 @@ interface ConfirmDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  /** What will be removed, in full (DESIGN.md Section 8). */
+  /** What will be removed, in full. */
   body: ReactNode;
   confirmLabel: string;
   /** When set, the user must type this exactly before the button enables. */
@@ -119,15 +131,15 @@ export function ConfirmDialog({
         </>
       }
     >
-      <div className="space-y-4 text-sm text-fg-2">
-        <div className="space-y-2">{body}</div>
+      <div className="space-y-4 text-[14px] text-fg-2">
+        <div className="space-y-2.5">{body}</div>
         {disabledReason && <p className="text-caution">{disabledReason}</p>}
         {typeToConfirm && !disabledReason && (
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="block text-[13px] text-fg-2" htmlFor="confirm-name">
               Type <span className="font-mono text-fg">{typeToConfirm}</span> to confirm.
             </label>
-            <Input id="confirm-name" autoFocus autoComplete="off" spellCheck={false} value={typed} onChange={(e) => setTyped(e.target.value)} />
+            <Input id="confirm-name" className="h-10 text-[14px]" autoFocus autoComplete="off" spellCheck={false} value={typed} onChange={(e) => setTyped(e.target.value)} />
           </div>
         )}
         <FormError>{error}</FormError>

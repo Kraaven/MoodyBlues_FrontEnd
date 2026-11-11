@@ -2,8 +2,8 @@ import { formatBytes } from '../lib/format';
 import { useStage } from './store';
 
 /**
- * The Stage's progress marker (DESIGN.md 4.5): a rail with a playhead, because loading is the same
- * gesture as playback, only slower. Set it with `useStage.getState().setLoading(...)`.
+ * The Stage's progress marker: a rail with a playhead, because loading is the same gesture as
+ * playback, only slower. Set it with `useStage.getState().setLoading(...)`.
  */
 export function StagePreloader() {
   // The oldest download still running is the one shown.
@@ -14,10 +14,10 @@ export function StagePreloader() {
   const done = fraction === 1;
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-24 z-20 flex justify-center px-6" role="status" aria-live="polite">
-      <div className="glass elevated w-80 animate-rise space-y-2.5 rounded-[var(--radius-card)] border border-rule px-4 py-3">
-        <p className="flex items-baseline justify-between gap-3 text-[12px] text-fg-2">
-          <span>{done ? 'Preparing playback…' : loading.label}</span>
+    <div className="pointer-events-none fixed inset-x-0 top-[96px] z-40 flex justify-center px-6" role="status" aria-live="polite">
+      <div className="glass elevated w-[340px] animate-rise space-y-3 rounded-[10px] border border-rule-strong/60 px-5 py-4">
+        <p className="flex items-baseline justify-between gap-3 text-[13px] text-fg-2">
+          <span>{done ? 'Preparing…' : loading.label}</span>
           {loading.received > 0 && !done && (
             <span className="tabular font-mono text-[11px] text-fg-3">
               {formatBytes(loading.received)}
@@ -25,14 +25,14 @@ export function StagePreloader() {
             </span>
           )}
         </p>
-        <div className="relative h-1.5 rounded-full bg-ink-3">
+        <div className="relative h-[3px] rounded-full bg-ink-4">
           {fraction === null ? (
-            <div className="shimmer absolute inset-0 rounded-full" />
+            <div className="sweep absolute inset-0 rounded-full" />
           ) : (
             <>
-              <div className="h-full rounded-full bg-gradient-to-r from-blue to-blue-bright transition-[width] duration-200" style={{ width: `${fraction * 100}%` }} />
+              <div className="h-full rounded-full bg-accent transition-[width] duration-200" style={{ width: `${fraction * 100}%` }} />
               <span
-                className="absolute top-1/2 h-3.5 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-now shadow-[0_0_8px_rgb(255_181_71/0.7)] transition-[left] duration-200"
+                className="absolute top-1/2 h-3 w-[5px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent shadow-[0_0_10px_rgb(245_181_68/0.7)] transition-[left] duration-200"
                 style={{ left: `${fraction * 100}%` }}
               />
             </>

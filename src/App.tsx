@@ -1,39 +1,43 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { ProtectedRoute } from './auth/ProtectedRoute';
-import { LoginPage, RegisterPage } from './pages/auth/AuthPages';
-import { ProjectsPage } from './pages/ProjectsPage';
+import { AuthPage } from './pages/auth/AuthPage';
+import { LobbyPage } from './pages/LobbyPage';
+import { NewProjectPage } from './pages/NewProjectPage';
 import { ProjectPage } from './pages/ProjectPage';
 import { ScenePage } from './pages/scene/ScenePage';
-import { ArchiveTab, SessionsTab, SettingsTab } from './pages/scene/SceneTabs';
+import { CurrentVersionTab, SettingsTab, VersionHistoryTab } from './pages/scene/SceneTabs';
+import { SetupGuideDialog } from './shell/SetupGuide';
 import { StagePreloader } from './stage/StagePreloader';
 import { debugEnabled } from './debug/enabled';
-import { Logo } from './ui/Logo';
+import { Mark } from './ui/Logo';
 
-// three.js and the replay engine load only on these routes (DESIGN.md 12.3).
-const SessionPlayerPage = lazy(() => import('./player/SessionPlayerPage'));
-const SceneInspectorPage = lazy(() => import('./inspector/SceneInspectorPage'));
-// The persistent Stage loads in its own chunk, after the shell has painted (DESIGN.md 4.5).
+// three.js, the replay engine and the studio load only when something is opened in 3D.
+const StudioPage = lazy(() => import('./studio/StudioPage'));
+// The persistent Stage loads in its own chunk, after the shell has painted.
+const StageHost = lazy(() => import('./stage/StageHost'));
 // Development tools, loaded only with ?debug.
 const DebugPanel = lazy(() => import('./debug/DebugPanel'));
-const StageHost = lazy(() => import('./stage/StageHost'));
-// Development only: drives the Stage by hand. Tree-shaken out of production builds.
-const StageLab = import.meta.env.DEV ? lazy(() => import('./stage/StageLab')) : null;
-
 const debugOn = debugEnabled();
 
 function RouteFallback() {
   return (
-    <div className="flex h-full items-center justify-center">
-      <Logo size={32} className="animate-pulse" />
+    <div className="flex min-h-dvh items-center justify-center">
+      <Mark className="animate-pulse text-[40px]" />
     </div>
   );
 }
 
-/** `/.../view` was the old inspector route. */
-function LegacyViewRedirect() {
+/** Old addresses of the inspector. */
+function LegacyInspectRedirect() {
   const { projectId, sceneId } = useParams();
-  return <Navigate to={`/projects/${projectId}/scenes/${sceneId}/inspect`} replace />;
+  const version = new URLSearchParams(window.location.search).get('version');
+  return <Navigate to={`/projects/${projectId}/scenes/${sceneId}/view${version ? `?version=${version}` : ''}`} replace />;
+}
+
+function LegacyArchiveRedirect() {
+  const { projectId, sceneId } = useParams();
+  return <Navigate to={`/projects/${projectId}/scenes/${sceneId}/history`} replace />;
 }
 
 export default function App() {
@@ -43,6 +47,7 @@ export default function App() {
         <StageHost />
       </Suspense>
       <StagePreloader />
+      <SetupGuideDialog />
       {debugOn && (
         <Suspense fallback={null}>
           <DebugPanel />
@@ -50,21 +55,22 @@ export default function App() {
       )}
       <Suspense fallback={<RouteFallback />}>
         <Routes>
-          {StageLab && <Route path="/_stage" element={<StageLab />} />}
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/login" element={<AuthPage mode="login" />} />
+          <Route path="/register" element={<AuthPage mode="register" />} />
 
           <Route element={<ProtectedRoute />}>
-            <Route path="/projects" element={<ProjectsPage />} />
+            <Route path="/projects" element={<LobbyPage />} />
+            <Route path="/projects/new" element={<NewProjectPage />} />
             <Route path="/projects/:projectId" element={<ProjectPage />} />
             <Route path="/projects/:projectId/scenes/:sceneId" element={<ScenePage />}>
-              <Route index element={<SessionsTab />} />
-              <Route path="archive" element={<ArchiveTab />} />
+              <Route index element={<CurrentVersionTab />} />
+              <Route path="history" element={<VersionHistoryTab />} />
               <Route path="settings" element={<SettingsTab />} />
+              <Route path="archive" element={<LegacyArchiveRedirect />} />
             </Route>
-            <Route path="/projects/:projectId/scenes/:sceneId/inspect" element={<SceneInspectorPage />} />
-            <Route path="/projects/:projectId/scenes/:sceneId/view" element={<LegacyViewRedirect />} />
-            <Route path="/projects/:projectId/scenes/:sceneId/sessions/:sessionId" element={<SessionPlayerPage />} />
+            <Route path="/projects/:projectId/scenes/:sceneId/view" element={<StudioPage />} />
+            <Route path="/projects/:projectId/scenes/:sceneId/sessions/:sessionId" element={<StudioPage />} />
+            <Route path="/projects/:projectId/scenes/:sceneId/inspect" element={<LegacyInspectRedirect />} />
           </Route>
 
           <Route path="/dashboard" element={<Navigate to="/projects" replace />} />

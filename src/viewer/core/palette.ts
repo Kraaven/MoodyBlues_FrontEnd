@@ -3,34 +3,38 @@
  * needs are repeated here. `palette.test.ts` parses `tokens.css` and fails if they drift apart.
  */
 export const PALETTE = {
-  ink0: '#04060d',
-  ink1: '#080c18',
-  ink2: '#0d1324',
-  ink3: '#141c33',
-  rule: '#1b2542',
-  ruleStrong: '#2b3a63',
-  blueDeep: '#1c3faa',
-  blue: '#3d63f0',
-  blueBright: '#8ca8ff',
-  now: '#ffb547',
+  ink1: '#232322',
+  ink2: '#2a2a29',
+  world0: '#1c1e22',
+  world1: '#24262b',
+  world2: '#2c2f35',
+  grid: '#353941',
+  gridStrong: '#434852',
+  accent: '#f5b544',
+  fg: '#efece6',
+  axisX: '#e98a73',
+  axisY: '#95cda5',
+  axisZ: '#8db3dd',
 } as const;
 
 /** Which CSS token each palette entry mirrors, for the drift test. */
 export const PALETTE_TOKENS: Record<keyof typeof PALETTE, string> = {
-  ink0: '--color-ink-0',
   ink1: '--color-ink-1',
   ink2: '--color-ink-2',
-  ink3: '--color-ink-3',
-  rule: '--color-rule',
-  ruleStrong: '--color-rule-strong',
-  blueDeep: '--color-blue-deep',
-  blue: '--color-blue',
-  blueBright: '--color-blue-bright',
-  now: '--color-now',
+  world0: '--color-world-0',
+  world1: '--color-world-1',
+  world2: '--color-world-2',
+  grid: '--color-world-grid',
+  gridStrong: '--color-world-grid-strong',
+  accent: '--color-accent',
+  fg: '--color-fg',
+  axisX: '--color-axis-x',
+  axisY: '--color-axis-y',
+  axisZ: '--color-axis-z',
 };
 
-/** Derived for 3D only (the dim half of the selection outline); not a UI token. */
-export const NOW_DIM = '#6b4710';
+/** Derived for 3D only (the hidden half of the selection outline); not a UI token. */
+export const ACCENT_DIM = '#6b4a14';
 
 /** '#rrggbb' to the number three.js colour constructors take. */
 export function hex(color: string): number {

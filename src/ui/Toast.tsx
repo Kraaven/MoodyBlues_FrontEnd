@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Toast as T } from 'radix-ui';
-import { CheckCircle2, X, XCircle } from 'lucide-react';
+import { X } from 'lucide-react';
+import { cn } from './cn';
 
 interface ToastItem {
   id: number;
@@ -30,26 +31,22 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <T.Root
             key={item.id}
             onOpenChange={(open) => !open && setItems((prev) => prev.filter((i) => i.id !== item.id))}
-            className="elevated flex animate-rise items-start gap-3 rounded-[var(--radius-card)] border border-rule bg-ink-2 px-4 py-3"
+            className="elevated flex animate-rise items-start gap-3 rounded-[var(--radius-card)] border border-rule-strong/70 bg-ink-3 py-3 pl-3.5 pr-3"
           >
-            {item.tone === 'ok' ? (
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-ok" />
-            ) : (
-              <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
-            )}
-            <T.Description className="flex-1 text-[13px] text-fg">{item.message}</T.Description>
+            <span aria-hidden="true" className={cn('mt-[7px] h-2 w-2 shrink-0 rounded-full', item.tone === 'ok' ? 'bg-accent' : 'bg-danger')} />
+            <T.Description className="flex-1 text-[13px] leading-5 text-fg">{item.message}</T.Description>
             <T.Close aria-label="Dismiss" className="text-fg-3 hover:text-fg">
               <X className="h-4 w-4" />
             </T.Close>
           </T.Root>
         ))}
-        <T.Viewport className="fixed bottom-4 right-4 z-[80] flex w-[380px] max-w-[calc(100vw-32px)] flex-col gap-2 outline-none" />
+        <T.Viewport className="fixed bottom-5 left-1/2 z-[80] flex w-[400px] max-w-[calc(100vw-32px)] -translate-x-1/2 flex-col gap-2 outline-none" />
       </T.Provider>
     </ToastContext.Provider>
   );
 }
 
-// eslint-disable-next-line react-refresh/only-export-components
+// oxlint-disable-next-line react/only-export-components
 export function useToast(): Notify {
   const notify = useContext(ToastContext);
   if (!notify) throw new Error('useToast must be used within a ToastProvider');

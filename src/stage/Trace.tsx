@@ -50,9 +50,9 @@ const CURVE_GLSL = /* glsl */ `
   }
 
   vec3 colourFor(float seed) {
-    vec3 cool = mix(vec3(0.24, 0.39, 0.94), vec3(0.55, 0.66, 1.0), seed);
-    vec3 warm = vec3(1.0, 0.71, 0.28);
-    return seed > 0.92 ? warm : cool;
+    vec3 stone = mix(vec3(0.42, 0.44, 0.48), vec3(0.78, 0.76, 0.72), seed);
+    vec3 warm = vec3(0.96, 0.71, 0.27);
+    return seed > 0.9 ? warm : stone;
   }
 `;
 
@@ -279,7 +279,7 @@ export function Trace() {
       <lineSegments geometry={lineGeometry} material={lineMaterial} frustumCulled={false} />
       <points geometry={keyGeometry} material={keyMaterial} frustumCulled={false} />
       <points geometry={headGeometry} material={headMaterial} frustumCulled={false} />
-      <Ground y={-8} fadeDistance={90} strength={0.6} />
+      <Ground y={-8} fadeDistance={90} />
     </>
   );
 }
