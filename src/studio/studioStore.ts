@@ -123,7 +123,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
 }));
 
-export function findById(root: THREE.Object3D, id: number): THREE.Object3D | null {
+function findById(root: THREE.Object3D, id: number): THREE.Object3D | null {
   let found: THREE.Object3D | null = null;
   root.traverse((n) => {
     if (!found && n.userData?.objectId === id) found = n;

@@ -15,7 +15,7 @@ import { reducedMotion } from './support';
  *
  * The page's decorative timeline reads `demoClock`, so the playhead under the scene moves with it.
  */
-export const demoClock = { time: 42.36, duration: 154.8 };
+const demoClock = { time: 42.36, duration: 154.8 };
 
 type Box = [w: number, h: number, d: number, x: number, y: number, z: number];
 

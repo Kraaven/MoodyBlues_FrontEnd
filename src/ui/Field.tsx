@@ -1,5 +1,5 @@
 import { forwardRef, useId, useState } from 'react';
-import type { InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react';
+import type { InputHTMLAttributes, ReactNode } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { cn } from './cn';
 
@@ -11,10 +11,6 @@ const control =
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input({ className, ...props }, ref) {
   return <input ref={ref} className={cn(control, 'h-12', className)} {...props} />;
-});
-
-export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(function Textarea({ className, ...props }, ref) {
-  return <textarea ref={ref} className={cn(control, 'min-h-24 py-3 leading-6', className)} {...props} />;
 });
 
 interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {

@@ -13,7 +13,6 @@ import { Tooltip } from '../../ui/Tooltip';
 import { useToast } from '../../ui/Toast';
 import { cn } from '../../ui/cn';
 import { formatBytes, formatCaptured, formatCount, formatDateTime, formatDuration, sessionHandle } from '../../lib/format';
-import { useGlyphTimelines } from './glyphs';
 
 const PAGE = 10;
 
@@ -32,7 +31,7 @@ function LogSummary({ session: s }: { session: SessionSummary }) {
 
 /**
  * A scene version's recorded sessions. Each row leads with the session's handle and state, shows the
- * shape of the session (its activity glyph), and opens the 3D player when chosen. Live recordings
+ * shape of the session (its activity glyph, from the backend), and opens the 3D player when chosen. Live recordings
  * come first; otherwise newest first, as the server returns them.
  */
 export function RecordingsTable({ sessions, sessionHref, nested = false }: { sessions: SessionSummary[]; sessionHref: (id: string) => string; nested?: boolean }) {
@@ -41,12 +40,10 @@ export function RecordingsTable({ sessions, sessionHref, nested = false }: { ses
   const remove = useDeleteSession();
   const [toDelete, setToDelete] = useState<SessionSummary | null>(null);
   const [page, setPage] = useState(0);
-  const timelines = useGlyphTimelines(sessions);
 
   const rows = useMemo(() => [...sessions].sort((a, b) => Number(b.status === 'Recording') - Number(a.status === 'Recording')), [sessions]);
   const pages = Math.max(1, Math.ceil(rows.length / PAGE));
   const shown = rows.slice(page * PAGE, page * PAGE + PAGE);
-  const longest = Math.max(1, ...sessions.map((s) => s.durationSeconds));
 
   const copyLink = async (id: string) => {
     try {
@@ -102,7 +99,7 @@ export function RecordingsTable({ sessions, sessionHref, nested = false }: { ses
               )}
             </Link>
             <div className="hidden md:block">
-              <ActivityGlyph session={s} longestSeconds={longest} timeline={timelines.get(s.id)} />
+              <ActivityGlyph session={s} />
             </div>
             <div className="hidden font-mono text-[12px] md:block">
               <LogSummary session={s} />
@@ -165,8 +162,4 @@ export function RecordingsTable({ sessions, sessionHref, nested = false }: { ses
       />
     </div>
   );
-}
-
-export function RecordingsEmpty({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-[var(--radius-card)] border border-dashed border-rule-strong px-6 py-8 text-[14px] text-fg-2">{children}</div>;
 }

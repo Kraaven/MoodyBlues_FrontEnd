@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronsLeft, ChevronsRight, Pause, Play } from 'lucide-react';
 import { LogLevel, logColorHex, type Replay, type ReplayLog } from '../viewer/replay/replayFile';
-import { nextLogTime, previousLogTime } from '../player/logNav';
-import { SPEEDS, usePlaybackState, type Playback } from '../player/playback';
+import { nextLogTime, previousLogTime } from './logNav';
+import { SPEEDS, usePlaybackState, type Playback } from './playback';
 import { IconButton } from '../ui/Button';
 import { Menu } from '../ui/Menu';
 import { cn } from '../ui/cn';

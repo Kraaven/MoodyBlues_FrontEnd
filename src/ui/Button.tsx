@@ -6,8 +6,8 @@ import { Loader2 } from 'lucide-react';
 import { cn } from './cn';
 import { Tooltip } from './Tooltip';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'quiet';
-export type ButtonSize = 'sm' | 'md' | 'lg';
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'quiet';
+type ButtonSize = 'sm' | 'md' | 'lg';
 
 const base =
   'group/btn relative inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius-control)] font-medium ' +
@@ -29,7 +29,7 @@ const sizes: Record<ButtonSize, string> = {
   lg: 'h-12 px-5 text-[15px]',
 };
 
-export function buttonClass(variant: ButtonVariant = 'primary', size: ButtonSize = 'md', className?: string): string {
+function buttonClass(variant: ButtonVariant = 'primary', size: ButtonSize = 'md', className?: string): string {
   return cn(base, variants[variant], sizes[size], className);
 }
 

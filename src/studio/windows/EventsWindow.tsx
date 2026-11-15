@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { LogLevel, logColorHex, type Replay, type ReplayEvent } from '../../viewer/replay/replayFile';
-import { lastIndexAtOrBefore } from '../../player/logNav';
-import { usePlaybackState, usePlaybackTime, type Playback } from '../../player/playback';
+import { lastIndexAtOrBefore } from '../logNav';
+import { usePlaybackState, usePlaybackTime, type Playback } from '../playback';
 import { FilterTabs } from '../../ui/Tabs';
 import { cn } from '../../ui/cn';
 import { formatPlayhead } from '../../lib/format';
@@ -33,8 +33,7 @@ const EVENT_TEXT: Partial<Record<ReplayEvent['type'], { tag: string; title: (nam
 };
 
 /** Logs and the replay's own events (spawns, deletes, disconnects, gaps), as one list in time order. */
-// oxlint-disable-next-line react/only-export-components
-export function buildEntries(replay: Replay, nameOf: (id: number) => string): Entry[] {
+function buildEntries(replay: Replay, nameOf: (id: number) => string): Entry[] {
   const out: Entry[] = replay.logs.map((log) => {
     const [first, ...rest] = (log.text || '(empty)').split('\n');
     const tone = log.level === LogLevel.Error ? 'error' : log.level === LogLevel.Warning ? 'warn' : 'log';

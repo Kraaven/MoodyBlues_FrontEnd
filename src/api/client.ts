@@ -4,14 +4,13 @@
  * Auth is two httpOnly cookies the backend sets: a 15-minute access cookie and a refresh cookie
  * scoped to /auth. Script never sees either, so every request just sends credentials. A 401 on an
  * authenticated request triggers one POST /auth/refresh (shared by every request that failed at
- * the same moment) and a single retry; if the refresh fails too, the auth layer signs the user out
- * (DESIGN.md Section 10).
+ * the same moment) and a single retry; if the refresh fails too, the auth layer signs the user out.
  *
  * Every request carries X-MoodyBlues-Client. The backend refuses state-changing requests without
  * it, which a cross-site form cannot add, so it doubles as CSRF protection.
  */
 
-export const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8765';
+const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8765';
 
 const CLIENT_HEADER = 'X-MoodyBlues-Client';
 const CLIENT_VALUE = 'dashboard';
@@ -49,7 +48,7 @@ async function errorMessage(res: Response): Promise<string> {
   }
 }
 
-export function apiUrl(path: string): string {
+function apiUrl(path: string): string {
   return `${API_BASE_URL}${path}`;
 }
 

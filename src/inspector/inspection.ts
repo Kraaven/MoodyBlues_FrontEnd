@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 /**
- * Reading a loaded scene for the inspector (DESIGN.md 7.8).
+ * Reading a loaded scene for the inspector.
  *
  * The approach to materials, textures, geometries and the statistics is adapted from
  * glb-viewer-core (https://github.com/ohzinteractive/glb-viewer-core, MIT licence, Copyright
@@ -11,13 +11,13 @@ import * as THREE from 'three';
  * re-implementation in TypeScript against our own types, not a copy of their code.
  */
 
-export interface MaterialInfo {
+interface MaterialInfo {
   material: THREE.Material;
   /** Meshes that use it. */
   users: THREE.Mesh[];
 }
 
-export interface SceneInspection {
+interface SceneInspection {
   nodeCount: number;
   trackedCount: number;
   hiddenCount: number;
@@ -57,9 +57,6 @@ export const TEXTURE_CHANNELS: { key: string; label: string }[] = [
   { key: 'iridescenceMap', label: 'Iridescence map' },
   { key: 'anisotropyMap', label: 'Anisotropy map' },
 ];
-
-/** The channels that most scenes use, in the order a material row lists them. */
-export const TEXTURE_SLOTS = TEXTURE_CHANNELS.slice(0, 9);
 
 export function triangleCount(geometry: THREE.BufferGeometry): number {
   return Math.round((geometry.index ? geometry.index.count : (geometry.attributes.position?.count ?? 0)) / 3);
@@ -125,13 +122,13 @@ export function inspectScene(root: THREE.Object3D): SceneInspection {
 
 // ---- Textures -----------------------------------------------------------------------------------
 
-export interface TextureUse {
+interface TextureUse {
   materialName: string;
   channel: string;
   mesh: THREE.Mesh;
 }
 
-export interface TextureEntry {
+interface TextureEntry {
   /** The image source's id: two textures sharing one image are one entry. */
   id: string;
   name: string;
@@ -197,13 +194,13 @@ export function collectTextures(root: THREE.Object3D): TextureEntry[] {
 
 // ---- Geometries ---------------------------------------------------------------------------------
 
-export interface GeometryAttribute {
+interface GeometryAttribute {
   name: string;
   itemSize: number;
   count: number;
 }
 
-export interface GeometryEntry {
+interface GeometryEntry {
   id: string;
   name: string;
   geometry: THREE.BufferGeometry;
@@ -260,7 +257,7 @@ export function vertexStats(root: THREE.Object3D): { model: number; regular: num
 
 // ---- Materials ----------------------------------------------------------------------------------
 
-export interface MaterialRow {
+interface MaterialRow {
   label: string;
   value: string;
   /** A colour to show as a swatch beside the value. */

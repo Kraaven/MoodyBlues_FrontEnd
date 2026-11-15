@@ -18,7 +18,6 @@ export function ConnectionDialog({ project, open, onOpenChange }: { project: Pro
   const rotate = useRotateIngestKey(project.id);
   const notify = useToast();
   const [confirming, setConfirming] = useState(false);
-  const hasKey = Boolean(project.ingestKeyPrefix);
 
   return (
     <>
@@ -31,16 +30,14 @@ export function ConnectionDialog({ project, open, onOpenChange }: { project: Pro
             <CopyField value={project.connectionString} display={maskConnection(project.connectionString)} label="connection string" size="lg" />
             <p className="text-[13px] text-fg-3">
               Keep it private; share it only with your team.
-              {project.ingestKeyCreatedAtUtc && <> Created {formatDateTime(project.ingestKeyCreatedAtUtc)}.</>}
+              Created {formatDateTime(project.ingestKeyCreatedAtUtc)}.
             </p>
           </div>
         ) : (
           <div className="flex items-start gap-3 rounded-[var(--radius-card)] border border-caution/30 bg-caution/8 p-4">
             <KeyRound className="mt-0.5 h-5 w-5 shrink-0 text-caution" />
             <p className="text-[14px] text-fg-2">
-              {hasKey
-                ? 'This project has a key from before keys could be shown again. Rotate it to get a connection string you can copy.'
-                : 'This project has no connection key yet. Until it has one, recordings and scene uploads from Unity are refused.'}
+              The server can no longer read this project's key, so it cannot show the connection string. Rotate the key to get a new one.
             </p>
           </div>
         )}
@@ -67,7 +64,7 @@ export function ConnectionDialog({ project, open, onOpenChange }: { project: Pro
           ) : (
             <Button loading={rotate.isPending} onClick={() => setConfirming(true)}>
               <KeyRound className="h-4 w-4" />
-              {hasKey ? 'Rotate key' : 'Create connection key'}
+              Rotate key
             </Button>
           )}
         </div>
@@ -76,21 +73,17 @@ export function ConnectionDialog({ project, open, onOpenChange }: { project: Pro
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title={hasKey ? 'Rotate the connection key?' : 'Create a connection key?'}
-        confirmLabel={hasKey ? 'Rotate key' : 'Create key'}
-        destructive={hasKey}
+        title="Rotate the connection key?"
+        confirmLabel="Rotate key"
+        destructive
         body={
-          hasKey ? (
-            <>
-              <p>
-                The current key (<span className="font-mono text-fg">{project.ingestKeyPrefix}…</span>) stops working at once. Every build and Editor that still has it is
-                refused until it has the new connection string.
-              </p>
-              <p>Only do this if the key leaked. Recordings already on the server are not affected.</p>
-            </>
-          ) : (
-            <p>Unity sends this key with every recording and scene upload. Without one, the server refuses them.</p>
-          )
+          <>
+            <p>
+              The current key (<span className="font-mono text-fg">{project.ingestKeyPrefix}…</span>) stops working at once. Every build and Editor that still has it is
+              refused until it has the new connection string.
+            </p>
+            <p>Only do this if the key leaked. Recordings already on the server are not affected.</p>
+          </>
         }
         onConfirm={async () => {
           await rotate.mutateAsync();

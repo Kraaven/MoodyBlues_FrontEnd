@@ -16,7 +16,7 @@
  * ReplayFormatError instead of reading garbage.
  */
 
-export const REPLAY_FORMAT_VERSION = 2;
+const REPLAY_FORMAT_VERSION = 2;
 
 export class ReplayFormatError extends Error {}
 
@@ -30,14 +30,14 @@ export const ReplayObjectKind = {
 } as const;
 export type ReplayObjectKind = (typeof ReplayObjectKind)[keyof typeof ReplayObjectKind];
 
-export const ReplayChannel = {
+const ReplayChannel = {
   Position: 0,
   Rotation: 1,
   Scale: 2,
 } as const;
-export type ReplayChannel = (typeof ReplayChannel)[keyof typeof ReplayChannel];
+type ReplayChannel = (typeof ReplayChannel)[keyof typeof ReplayChannel];
 
-export type ReplayEventType = 'Spawn' | 'Delete' | 'Show' | 'Hide' | 'Reparent' | 'Connected' | 'Disconnected' | 'SessionEnded' | 'DataGap';
+type ReplayEventType = 'Spawn' | 'Delete' | 'Show' | 'Hide' | 'Reparent' | 'Connected' | 'Disconnected' | 'SessionEnded' | 'DataGap';
 
 const EVENT_TYPES: Record<number, ReplayEventType> = {
   1: 'Spawn',
@@ -86,7 +86,7 @@ export interface ReplayLog {
  * Lime, Green, Teal, Cyan, Sky, Blue, Indigo, Violet, Pink, Rose, Brown. Indices 16-63 are
  * reserved and drawn as gray.
  */
-export const LOG_COLORS: readonly string[] = [
+const LOG_COLORS: readonly string[] = [
   '#a1a1aa',
   '#fafafa',
   '#f87171',

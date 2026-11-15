@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Navigate, Route, Routes, useParams } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { AuthPage } from './pages/auth/AuthPage';
 import { LobbyPage } from './pages/LobbyPage';
@@ -26,19 +26,6 @@ function RouteFallback() {
   );
 }
 
-/** Old addresses of the inspector. */
-function LegacyInspectRedirect() {
-  const { projectId, sceneId } = useParams();
-  const version = new URLSearchParams(window.location.search).get('version');
-  return <Navigate to={`/projects/${projectId}/scenes/${sceneId}/view${version ? `?version=${version}` : ''}`} replace />;
-}
-
-/** The scene page used to have History and Settings tabs; both now live on the page itself. */
-function LegacySceneRedirect() {
-  const { projectId, sceneId } = useParams();
-  return <Navigate to={`/projects/${projectId}/scenes/${sceneId}`} replace />;
-}
-
 export default function App() {
   return (
     <>
@@ -61,15 +48,10 @@ export default function App() {
             <Route path="/projects/new" element={<NewProjectPage />} />
             <Route path="/projects/:projectId" element={<ProjectPage />} />
             <Route path="/projects/:projectId/scenes/:sceneId" element={<ScenePage />} />
-            <Route path="/projects/:projectId/scenes/:sceneId/history" element={<LegacySceneRedirect />} />
-            <Route path="/projects/:projectId/scenes/:sceneId/settings" element={<LegacySceneRedirect />} />
-            <Route path="/projects/:projectId/scenes/:sceneId/archive" element={<LegacySceneRedirect />} />
             <Route path="/projects/:projectId/scenes/:sceneId/view" element={<StudioPage />} />
             <Route path="/projects/:projectId/scenes/:sceneId/sessions/:sessionId" element={<StudioPage />} />
-            <Route path="/projects/:projectId/scenes/:sceneId/inspect" element={<LegacyInspectRedirect />} />
           </Route>
 
-          <Route path="/dashboard" element={<Navigate to="/projects" replace />} />
           <Route path="*" element={<Navigate to="/projects" replace />} />
         </Routes>
       </Suspense>
