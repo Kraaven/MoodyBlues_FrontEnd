@@ -18,7 +18,8 @@ interface HealthRow {
   detail?: string;
 }
 
-function healthRows(session: SessionDetail, replay: Replay | null): HealthRow[] {
+// oxlint-disable-next-line react/only-export-components
+export function healthRows(session: SessionDetail, replay: Replay | null): HealthRow[] {
   let gaps = 0;
   let reconnects = 0;
   for (const e of replay?.events ?? []) {
@@ -89,7 +90,6 @@ export function DetailsWindow({ session, replay, sceneHref }: { session: Session
         <Row label="Replay size">{formatBytes(session.replaySizeBytes)}</Row>
         <Row label="Raw log size">{formatBytes(session.rawLogSizeBytes)}</Row>
         <Row label="Connections">{formatCount(session.connectionCount)}</Row>
-        <Row label="Rotation widenings">{formatCount(session.rotationWidenings)}</Row>
         <Row label="Compiler">{session.compilerVersion ? `v${session.compilerVersion}` : '—'}</Row>
       </dl>
       <p className="mt-3 break-all font-mono text-[11px] text-fg-3" title="Scene version hash">

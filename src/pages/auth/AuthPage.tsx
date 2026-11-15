@@ -7,13 +7,14 @@ import { errorText } from '../../api/client';
 import { useMediaQuery } from '../../lib/useMediaQuery';
 import { DEMO_POSE } from '../../stage/DemoScene';
 import { StageWindow } from '../../stage/StageWindow';
-import { idleView, type StageView } from '../../stage/store';
+import type { StageView } from '../../stage/store';
 import { useStageView } from '../../stage/useStageView';
 import { Button } from '../../ui/Button';
 import { Field, FormError, FormNotice } from '../../ui/Field';
 import { Brand } from '../../ui/Logo';
 
 const DEMO: StageView = { id: 'auth', content: 'demo', pose: DEMO_POSE, drift: true, dim: 1, durationMs: 0 };
+const NONE: StageView = { id: 'auth', content: 'none', dim: 0 };
 
 function useAuthForm(submit: (email: string, password: string) => Promise<void>) {
   const navigate = useNavigate();
@@ -46,7 +47,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const { user, login, register, expired } = useAuth();
   const form = useAuthForm(mode === 'login' ? login : register);
   const wide = useMediaQuery('(min-width: 1024px)');
-  useStageView(wide ? DEMO : idleView('auth'));
+  useStageView(wide ? DEMO : NONE);
 
   useEffect(() => {
     document.title = `${mode === 'login' ? 'Sign in' : 'Create account'} · MoodyBlues`;

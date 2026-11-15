@@ -5,7 +5,7 @@ import { sceneFilePath, saveDownload, useDeleteScene, useProject, useRenameScene
 import { errorText } from '../../api/client';
 import type { ProjectDetail, SceneDetail, SceneVersion, SessionSummary } from '../../api/types';
 import { PageBody, WorkspaceLayout } from '../../shell/WorkspaceLayout';
-import { idleView } from '../../stage/store';
+import type { StageView } from '../../stage/store';
 import { useStageView } from '../../stage/useStageView';
 import { Button, IconButton, LinkButton } from '../../ui/Button';
 import { versionLabel, VersionStatus } from '../../ui/Chip';
@@ -16,11 +16,15 @@ import { EmptyState, ErrorState, Skeleton } from '../../ui/States';
 import { useToast } from '../../ui/Toast';
 import { useWindowTitle } from '../../lib/useWindowTitle';
 import { formatBytes, formatCaptured, formatCount, plural, safeFilename, sceneTitle } from '../../lib/format';
+import { useGlyphTimelines, useSessionIndexer } from './glyphs';
 import { RecordingsTable } from './RecordingsTable';
 import { VersionsDialog } from './VersionsDialog';
 
+const NONE: StageView = { id: 'scene', content: 'none', dim: 0 };
+
 /** Where a session or a scene version opens in 3D. */
-const viewerHref = {
+// oxlint-disable-next-line react/only-export-components
+export const viewerHref = {
   scene: (base: string, version?: number) => `${base}/view${version !== undefined ? `?version=${version}` : ''}`,
   session: (base: string, sessionId: string) => `${base}/sessions/${encodeURIComponent(sessionId)}`,
 };
@@ -30,11 +34,11 @@ const viewerHref = {
  * Everything else (rename, download, older exports, delete) lives in the menu beside the title.
  */
 export function ScenePage() {
-  useStageView(idleView('scene'));
+  useStageView(NONE);
   const { projectId, sceneId } = useParams<{ projectId: string; sceneId: string }>();
   const [search, setSearch] = useSearchParams();
   const project = useProject(projectId);
-  const scene = useScene(projectId, sceneId);
+  const scene = useScene(project.data?.developerId, sceneId);
   const base = `/projects/${projectId}/scenes/${encodeURIComponent(sceneId ?? '')}`;
   const title = scene.data ? sceneTitle(scene.data) : 'Scene';
   useWindowTitle(title);
@@ -97,15 +101,15 @@ function SceneBody({
   const navigate = useNavigate();
   const name = sceneTitle(scene);
 
-  const sessions = useSessions(project.id, scene.sceneId, selected ? { version: selected.version } : null);
+  const sessions = useSessions(project.developerId, scene.sceneId, selected ? { version: selected.version } : null);
   const awaitingShown = Boolean(selected?.isCurrent) && scene.awaitingSceneSessionCount > 0;
-  const awaiting = useSessions(project.id, scene.sceneId, awaitingShown ? { awaitingScene: true } : null);
+  const awaiting = useSessions(project.developerId, scene.sceneId, awaitingShown ? { awaitingScene: true } : null);
   const sessionHref = (id: string) => viewerHref.session(base, id);
 
   const download = async () => {
     if (!selected) return;
     try {
-      await saveDownload(sceneFilePath(project.id, scene.sceneId, selected.hash), safeFilename(`${name}-${versionLabel(selected.version)}`, '.glb'));
+      await saveDownload(sceneFilePath(project.developerId, scene.sceneId, selected.hash), safeFilename(`${name}-${versionLabel(selected.version)}`, '.glb'));
     } catch (err) {
       notify(errorText(err), 'error');
     }
@@ -183,6 +187,7 @@ function SceneBody({
             <h2 className="text-[16px] font-medium text-fg">
               Recordings <span className="ml-1 font-normal text-fg-3">{formatCount(sessions.data?.length ?? selected.sessionCount)}</span>
             </h2>
+            {sessions.data && <IndexSessions sessions={sessions.data} />}
           </div>
           {sessions.isError ? (
             <ErrorState error={sessions.error} title="Recordings did not load" onRetry={() => sessions.refetch()} />
@@ -225,9 +230,36 @@ function Dot() {
   );
 }
 
+/** Offers to read the replays of sessions that only have a summary glyph, so each gets a true timeline. Never runs by itself. */
+function IndexSessions({ sessions }: { sessions: SessionSummary[] }) {
+  const timelines = useGlyphTimelines(sessions);
+  const missing = useMemo(() => sessions.filter((s) => s.status === 'Ready' && !timelines.has(s.id)), [sessions, timelines]);
+  const { state, start, cancel } = useSessionIndexer(missing);
+  if (!state.running && missing.length === 0) return null;
+  return (
+    <div className="flex items-center gap-3 text-[13px] text-fg-3" role="status">
+      {state.running ? (
+        <>
+          <span className="tabular">
+            Reading replays {state.done}/{state.total}
+            {state.failed > 0 && `, ${state.failed} failed`}
+          </span>
+          <Button size="sm" variant="ghost" onClick={cancel}>
+            Cancel
+          </Button>
+        </>
+      ) : (
+        <Button size="sm" variant="ghost" onClick={() => void start()} title="Reads each replay once in this browser, so its activity strip shows when things happened">
+          Index {plural(missing.length, 'session')}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 function RenameField({ project, scene, onDone }: { project: ProjectDetail; scene: SceneDetail; onDone: () => void }) {
   const [value, setValue] = useState(scene.displayName ?? '');
-  const rename = useRenameScene(project.id, scene.sceneId);
+  const rename = useRenameScene(project.developerId, scene.sceneId);
   const notify = useToast();
 
   const save = async () => {
@@ -303,10 +335,10 @@ function SceneWarnings({ scene }: { scene: SceneDetail }) {
 }
 
 function DeleteSceneDialog({ open, onOpenChange, project, scene }: { open: boolean; onOpenChange: (open: boolean) => void; project: ProjectDetail; scene: SceneDetail }) {
-  const remove = useDeleteScene(project.id, scene.sceneId);
+  const remove = useDeleteScene(project.developerId, scene.sceneId);
   const navigate = useNavigate();
   const notify = useToast();
-  const current = useSessions(project.id, scene.sceneId, open && scene.current ? { version: scene.current.version } : null);
+  const current = useSessions(project.developerId, scene.sceneId, open && scene.current ? { version: scene.current.version } : null);
   const live = (current.data ?? []).filter((s: SessionSummary) => s.status === 'Recording').length;
 
   const versions = (scene.current ? 1 : 0) + scene.archived.length;

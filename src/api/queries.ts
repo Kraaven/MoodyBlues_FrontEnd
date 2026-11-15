@@ -12,7 +12,7 @@ import {
 } from './types';
 
 /**
- * Server state, through TanStack Query: cached per resource, refreshed in
+ * Server state, through TanStack Query (DESIGN.md Section 15): cached per resource, refreshed in
  * the background, polled only while something can change (and never in a hidden tab, which is
  * TanStack's default), and invalidated by the mutations that change it.
  */
@@ -28,18 +28,18 @@ export const queryClient = new QueryClient({
 });
 
 const enc = encodeURIComponent;
-const scenePath = (projectId: string, sceneId: string) => `/api/projects/${enc(projectId)}/scenes/${enc(sceneId)}`;
+const scenePath = (developerId: string, sceneId: string) => `/api/scenes/${enc(developerId)}/${enc(sceneId)}`;
 
 export const keys = {
   projects: ['projects'] as const,
   project: (projectId: string) => ['project', projectId] as const,
-  scene: (projectId: string, sceneId: string) => ['scene', projectId, sceneId] as const,
-  sessions: (projectId: string, sceneId: string, filter: SessionFilter) => ['sessions', projectId, sceneId, filter] as const,
-  sceneSessions: (projectId: string, sceneId: string) => ['sessions', projectId, sceneId] as const,
+  scene: (developerId: string, sceneId: string) => ['scene', developerId, sceneId] as const,
+  sessions: (developerId: string, sceneId: string, filter: SessionFilter) => ['sessions', developerId, sceneId, filter] as const,
+  sceneSessions: (developerId: string, sceneId: string) => ['sessions', developerId, sceneId] as const,
   session: (sessionId: string) => ['session', sessionId] as const,
 };
 
-type SessionFilter = { version: number } | { awaitingScene: true };
+export type SessionFilter = { version: number } | { awaitingScene: true };
 
 const FAST_POLL_MS = 5_000;
 const SLOW_POLL_MS = 30_000;
@@ -84,11 +84,11 @@ export function useRotateIngestKey(projectId: string) {
 
 // ---- Scenes -----------------------------------------------------------------------------------
 
-export function useScene(projectId: string | undefined, sceneId: string | undefined) {
+export function useScene(developerId: string | undefined, sceneId: string | undefined) {
   return useQuery({
-    queryKey: keys.scene(projectId ?? '', sceneId ?? ''),
-    queryFn: () => apiJson<SceneDetail>(scenePath(projectId!, sceneId!)),
-    enabled: Boolean(projectId && sceneId),
+    queryKey: keys.scene(developerId ?? '', sceneId ?? ''),
+    queryFn: () => apiJson<SceneDetail>(scenePath(developerId!, sceneId!)),
+    enabled: Boolean(developerId && sceneId),
     // A processing version, or sessions waiting for an upload, can change without the user.
     refetchInterval: (query) => {
       const scene = query.state.data;
@@ -101,74 +101,74 @@ export function useScene(projectId: string | undefined, sceneId: string | undefi
   });
 }
 
-function invalidateScene(client: QueryClient, projectId: string, sceneId: string) {
-  void client.invalidateQueries({ queryKey: keys.scene(projectId, sceneId) });
-  void client.invalidateQueries({ queryKey: keys.sceneSessions(projectId, sceneId) });
+function invalidateScene(client: QueryClient, developerId: string, sceneId: string) {
+  void client.invalidateQueries({ queryKey: keys.scene(developerId, sceneId) });
+  void client.invalidateQueries({ queryKey: keys.sceneSessions(developerId, sceneId) });
   void client.invalidateQueries({ queryKey: ['project'] });
   void client.invalidateQueries({ queryKey: keys.projects });
 }
 
-export function useRenameScene(projectId: string, sceneId: string) {
+export function useRenameScene(developerId: string, sceneId: string) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (displayName: string) =>
-      apiJson<unknown>(scenePath(projectId, sceneId), { method: 'PATCH', body: { displayName } }),
-    onSuccess: () => invalidateScene(client, projectId, sceneId),
+      apiJson<unknown>(scenePath(developerId, sceneId), { method: 'PATCH', body: { displayName } }),
+    onSuccess: () => invalidateScene(client, developerId, sceneId),
   });
 }
 
-export function useDeleteScene(projectId: string, sceneId: string) {
+export function useDeleteScene(developerId: string, sceneId: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: () => apiJson<DeleteResponse>(scenePath(projectId, sceneId), { method: 'DELETE' }),
+    mutationFn: () => apiJson<DeleteResponse>(scenePath(developerId, sceneId), { method: 'DELETE' }),
     onSuccess: () => {
-      client.removeQueries({ queryKey: keys.scene(projectId, sceneId) });
-      client.removeQueries({ queryKey: keys.sceneSessions(projectId, sceneId) });
+      client.removeQueries({ queryKey: keys.scene(developerId, sceneId) });
+      client.removeQueries({ queryKey: keys.sceneSessions(developerId, sceneId) });
       void client.invalidateQueries({ queryKey: ['project'] });
       void client.invalidateQueries({ queryKey: keys.projects });
     },
   });
 }
 
-export function useDeleteVersion(projectId: string, sceneId: string) {
+export function useDeleteVersion(developerId: string, sceneId: string) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (version: number) =>
-      apiJson<DeleteResponse>(`${scenePath(projectId, sceneId)}/versions/${version}`, { method: 'DELETE' }),
-    onSuccess: () => invalidateScene(client, projectId, sceneId),
+      apiJson<DeleteResponse>(`${scenePath(developerId, sceneId)}/versions/${version}`, { method: 'DELETE' }),
+    onSuccess: () => invalidateScene(client, developerId, sceneId),
   });
 }
 
-export function useDeleteArchive(projectId: string, sceneId: string) {
+export function useDeleteArchive(developerId: string, sceneId: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: () => apiJson<DeleteResponse>(`${scenePath(projectId, sceneId)}/archive`, { method: 'DELETE' }),
-    onSuccess: () => invalidateScene(client, projectId, sceneId),
+    mutationFn: () => apiJson<DeleteResponse>(`${scenePath(developerId, sceneId)}/archive`, { method: 'DELETE' }),
+    onSuccess: () => invalidateScene(client, developerId, sceneId),
   });
 }
 
 /** The URL path of a scene version's GLB (no hash = current version). */
-export function sceneFilePath(projectId: string, sceneId: string, hash?: string): string {
-  return `${scenePath(projectId, sceneId)}/file${hash ? `?hash=${enc(hash)}` : ''}`;
+export function sceneFilePath(developerId: string, sceneId: string, hash?: string): string {
+  return `${scenePath(developerId, sceneId)}/file${hash ? `?hash=${enc(hash)}` : ''}`;
 }
 
 // ---- Sessions ---------------------------------------------------------------------------------
 
 /** Query options for a scene's sessions in one version, or those waiting for a scene. */
-export function sessionsQuery(projectId: string, sceneId: string, filter: SessionFilter) {
+export function sessionsQuery(developerId: string, sceneId: string, filter: SessionFilter) {
   return {
-    queryKey: keys.sessions(projectId, sceneId, filter),
+    queryKey: keys.sessions(developerId, sceneId, filter),
     queryFn: () => {
       const query = 'version' in filter ? `?version=${filter.version}` : '?awaitingScene=true';
-      return apiJson<SessionSummary[]>(`${scenePath(projectId, sceneId)}/sessions${query}`);
+      return apiJson<SessionSummary[]>(`${scenePath(developerId, sceneId)}/sessions${query}`);
     },
   };
 }
 
-export function useSessions(projectId: string | undefined, sceneId: string | undefined, filter: SessionFilter | null) {
+export function useSessions(developerId: string | undefined, sceneId: string | undefined, filter: SessionFilter | null) {
   return useQuery({
-    ...sessionsQuery(projectId ?? '', sceneId ?? '', filter ?? { version: 0 }),
-    enabled: Boolean(projectId && sceneId && filter),
+    ...sessionsQuery(developerId ?? '', sceneId ?? '', filter ?? { version: 0 }),
+    enabled: Boolean(developerId && sceneId && filter),
     refetchInterval: (query) =>
       query.state.data?.some((s) => CHANGING_STATUSES.has(s.status)) ? FAST_POLL_MS : SLOW_POLL_MS,
   });

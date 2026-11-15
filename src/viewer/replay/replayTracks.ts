@@ -17,7 +17,7 @@ import type { ReplayTrack } from './replayFile';
  * the result, which is how the backend measured the fitting error. (Same approach as GLTFLoader's
  * cubic-spline quaternion interpolant.)
  */
-class QuaternionBezierInterpolant extends THREE.BezierInterpolant {
+export class QuaternionBezierInterpolant extends THREE.BezierInterpolant {
   interpolate_(i1: number, t0: number, t: number, t1: number) {
     const result = super.interpolate_(i1, t0, t, t1);
     const x = result[0], y = result[1], z = result[2], w = result[3];

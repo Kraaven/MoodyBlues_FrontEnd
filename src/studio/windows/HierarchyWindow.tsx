@@ -4,7 +4,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { ReplayObjectKind } from '../../viewer/replay/replayFile';
 import type { ReplayPlayer } from '../../viewer/replay/ReplayPlayer';
-import { useReplayBinding } from '../binding';
+import { useReplayBinding } from '../../player/binding';
 import { cn } from '../../ui/cn';
 import { formatCount } from '../../lib/format';
 import { useStudio } from '../studioStore';

@@ -1,4 +1,4 @@
-const SETUP_STEPS = [
+export const SETUP_STEPS = [
   {
     title: 'Create your project',
     body: 'One project per Unity game. It holds every scene you export and every session recorded in them.',

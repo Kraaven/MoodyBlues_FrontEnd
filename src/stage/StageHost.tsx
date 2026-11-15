@@ -13,6 +13,7 @@ import { DemoScene } from './DemoScene';
 import { SceneContent } from './SceneContent';
 import { DEFAULT_CAMERA, useStage } from './store';
 import { reducedMotion, webglSupported } from './support';
+import { Trace } from './Trace';
 
 // The studio (inspection and replay) loads only when a scene is opened in 3D.
 const StudioContent = lazy(() => import('../studio/StudioContent'));
@@ -42,6 +43,7 @@ function StatsReporter() {
       points: info.render.points,
       geometries: info.memory.geometries,
       textures: info.memory.textures,
+      quality: state.traceQuality,
     });
     w.time = 0;
     w.frames = 0;
@@ -99,6 +101,7 @@ function StageControls() {
 
 function Content() {
   const content = useStage((s) => s.view.content);
+  if (content === 'trace') return <Trace />;
   if (content === 'demo') return <DemoScene />;
   if (content === 'scene') return <SceneContent />;
   if (content === 'studio') {

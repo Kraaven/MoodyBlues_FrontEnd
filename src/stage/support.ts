@@ -1,4 +1,4 @@
-/** Capability and preference checks for the Stage. */
+/** Capability and preference checks for the Stage (DESIGN.md 4.2, 6.5). */
 
 let webgl: boolean | null = null;
 

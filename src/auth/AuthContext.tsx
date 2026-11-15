@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ApiError, apiJson, refreshSession, setUnauthorizedHandler } from '../api/client';
 import { queryClient } from '../api/queries';
-import type { UserResponse } from '../api/types';
+import type { AuthResponse, MeResponse } from '../api/types';
 import { AuthContext, type AuthUser } from './context';
 
 /**
@@ -10,8 +10,8 @@ import { AuthContext, type AuthUser } from './context';
  * load the only way to know whether one exists is to ask: GET /auth/me, and if the access cookie
  * has lapsed, one refresh and a second try.
  */
-async function probeSession(): Promise<UserResponse | null> {
-  const me = () => apiJson<UserResponse>('/auth/me', { auth: false });
+async function probeSession(): Promise<MeResponse | null> {
+  const me = () => apiJson<MeResponse>('/auth/me', { auth: false });
   try {
     return await me();
   } catch (err) {
@@ -43,20 +43,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setIsLoading(false));
   }, [signOut]);
 
-  const accept = useCallback((response: UserResponse) => {
+  const accept = useCallback((response: AuthResponse) => {
     setExpired(false);
     setUser({ userId: response.userId, email: response.email });
   }, []);
 
   const login = useCallback(
     async (email: string, password: string) =>
-      accept(await apiJson<UserResponse>('/auth/login', { method: 'POST', body: { email, password }, auth: false })),
+      accept(await apiJson<AuthResponse>('/auth/login', { method: 'POST', body: { email, password }, auth: false })),
     [accept],
   );
 
   const register = useCallback(
     async (email: string, password: string) =>
-      accept(await apiJson<UserResponse>('/auth/register', { method: 'POST', body: { email, password }, auth: false })),
+      accept(await apiJson<AuthResponse>('/auth/register', { method: 'POST', body: { email, password }, auth: false })),
     [accept],
   );
 

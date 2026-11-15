@@ -1,6 +1,13 @@
-import { HEADER_SIZE } from './replayFile';
+/**
+ * Writes a replay file the way the backend's ReplayFileWriter does (format 2). Used by the unit tests
+ * and by the dev fixture generator (dev/make-fixture.ts), so it must stay free of runtime imports and
+ * use only syntax Node can strip.
+ */
 
-interface TestTrack {
+/** Same value as HEADER_SIZE in replayFile.ts; a test asserts they match. */
+export const HEADER_SIZE = 80;
+
+export interface TestTrack {
   objectId: number;
   channel: 0 | 1 | 2;
   leadIn?: boolean;
@@ -11,7 +18,7 @@ interface TestTrack {
   outTangents?: number[];
 }
 
-interface TestFile {
+export interface TestFile {
   version?: number;
   duration?: number;
   objects?: { id: number; kind: number; template?: number; parent?: number; spawn?: number; del?: number }[];
@@ -20,7 +27,6 @@ interface TestFile {
   blocks?: { start: number; tracks: TestTrack[] }[];
 }
 
-/** Writes a replay file the way the backend's ReplayFileWriter does (format 2), for the unit tests. */
 export function buildReplay(f: TestFile): ArrayBuffer {
   const objects = f.objects ?? [];
   const events = f.events ?? [];

@@ -1,5 +1,5 @@
 /**
- * The Stage's transition clock: one progress value drives the camera, the stage
+ * The Stage's transition clock (DESIGN.md 4.4): one progress value drives the camera, the stage
  * dim and the drift together. Pure maths, no three.js and no React, so it is unit-tested alone.
  */
 
@@ -68,7 +68,7 @@ export const EASE_SOFT = cubicBezier(0.2, 0.8, 0.2, 1);
 
 /**
  * Moves from the pose the camera is actually in to a new one. Starting again mid-way continues from
- * wherever it is now, so an interrupted transition never snaps.
+ * wherever it is now, so an interrupted transition never snaps (DESIGN.md 4.4).
  */
 export class PoseTransition {
   private from: Pose;

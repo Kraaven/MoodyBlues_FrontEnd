@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { createStore, del, entries, get, set } from 'idb-keyval';
 
 /**
- * Scene thumbnails. The backend stores none, but a scene version is immutable, so
+ * Scene thumbnails (DESIGN.md 7.4). The backend stores none, but a scene version is immutable, so
  * its hash is a perfect cache key: the first time a version is shown in the Stage, one image is
  * rendered offscreen and kept in IndexedDB. Nothing here is shared between browsers; a scene nobody
  * has opened on this machine shows a placeholder instead.
@@ -69,6 +69,11 @@ export function beginSnapshot(hash: string): boolean {
   if (attempted.has(hash)) return false;
   attempted.add(hash);
   return true;
+}
+
+/** True if a snapshot was already tried this session (successfully or not). */
+export function snapshotAttempted(hash: string): boolean {
+  return attempted.has(hash);
 }
 
 /** The snapshot for a scene version, or null while there is none. Updates when one is captured. */

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
-import { Hourglass, Plus, TriangleAlert, XCircle } from 'lucide-react';
+import { Hourglass, KeyRound, Plus, TriangleAlert, XCircle } from 'lucide-react';
 import { PageBody, PageHeader, WorkspaceLayout } from '../shell/WorkspaceLayout';
-import { idleView } from '../stage/store';
+import type { StageView } from '../stage/store';
 import { useStageView } from '../stage/useStageView';
 import { LinkButton } from '../ui/Button';
 import { SnapshotImage } from '../ui/SnapshotImage';
@@ -10,11 +10,13 @@ import { formatAgo, formatCaptured, plural, sceneTitle } from '../lib/format';
 import { useWindowTitle } from '../lib/useWindowTitle';
 import { ACTIVITY_PROJECTS, useRecentActivity, type ActivityItem } from './useRecentActivity';
 
+const NONE: StageView = { id: 'lobby', content: 'none', dim: 0 };
+
 /**
  * The page you land on: your projects, with anything that is recording or broken above them.
  */
 export function LobbyPage() {
-  useStageView(idleView('lobby'));
+  useStageView(NONE);
   useWindowTitle('Projects');
   const { projects, details, now, attention } = useRecentActivity();
   const list = [...(projects.data ?? [])].sort((a, b) => b.createdAtUtc.localeCompare(a.createdAtUtc));
@@ -87,6 +89,12 @@ export function LobbyPage() {
                           {plural(project.sceneCount, 'scene')}
                           {latest && <> · {sceneTitle(latest)}</>}
                         </p>
+                        {!project.ingestKeyPrefix && (
+                          <p className="flex items-center gap-1.5 pt-1 text-[13px] text-caution">
+                            <KeyRound className="h-3.5 w-3.5" />
+                            No connection key
+                          </p>
+                        )}
                       </div>
                     </Link>
                   </li>
@@ -127,6 +135,12 @@ function ActivityRow({ item }: { item: ActivityItem }) {
       label = 'Waiting for scene';
       detail = `${plural(item.count ?? 0, 'session')} recorded in a version that was never uploaded`;
       break;
+    case 'no-key':
+      to = `/projects/${project.id}`;
+      icon = <KeyRound className="h-4 w-4 text-caution" />;
+      label = 'No connection key';
+      detail = 'Unity recordings are refused until it has one';
+      break;
     case 'optimize-failed':
       label = 'Scene not optimized';
       detail = 'Replays use the unoptimized upload';
@@ -140,7 +154,7 @@ function ActivityRow({ item }: { item: ActivityItem }) {
         <p className="min-w-0 flex-1 truncate text-[14px] text-fg">
           {label}
           <span className="text-fg-3"> · </span>
-          <span className="text-fg-2">{where}</span>
+          <span className="text-fg-2">{item.kind === 'no-key' ? project.name : where}</span>
         </p>
         {detail && <p className="hidden min-w-0 max-w-[45%] truncate text-[13px] text-fg-3 md:block">{detail}</p>}
       </Link>

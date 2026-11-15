@@ -30,8 +30,8 @@ export function VersionsDialog({
 }) {
   const [deletingAll, setDeletingAll] = useState(false);
   const [deleting, setDeleting] = useState<SceneVersion | null>(null);
-  const removeAll = useDeleteArchive(project.id, scene.sceneId);
-  const removeOne = useDeleteVersion(project.id, scene.sceneId);
+  const removeAll = useDeleteArchive(project.developerId, scene.sceneId);
+  const removeOne = useDeleteVersion(project.developerId, scene.sceneId);
   const notify = useToast();
   const name = sceneTitle(scene);
   const versions = [scene.current, ...scene.archived].filter((v): v is SceneVersion => v !== null);
@@ -40,7 +40,7 @@ export function VersionsDialog({
 
   const download = async (v: SceneVersion) => {
     try {
-      await saveDownload(sceneFilePath(project.id, scene.sceneId, v.hash), safeFilename(`${name}-${versionLabel(v.version)}`, '.glb'));
+      await saveDownload(sceneFilePath(project.developerId, scene.sceneId, v.hash), safeFilename(`${name}-${versionLabel(v.version)}`, '.glb'));
     } catch (err) {
       notify(errorText(err), 'error');
     }

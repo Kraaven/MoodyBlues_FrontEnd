@@ -6,7 +6,7 @@ import type { ProjectDetail, ProjectScene } from '../api/types';
 import { ConnectionDialog } from '../shell/ConnectionDialog';
 import { SetupSteps } from '../shell/SetupGuide';
 import { PageBody, PageHeader, WorkspaceLayout } from '../shell/WorkspaceLayout';
-import { idleView } from '../stage/store';
+import type { StageView } from '../stage/store';
 import { useStageView } from '../stage/useStageView';
 import { Button } from '../ui/Button';
 import { versionLabel, VersionStatus } from '../ui/Chip';
@@ -15,6 +15,8 @@ import { ErrorState, Skeleton } from '../ui/States';
 import { formatBytes, formatCaptured, plural, sceneTitle } from '../lib/format';
 import { useWindowTitle } from '../lib/useWindowTitle';
 
+const NONE: StageView = { id: 'project', content: 'none', dim: 0 };
+
 export function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [params, setParams] = useSearchParams();
@@ -22,7 +24,7 @@ export function ProjectPage() {
   const [connecting, setConnecting] = useState(false);
   const data = project.data;
   useWindowTitle(data?.name ?? 'Project');
-  useStageView(idleView('project'));
+  useStageView(NONE);
 
   // Arriving from "Create project": open the Unity connection straight away.
   useEffect(() => {
@@ -33,6 +35,7 @@ export function ProjectPage() {
   }, [params, data, setParams]);
 
   const scenes = useMemo(() => (data ? [...data.scenes].sort((a, b) => b.updatedAtUtc.localeCompare(a.updatedAtUtc)) : []), [data]);
+  const keyless = data && !data.ingestKeyPrefix;
 
   return (
     <WorkspaceLayout crumbs={[{ label: 'Projects', to: '/projects' }, { label: data?.name ?? 'Project', switcher: true }]}>
@@ -50,9 +53,9 @@ export function ProjectPage() {
               title={data.name}
               meta={plural(scenes.length, 'scene')}
               actions={
-                <Button variant="secondary" onClick={() => setConnecting(true)}>
+                <Button variant={keyless ? 'primary' : 'secondary'} onClick={() => setConnecting(true)}>
                   <KeyRound className="h-4 w-4" />
-                  Unity connection
+                  {keyless ? 'Create connection key' : 'Unity connection'}
                 </Button>
               }
             />

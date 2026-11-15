@@ -9,7 +9,7 @@ export const SPEEDS = [0.25, 0.5, 1, 2, 4] as const;
 type FrameListener = (time: number) => void;
 
 /**
- * The playback clock, outside React: the viewport advances it every frame, and the
+ * The playback clock, outside React (DESIGN.md 15): the viewport advances it every frame, and the
  * playhead and time readouts subscribe to it and update the DOM directly. React state only
  * changes on user actions, or through {@link usePlaybackTime} at a low rate.
  */

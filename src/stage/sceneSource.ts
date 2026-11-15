@@ -10,12 +10,12 @@ import { parseSceneGltf, type Progress } from '../viewer/core/gltf';
  */
 export async function loadSceneGltf(
   renderer: THREE.WebGLRenderer,
-  projectId: string,
+  developerId: string,
   sceneId: string,
   hash: string | undefined,
   onProgress?: Progress,
   signal?: AbortSignal,
 ): Promise<GLTF> {
-  const buffer = await downloadWithProgress(sceneFilePath(projectId, sceneId, hash), onProgress, signal);
+  const buffer = await downloadWithProgress(sceneFilePath(developerId, sceneId, hash), onProgress, signal);
   return parseSceneGltf(renderer, buffer);
 }

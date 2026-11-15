@@ -64,6 +64,18 @@ export function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
+/** "Today 14:02", "Yesterday 09:10", "Tue 18:30" within a week, else a date. */
+export function formatRecorded(iso: string, now = new Date()): string {
+  const date = new Date(iso);
+  const time = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOfDay(now) - startOfDay(date)) / 86_400_000);
+  if (days === 0) return `Today ${time}`;
+  if (days === 1) return `Yesterday ${time}`;
+  if (days > 1 && days < 7) return `${date.toLocaleDateString(undefined, { weekday: 'short' })} ${time}`;
+  return date.toLocaleDateString(undefined, { dateStyle: 'medium' });
+}
+
 /** "3 minutes ago". */
 export function formatAgo(iso: string, now = Date.now()): string {
   const seconds = Math.round((now - new Date(iso).getTime()) / 1000);

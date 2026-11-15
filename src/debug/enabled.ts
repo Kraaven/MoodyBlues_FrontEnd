@@ -1,7 +1,7 @@
 const KEY = 'moodyblues.debug';
 
 /**
- * The Debug panel is for people building the viewer. `?debug` turns it on and it is
+ * The Debug panel is for people building the viewer (DESIGN.md 9.6). `?debug` turns it on and it is
  * remembered; `?debug=0` turns it off again. Nothing of it is loaded while it is off.
  */
 export function debugEnabled(): boolean {

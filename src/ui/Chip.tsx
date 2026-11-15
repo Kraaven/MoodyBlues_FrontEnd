@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import type { SceneProcessingStatus, SessionStatus } from '../api/types';
 import { cn } from './cn';
 
-type Tone = 'neutral' | 'accent' | 'ok' | 'work' | 'wait' | 'danger' | 'live' | 'caution';
+export type Tone = 'neutral' | 'accent' | 'ok' | 'work' | 'wait' | 'danger' | 'live' | 'caution';
 
 const text: Record<Tone, string> = {
   neutral: 'text-fg-2',
@@ -42,7 +42,7 @@ export function Tag({ tone = 'neutral', children, className }: { tone?: Tone; ch
 }
 
 /** A status as a dot and a label. The dot pulses for live and sweeps for work in progress. */
-function Status({ tone, label, className, compact = false }: { tone: Tone; label: string; className?: string; compact?: boolean }) {
+export function Status({ tone, label, className, compact = false }: { tone: Tone; label: string; className?: string; compact?: boolean }) {
   return (
     <span className={cn('inline-flex min-w-0 items-center gap-2 text-[13px]', text[tone], className)} title={compact ? label : undefined}>
       <span aria-hidden="true" className={cn('relative h-2 w-2 shrink-0 rounded-full', fill[tone], tone === 'live' && 'animate-pulse-live', tone === 'work' && 'animate-pulse')} />
@@ -51,7 +51,7 @@ function Status({ tone, label, className, compact = false }: { tone: Tone; label
   );
 }
 
-const SESSION_STATUS: Record<SessionStatus, { label: string; tone: Tone }> = {
+export const SESSION_STATUS: Record<SessionStatus, { label: string; tone: Tone }> = {
   Recording: { label: 'Recording', tone: 'live' },
   Queued: { label: 'Queued', tone: 'work' },
   Compiling: { label: 'Building', tone: 'work' },

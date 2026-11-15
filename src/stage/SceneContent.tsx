@@ -8,7 +8,7 @@ import { acquireScene, isAbortError, sceneKey } from './sceneAssets';
 import { captureSnapshot } from './snapshotCapture';
 import { needsFraming, regionFill, useStage, type SceneRef } from './store';
 
-const FRAME_DIRECTION = new THREE.Vector3(1, 0.78, 1.15);
+export const FRAME_DIRECTION = new THREE.Vector3(1, 0.78, 1.15);
 
 /** Where a loaded scene sits: its centre, size and floor, for lights, shadows and the grid. */
 export interface SceneBounds {
@@ -17,7 +17,7 @@ export interface SceneBounds {
   floorY: number;
 }
 
-function measureScene(root: THREE.Object3D): SceneBounds {
+export function measureScene(root: THREE.Object3D): SceneBounds {
   const box = new THREE.Box3().setFromObject(root, true);
   if (box.isEmpty()) return { center: new THREE.Vector3(), radius: 10, floorY: 0 };
   const sphere = box.getBoundingSphere(new THREE.Sphere());
@@ -92,18 +92,18 @@ export function useStagedScene(
   const camera = useThree((s) => s.camera);
   const attempt = useStage((s) => s.scene.attempt);
   const [state, setState] = useState<{ root: THREE.Object3D | null; bounds: SceneBounds | null }>({ root: null, bounds: null });
-  const projectId = ref?.projectId;
+  const developerId = ref?.developerId;
   const sceneId = ref?.sceneId;
   const hash = ref?.hash;
 
   useEffect(() => {
-    if (!projectId || !sceneId || !hash) return;
+    if (!developerId || !sceneId || !hash) return;
     const label = 'Downloading the scene';
     const stage = useStage.getState();
     stage.setSceneState({ status: 'loading', error: null });
     stage.setLoading('scene', { label, received: 0, total: null });
 
-    const lease = acquireScene(gl, { projectId, sceneId, hash }, (received, total) => useStage.getState().setLoading('scene', { label, received, total }));
+    const lease = acquireScene(gl, { developerId, sceneId, hash }, (received, total) => useStage.getState().setLoading('scene', { label, received, total }));
     let alive = true;
     let mounted: THREE.Object3D | null = null;
     let teardown: (() => void) | void;
@@ -122,17 +122,17 @@ export function useStagedScene(
           perspective.near = Math.max(0.01, pose.distance / 1000);
           perspective.far = Math.max(1000, pose.distance * 20);
           perspective.updateProjectionMatrix();
-          const key = sceneKey({ projectId, sceneId, hash });
+          const key = sceneKey({ developerId, sceneId, hash });
           if (needsFraming(key, fill)) {
             useStage.getState().setCameraPose({ position: pose.position, target: pose.target }, 1000);
             useStage.getState().setFramedKey(key, fill);
           }
         }
         teardown = onReady?.(root, master);
-        if (!useStage.getState().summaries[sceneKey({ projectId, sceneId, hash })]) {
+        if (!useStage.getState().summaries[sceneKey({ developerId, sceneId, hash })]) {
           const found = inspectScene(master);
           useStage.getState().setSummary({
-            key: sceneKey({ projectId, sceneId, hash }),
+            key: sceneKey({ developerId, sceneId, hash }),
             nodes: found.nodeCount,
             meshes: found.meshCount,
             materials: found.materials.length,
@@ -164,7 +164,7 @@ export function useStagedScene(
     };
     // `pick` and `onReady` are expected to be stable for one scene; the scene identity drives this.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, sceneId, hash, attempt, gl, scene, camera, variant]);
+  }, [developerId, sceneId, hash, attempt, gl, scene, camera, variant]);
 
   return state;
 }

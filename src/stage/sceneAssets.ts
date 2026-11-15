@@ -5,7 +5,7 @@ import { loadSceneGltf } from './sceneSource';
 import { refKey, type SceneRef } from './store';
 
 /**
- * Downloaded scene versions, shared between views (going from a scene into one of
+ * Downloaded scene versions, shared between views (DESIGN.md 4.4: going from a scene into one of
  * its sessions reuses the scene already on screen instead of downloading it again).
  *
  * A scene version is immutable (its hash never changes), so the hash is a perfect cache key. Every
@@ -16,7 +16,7 @@ import { refKey, type SceneRef } from './store';
  */
 
 /** What the glTF file itself says, kept for the inspector. */
-interface SceneInfo {
+export interface SceneInfo {
   /** The parsed glTF JSON (nodes, meshes, materials, extensions used). */
   json: Record<string, unknown>;
   animationCount: number;
@@ -42,7 +42,7 @@ export function sceneKey(ref: SceneRef): string {
   return refKey(ref);
 }
 
-interface SceneLease {
+export interface SceneLease {
   /** Resolves to the shared master graph. Rejects with an AbortError if released first. */
   promise: Promise<THREE.Object3D>;
   release: () => void;
@@ -80,7 +80,7 @@ export function acquireScene(
     };
     created.promise = loadSceneGltf(
       renderer,
-      ref.projectId,
+      ref.developerId,
       ref.sceneId,
       ref.hash,
       (received, total) => {

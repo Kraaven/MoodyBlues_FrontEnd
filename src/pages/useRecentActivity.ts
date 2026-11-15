@@ -4,7 +4,7 @@ import { projectQuery, sessionsQuery, useProjects } from '../api/queries';
 import type { ProjectDetail, ProjectScene, ProjectSummary, SessionSummary } from '../api/types';
 
 /**
- * How far the lobby looks. There is no "everything that needs attention" route,
+ * How far the lobby looks (DESIGN.md 7.2, 13). There is no "everything that needs attention" route,
  * so the lobby checks a bounded window: the few most recently created projects, and for each the
  * scene updated most recently. At most 1 + 4 + 4 * 2 = 13 requests, sharing cache entries with the
  * project and scene pages, refreshed every 30 s while the tab is visible.
@@ -13,7 +13,7 @@ export const ACTIVITY_PROJECTS = 4;
 
 export interface ActivityItem {
   id: string;
-  kind: 'recording' | 'failed' | 'waiting' | 'optimize-failed';
+  kind: 'recording' | 'failed' | 'waiting' | 'no-key' | 'optimize-failed';
   project: ProjectSummary;
   scene?: ProjectScene;
   session?: SessionSummary;
@@ -44,8 +44,8 @@ export function useRecentActivity() {
   const sessionQueries = targets.flatMap((t) =>
     t.detail && t.scene
       ? [
-          { target: t, kind: 'version' as const, ...sessionsQuery(t.detail.id, t.scene.sceneId, { version: t.scene.currentVersion }), refetchInterval: POLL_MS },
-          { target: t, kind: 'waiting' as const, ...sessionsQuery(t.detail.id, t.scene.sceneId, { awaitingScene: true }), refetchInterval: POLL_MS },
+          { target: t, kind: 'version' as const, ...sessionsQuery(t.detail.developerId, t.scene.sceneId, { version: t.scene.currentVersion }), refetchInterval: POLL_MS },
+          { target: t, kind: 'waiting' as const, ...sessionsQuery(t.detail.developerId, t.scene.sceneId, { awaitingScene: true }), refetchInterval: POLL_MS },
         ]
       : [],
   );
@@ -55,6 +55,9 @@ export function useRecentActivity() {
     const now: ActivityItem[] = [];
     const attention: ActivityItem[] = [];
 
+    for (const project of projects.data ?? []) {
+      if (!project.ingestKeyPrefix) attention.push({ id: `nokey-${project.id}`, kind: 'no-key', project });
+    }
     targets.forEach((t) => {
       if (t.scene && t.scene.processingStatus === 'Failed') {
         attention.push({ id: `optimize-${t.project.id}-${t.scene.sceneId}`, kind: 'optimize-failed', project: t.project, scene: t.scene });
