@@ -298,7 +298,7 @@ Deploying (Vercel or any static host): set `VITE_API_BASE_URL` before building, 
 it in. Add the deployed origin to the backend's `MOODYBLUES_CORS_ORIGIN`. `vercel.json` rewrites
 all routes to `index.html` and sets the security headers. Its Content-Security-Policy names the
 API origin in `connect-src` (`https://moodyblues.kraaven.net`); **change it there if the API
-moves**, or every request is blocked. The policy allows `'wasm-unsafe-eval'` and `blob:` workers
+moves**, or every request is blocked. The policy allows `'wasm-unsafe-eval'`, `'unsafe-eval'` (the Basis transcoder builds functions with `Function`; without it KTX2 textures never finish decoding) and `blob:` workers
 for the Draco and Basis decoders, and `blob:` fetches for GLB textures. Another static host needs
 the same headers. After upgrading `three`, re-copy the decoders from
 `node_modules/three/examples/jsm/libs/{draco/gltf,basis}/` into `public/decoders/`.
