@@ -3,7 +3,7 @@ import { DropdownMenu as M } from 'radix-ui';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from './cn';
 
-export interface MenuItem {
+interface MenuItem {
   label: string;
   icon?: LucideIcon;
   onSelect: () => void;

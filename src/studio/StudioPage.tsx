@@ -28,13 +28,11 @@ import { downloadWithProgress, useProject, useRecompileSession, useScene, useSes
 import { errorText } from '../api/client';
 import type { SceneVersion, SessionDetail } from '../api/types';
 import { parseReplay } from '../viewer/replay/replayFile';
-import { computeGlyphTimeline } from '../viewer/replay/glyphTimeline';
-import { useReplayBinding } from '../player/binding';
-import { Playback } from '../player/playback';
-import { saveGlyph } from '../pages/scene/glyphs';
+import { useReplayBinding } from './binding';
+import { Playback } from './playback';
 import { StageNotice } from '../stage/StageNotice';
 import { StageSurface } from '../stage/StageSurface';
-import { useStage, type StageView } from '../stage/store';
+import { idleView, useStage, type StageView } from '../stage/store';
 import { useStageRegion } from '../stage/useStageInset';
 import { useStageView } from '../stage/useStageView';
 import { Button, IconButton } from '../ui/Button';
@@ -60,8 +58,6 @@ import { ViewSettingsWindow } from './windows/ViewSettingsWindow';
 import { RecordingsWindow } from './windows/RecordingsWindow';
 import { FloatingWindows, WindowDock, WindowRail, type RailTool, type WindowDef } from './windows/WindowHost';
 
-const IDLE: StageView = { id: 'studio', content: 'none', dim: 0 };
-
 /**
  * The 3D studio: one scene version in the persistent Stage with the tool windows over it, and, in
  * a recordings window and, when a session is open, its timeline and events.
@@ -76,7 +72,7 @@ export default function StudioPage() {
   const notify = useToast();
   const phone = useMediaQuery('(max-width: 767px)');
   const project = useProject(projectId);
-  const scene = useScene(project.data?.developerId, sceneId);
+  const scene = useScene(projectId, sceneId);
   const session = useSession(sessionId);
   const [playback] = useState(() => new Playback());
   const sceneState = useStage((s) => s.scene);
@@ -91,10 +87,9 @@ export default function StudioPage() {
   const requested = Number(params.get('version'));
   const sessionVersion = session.data ? (versions.find((v) => v.hash === session.data.sceneHash) ?? null) : null;
   const version: SceneVersion | null = sessionId ? sessionVersion : (versions.find((v) => v.version === requested) ?? scene.data?.current ?? null);
-  const developerId = project.data?.developerId;
   const sceneRef = useMemo(
-    () => (developerId && sceneId && version ? { developerId, sceneId: scene.data?.sceneId ?? sceneId, hash: version.hash } : null),
-    [developerId, sceneId, version, scene.data?.sceneId],
+    () => (projectId && sceneId && version ? { projectId, sceneId: scene.data?.sceneId ?? sceneId, hash: version.hash } : null),
+    [projectId, sceneId, version, scene.data?.sceneId],
   );
 
   // ---- The replay -------------------------------------------------------------------------------
@@ -125,12 +120,7 @@ export default function StudioPage() {
     return () => useReplayBinding.getState().bind(null, null);
   }, [replay.data, playback, sessionId]);
 
-  // A replay read here gives its session a true timeline glyph in the lists.
   const detail = session.data;
-  useEffect(() => {
-    if (replay.data && detail) void saveGlyph({ id: detail.id, replaySizeBytes: detail.replaySizeBytes, keyframeCount: detail.keyframeCount }, computeGlyphTimeline(replay.data));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [replay.data, detail?.id]);
 
   // Start at ?t= (a shared link), once per session.
   useEffect(() => {
@@ -143,17 +133,17 @@ export default function StudioPage() {
   // ---- The Stage ---------------------------------------------------------------------------------
   const waiting = status === 'WaitingForScene';
   const fallbackRef = useMemo(
-    () => (developerId && scene.data?.current ? { developerId, sceneId: scene.data.sceneId, hash: scene.data.current.hash } : null),
-    [developerId, scene.data],
+    () => (projectId && scene.data?.current ? { projectId, sceneId: scene.data.sceneId, hash: scene.data.current.hash } : null),
+    [projectId, scene.data],
   );
-  let view: StageView = IDLE;
+  let view: StageView = idleView('studio');
   if (sceneRef) view = { id: 'studio', content: 'studio', scene: sceneRef, control: 'free', dim: 1, durationMs: 900 };
   else if (waiting && fallbackRef) view = { id: 'studio', content: 'scene', scene: fallbackRef, control: 'free', idleOrbit: true, dim: 0.35 };
   useStageView(view);
   useStageRegion(region);
 
   // ---- Recordings ---------------------------------------------------------------------------------
-  const sessions = useSessions(developerId, scene.data?.sceneId, version ? { version: version.version } : null);
+  const sessions = useSessions(projectId, scene.data?.sceneId, version ? { version: version.version } : null);
   const sessionHref = useCallback((id: string) => `${base}/sessions/${encodeURIComponent(id)}`, [base]);
 
   const share = async () => {

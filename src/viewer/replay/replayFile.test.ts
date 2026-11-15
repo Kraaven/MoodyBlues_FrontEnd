@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { HEADER_SIZE, LogLevel, parseReplay, ReplayFormatError, ReplayObjectKind } from './replayFile';
 import { toStrictFloat32Times } from './replayTracks';
-import { nextLogTime, previousLogTime } from '../../player/logNav';
-import { buildReplay, HEADER_SIZE as TEST_HEADER_SIZE } from './testReplay';
+import { nextLogTime, previousLogTime } from '../../studio/logNav';
+import { buildReplay } from './testReplay';
 
 describe('parseReplay', () => {
   it('reads objects, events, logs and joins tracks across blocks, dropping lead-ins', () => {
@@ -96,10 +96,5 @@ describe('log navigation', () => {
   it('can skip to errors only', () => {
     expect(nextLogTime(logs, 0, true)).toBe(2);
     expect(previousLogTime(logs, 3, true)).toBe(2);
-  });
-});
-describe('testReplay helper', () => {
-  it('uses the same header size as the parser', () => {
-    expect(TEST_HEADER_SIZE).toBe(HEADER_SIZE);
   });
 });

@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import type { ReplayLog } from '../viewer/replay/replayFile';
-import { nextLogTime, previousLogTime } from '../player/logNav';
-import { SPEEDS, TICK_SECONDS, type Playback } from '../player/playback';
-import { unityPath } from '../player/unityPath';
+import { nextLogTime, previousLogTime } from './logNav';
+import { SPEEDS, TICK_SECONDS, type Playback } from './playback';
+import { unityPath } from './unityPath';
 import { Dialog } from '../ui/Dialog';
 import { Kbd } from '../ui/States';
 import { useStudio } from './studioStore';

@@ -32,14 +32,14 @@ export interface ScopeLayout {
   dockWidth: number;
 }
 
-export const DOCK_MIN = 320;
-export const DOCK_MAX = 520;
-export const WINDOW_MIN: Bounds = { w: 280, h: 200 };
-export const WINDOW_DEFAULT: Bounds = { w: 380, h: 540 };
+const DOCK_MIN = 320;
+const DOCK_MAX = 520;
+const WINDOW_MIN: Bounds = { w: 280, h: 200 };
+const WINDOW_DEFAULT: Bounds = { w: 380, h: 540 };
 /** How much of a window's header must stay inside the view so it can always be grabbed. */
 const GRAB = 72;
 /** Room kept free on the right for the tool rail. */
-export const RAIL_ROOM = 88;
+const RAIL_ROOM = 88;
 
 export function defaultLayout(docked: string[] = []): ScopeLayout {
   return { open: [], rects: {}, docked, dockActive: docked[0] ?? null, dockOpen: docked.length > 0, dockWidth: 380 };
@@ -59,7 +59,7 @@ export function clampRect(rect: WindowRect, bounds: Bounds, min: Bounds = WINDOW
 }
 
 /** Where a window opens the first time: beside the rail, each further one a little lower and to the left. */
-export function defaultRect(bounds: Bounds, existing: number): WindowRect {
+function defaultRect(bounds: Bounds, existing: number): WindowRect {
   const w = Math.min(WINDOW_DEFAULT.w, Math.max(WINDOW_MIN.w, bounds.w - RAIL_ROOM - 32));
   const h = Math.min(WINDOW_DEFAULT.h, Math.max(WINDOW_MIN.h, bounds.h - 140));
   return clampRect({ x: bounds.w - RAIL_ROOM - w - 16 - existing * 28, y: 112 + existing * 28, w, h }, bounds);
@@ -67,7 +67,7 @@ export function defaultRect(bounds: Bounds, existing: number): WindowRect {
 
 const without = (list: string[], id: string) => list.filter((x) => x !== id);
 
-export type WindowState = 'closed' | 'floating' | 'docked';
+type WindowState = 'closed' | 'floating' | 'docked';
 
 export function windowState(layout: ScopeLayout, id: string): WindowState {
   if (layout.open.includes(id)) return 'floating';

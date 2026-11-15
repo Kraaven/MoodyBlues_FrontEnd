@@ -16,7 +16,7 @@ export interface Crumb {
   switcher?: boolean;
 }
 
-export function AccountMenu() {
+function AccountMenu() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   return (

@@ -4,16 +4,14 @@ import { useNavigate } from 'react-router-dom';
 import { useCreateProject } from '../api/queries';
 import { errorText } from '../api/client';
 import { PageBody, PageHeader, WorkspaceLayout } from '../shell/WorkspaceLayout';
-import type { StageView } from '../stage/store';
+import { idleView } from '../stage/store';
 import { useStageView } from '../stage/useStageView';
 import { Button, LinkButton } from '../ui/Button';
 import { Field, FormError } from '../ui/Field';
 import { useWindowTitle } from '../lib/useWindowTitle';
 
-const NONE: StageView = { id: 'new-project', content: 'none', dim: 0 };
-
 export function NewProjectPage() {
-  useStageView(NONE);
+  useStageView(idleView('new-project'));
   useWindowTitle('New project');
   const [name, setName] = useState('');
   const create = useCreateProject();

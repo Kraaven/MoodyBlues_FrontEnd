@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Bug, ChevronDown, ChevronUp } from 'lucide-react';
-import { useReplayBinding } from '../player/binding';
+import { useReplayBinding } from '../studio/binding';
 import { sceneCacheInfo } from '../stage/sceneAssets';
 import { useStage } from '../stage/store';
 import { cn } from '../ui/cn';
@@ -15,7 +15,7 @@ const TOGGLES = [
 ] as const;
 
 /**
- * Developer tools for the Stage (DESIGN.md 9.6): frame times, what the renderer holds, the replay
+ * Developer tools for the Stage: frame times, what the renderer holds, the replay
  * clock, the scene cache and the query cache, plus view toggles. Only loaded with `?debug`.
  */
 export default function DebugPanel() {
@@ -25,7 +25,6 @@ export default function DebugPanel() {
   const stats = useStage((s) => s.stats);
   const debug = useStage((s) => s.debug);
   const view = useStage((s) => s.view);
-  const quality = useStage((s) => s.traceQuality);
   const status = useStage((s) => s.status);
 
   useEffect(() => {
@@ -45,7 +44,6 @@ export default function DebugPanel() {
     ['Frame', stats ? `${stats.avgMs.toFixed(1)} ms avg · ${stats.maxMs.toFixed(1)} ms max · ${stats.fps.toFixed(0)} fps` : '—'],
     ['Draw calls', stats ? `${stats.calls} · ${stats.triangles} triangles` : '—'],
     ['GPU holds', stats ? `${stats.geometries} geometries · ${stats.textures} textures` : '—'],
-    ['Trace quality', `${Math.round(quality * 100)}%`],
     ['Replay clock', playback ? `${playback.time.toFixed(2)} s${playback.playing ? ' · playing' : ''}` : '—'],
     ['Scene cache', cache.length ? cache.map((c) => `${c.key.slice(-8)}×${c.refs}${c.loaded ? '' : '…'}`).join(' ') : 'empty'],
     ['Query cache', `${queries.getQueryCache().getAll().length} queries`],

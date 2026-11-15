@@ -1,11 +1,7 @@
 /** Backend API contracts (MoodyBlues_Backend: *Contracts.cs). camelCase JSON. */
 
-export interface AuthResponse {
-  userId: string;
-  email: string;
-}
-
-export interface MeResponse {
+/** The signed-in user: the answer of register, login and /auth/me. */
+export interface UserResponse {
   userId: string;
   email: string;
 }
@@ -13,12 +9,11 @@ export interface MeResponse {
 export interface ProjectSummary {
   id: string;
   name: string;
-  developerId: string;
   createdAtUtc: string;
   sceneCount: number;
-  /** Identifies the active ingest key ("mbk_" + 6 chars); null if the project has none yet. */
-  ingestKeyPrefix: string | null;
-  ingestKeyCreatedAtUtc: string | null;
+  /** Identifies the active ingest key ("mbk_" + 6 chars). */
+  ingestKeyPrefix: string;
+  ingestKeyCreatedAtUtc: string;
 }
 
 /** POST /api/projects/{id}/ingest-key: a new key. The previous one stopped working. */
@@ -38,21 +33,19 @@ export interface ProjectScene {
   latestHash: string;
   sizeBytes: number;
   processingStatus: SceneProcessingStatus;
-  revisionCount: number;
   currentVersion: number;
 }
 
 export interface ProjectDetail {
   id: string;
   name: string;
-  developerId: string;
   createdAtUtc: string;
   scenes: ProjectScene[];
-  ingestKeyPrefix: string | null;
-  ingestKeyCreatedAtUtc: string | null;
+  ingestKeyPrefix: string;
+  ingestKeyCreatedAtUtc: string;
   /**
-   * What the user pastes into Unity (`https://mbk_...@host`). Null when the project has no key,
-   * or its key predates stored keys; rotating gives it one.
+   * What the user pastes into Unity (`https://mbk_...@host`). Null only when the server cannot
+   * decrypt the stored key (its secret changed); rotating gives a new one.
    */
   connectionString: string | null;
 }
@@ -72,7 +65,7 @@ export interface SceneVersion {
 }
 
 export interface SceneDetail {
-  developerId: string;
+  projectId: string;
   sceneId: string;
   displayName: string | null;
   createdAtUtc: string;
@@ -90,6 +83,20 @@ export interface DeleteResponse {
 }
 
 export type SessionStatus = 'Recording' | 'Queued' | 'Compiling' | 'Ready' | 'Failed' | 'WaitingForScene';
+
+/**
+ * The shape of a session over time, computed by the backend when it compiles the replay. Every
+ * position is a fraction of the session, 0 to 1.
+ */
+export interface SessionActivity {
+  /** Keyframe activity per equal time bucket (48), 0 to 1. */
+  bins: number[];
+  errors: number[];
+  warnings: number[];
+  spawns: number[];
+  /** [start, end] spans with no data. */
+  gaps: [number, number][];
+}
 
 export interface SessionSummary {
   id: string;
@@ -110,11 +117,13 @@ export interface SessionSummary {
   infoLogCount: number;
   warningLogCount: number;
   errorLogCount: number;
+  /** Null until the replay is built. */
+  activity: SessionActivity | null;
 }
 
 export interface SessionDetail {
   id: string;
-  developerId: string;
+  projectId: string;
   sceneId: string;
   sceneHash: string;
   createdAtUtc: string;
@@ -125,19 +134,21 @@ export interface SessionDetail {
   durationSeconds: number;
   objectCount: number;
   spawnCount: number;
-  rawEventCount: number;
   keyframeCount: number;
   replaySizeBytes: number;
   rawLogSizeBytes: number;
   deltaPromotions: number;
   hardClamps: number;
   droppedEvents: number;
+  rotationWidenings: number;
   compilerVersion: number;
   compiledAtUtc: string | null;
   errorMessage: string | null;
   infoLogCount: number;
   warningLogCount: number;
   errorLogCount: number;
+  /** Null until the replay is built. */
+  activity: SessionActivity | null;
 }
 
 /** Statuses that can still change on their own, so lists showing them keep refreshing. */

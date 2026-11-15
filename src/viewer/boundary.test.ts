@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 /**
- * DESIGN.md 12.1: the viewer knows nothing about routing, the API, auth or the app's own layers, so
+ * The viewer knows nothing about routing, the API, auth or the app's own layers, so
  * it can be tested alone and reused. Everything under src/viewer (except tests) is checked.
  */
 const sources = import.meta.glob(['./**/*.ts', './**/*.tsx', '!./**/*.test.ts', '!./**/*.test.tsx'], {

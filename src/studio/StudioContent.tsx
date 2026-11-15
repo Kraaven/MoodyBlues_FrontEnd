@@ -6,7 +6,7 @@ import { framePose } from '../viewer/core/gltf';
 import { Ground } from '../viewer/core/Ground';
 import { SelectionOutline } from '../viewer/core/SelectionOutline';
 import { ReplayPlayer } from '../viewer/replay/ReplayPlayer';
-import { useReplayBinding } from '../player/binding';
+import { useReplayBinding } from './binding';
 import { cloneScene } from '../stage/sceneAssets';
 import { applyShadows, gridCell, SceneLights, useStagedScene } from '../stage/SceneContent';
 import { captureSnapshot } from '../stage/snapshotCapture';

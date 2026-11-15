@@ -68,29 +68,3 @@ export function framePose(
   const position = center.clone().addScaledVector(direction, distance);
   return { position: [position.x, position.y, position.z], target: [center.x, center.y, center.z], distance, radius };
 }
-
-/** Points the camera at an object so it fills the view, and moves the orbit target with it. */
-export function frameObject(
-  camera: THREE.PerspectiveCamera,
-  target: THREE.Vector3 | null,
-  object: THREE.Object3D,
-  options: { padding?: number; direction?: THREE.Vector3 } = {},
-): boolean {
-  let direction = options.direction;
-  if (!direction) {
-    // Keep looking from where the camera already is.
-    const center = target ?? new THREE.Box3().setFromObject(object, true).getCenter(new THREE.Vector3());
-    direction = camera.position.clone().sub(center);
-    if (direction.lengthSq() < 1e-6) direction.set(1, 0.6, 1);
-  }
-  const pose = framePose(object, camera.fov, { padding: options.padding, direction });
-  if (!pose) return false;
-
-  camera.position.set(...pose.position);
-  camera.near = Math.max(0.01, pose.distance / 1000);
-  camera.far = Math.max(1000, pose.distance * 20);
-  camera.lookAt(...pose.target);
-  camera.updateProjectionMatrix();
-  target?.set(...pose.target);
-  return true;
-}

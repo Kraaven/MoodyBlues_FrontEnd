@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 /**
- * Small preview images of textures for the inspector (DESIGN.md 7.8).
+ * Small preview images of textures for the inspector.
  *
  * An ordinary decoded image is drawn to a canvas. A texture that was transcoded for the GPU
  * (KTX2 / Basis) has no image a canvas can draw, so it is rendered through the Stage's renderer into a

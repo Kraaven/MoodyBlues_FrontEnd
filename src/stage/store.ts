@@ -2,9 +2,9 @@ import { create } from 'zustand';
 import type { Pose } from './transition';
 
 /** What the Stage is drawing. */
-export type StageContent = 'none' | 'trace' | 'demo' | 'scene' | 'studio';
+type StageContent = 'none' | 'demo' | 'scene' | 'studio';
 
-export interface CameraPose {
+interface CameraPose {
   position: [number, number, number];
   target: [number, number, number];
   fov?: number;
@@ -12,12 +12,12 @@ export interface CameraPose {
 
 /** One uploaded version of a scene: exactly what the backend keys its GLB by. */
 export interface SceneRef {
-  developerId: string;
+  projectId: string;
   sceneId: string;
   hash: string;
 }
 
-/** What a view asks of the Stage (DESIGN.md 4.3). */
+/** What a view asks of the Stage. */
 export interface StageView {
   id: string;
   content: StageContent;
@@ -42,16 +42,21 @@ export interface StageView {
   zoom?: boolean;
 }
 
-export type StageStatus = 'ok' | 'lost' | 'unsupported';
+/** A page that draws no 3D: the Stage rests, invisible, under its id. */
+export function idleView(id: string): StageView {
+  return { id, content: 'none', dim: 0 };
+}
 
-export interface LoadingState {
+type StageStatus = 'ok' | 'lost' | 'unsupported';
+
+interface LoadingState {
   label: string;
   received: number;
   /** Null when the server did not say. */
   total: number | null;
 }
 
-export interface SceneState {
+interface SceneState {
   status: 'idle' | 'loading' | 'ready' | 'error';
   error: unknown;
   /** Bumped by Retry so the same scene is requested again. */
@@ -59,7 +64,7 @@ export interface SceneState {
 }
 
 /** What a loaded scene version contains, measured once it is in the Stage; read by the pages. */
-export interface SceneSummary {
+interface SceneSummary {
   /** sceneKey() of the version it describes. */
   key: string;
   nodes: number;
@@ -70,7 +75,7 @@ export interface SceneSummary {
   vertices: number;
 }
 
-export interface StageStats {
+interface StageStats {
   fps: number;
   avgMs: number;
   maxMs: number;
@@ -80,7 +85,6 @@ export interface StageStats {
   points: number;
   geometries: number;
   textures: number;
-  quality: number;
 }
 
 /** Pixels of the viewport that the 3D should not use, so it centres in what is left. */
@@ -95,7 +99,7 @@ export const NO_INSET: Inset = { left: 0, right: 0, top: 0, bottom: 0 };
 
 /** The identity of a scene version, as the scene cache and the summaries key it. */
 export function refKey(ref: SceneRef): string {
-  return `${ref.developerId}/${ref.sceneId}/${ref.hash}`;
+  return `${ref.projectId}/${ref.sceneId}/${ref.hash}`;
 }
 export const DEFAULT_CAMERA: Required<CameraPose> = { position: [0, 9, 30], target: [0, -1, 0], fov: 50 };
 
@@ -115,7 +119,7 @@ interface StageState {
   /**
    * The scene version the camera was last framed on. A view that shows the same scene again (a scene
    * turning into one of its sessions) keeps the camera where the user left it instead of re-framing.
-   * Cleared when the Stage goes back to the Trace.
+   * Cleared when the Stage goes back to the demo.
    */
   framedKey: string | null;
   /** The share of the canvas the scene was framed for (see regionFill). A big change re-frames. */
@@ -127,9 +131,7 @@ interface StageState {
   insetSmooth: boolean;
   statsEnabled: boolean;
   stats: StageStats | null;
-  /** Fraction of the Trace's curves being drawn; 1 until frames run long. */
-  traceQuality: number;
-  /** Debug toggles (DESIGN.md 9.6). */
+  /** Debug toggles. */
   debug: { wireframe: boolean; axes: boolean; bounds: boolean; showHidden: boolean; fog: boolean };
   setView: (view: StageView) => void;
   /** Move the camera to a new pose without changing anything else about the view. */
@@ -146,7 +148,7 @@ interface StageState {
   setDebug: (patch: Partial<StageState['debug']>) => void;
 }
 
-export function toPose(camera: CameraPose, dim: number, drift: boolean): Pose {
+function toPose(camera: CameraPose, dim: number, drift: boolean): Pose {
   const fov = camera.fov ?? DEFAULT_CAMERA.fov;
   return {
     px: camera.position[0],
@@ -190,7 +192,6 @@ export const useStage = create<StageState>((set, get) => ({
   insetSmooth: false,
   statsEnabled: false,
   stats: null,
-  traceQuality: 1,
   debug: { wireframe: false, axes: false, bounds: false, showHidden: false, fog: true },
 
   setView: (view) => {
@@ -205,7 +206,7 @@ export const useStage = create<StageState>((set, get) => ({
       pose: next,
       poseVersion: previous.poseVersion + 1,
       durationMs: view.durationMs ?? 600,
-      framedKey: view.content === 'trace' || view.content === 'demo' ? null : previous.framedKey,
+      framedKey: view.content === 'demo' ? null : previous.framedKey,
     });
   },
   setCameraPose: (camera, durationMs = 900) => {
@@ -248,5 +249,5 @@ export function needsFraming(key: string, fill: number): boolean {
   return framedKey !== key || Math.abs(Math.log(fill / Math.max(0.01, framedFill))) > 0.3;
 }
 
-// Development only: lets the console and the dev scripts inspect the Stage (`__stage.getState()`).
+// Development only: lets the console inspect the Stage (`__stage.getState()`).
 if (import.meta.env.DEV) (window as unknown as { __stage: typeof useStage }).__stage = useStage;
