@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 
 import { useAuth } from '../../auth/useAuth';
+import { safeRedirect } from '../../auth/redirect';
 import { errorText } from '../../api/client';
 import { useMediaQuery } from '../../lib/useMediaQuery';
 import { DEMO_POSE } from '../../stage/DemoScene';
@@ -16,13 +17,10 @@ import { Brand } from '../../ui/Logo';
 const DEMO: StageView = { id: 'auth', content: 'demo', pose: DEMO_POSE, drift: true, dim: 1, durationMs: 0 };
 
 function useAuthForm(submit: (email: string, password: string) => Promise<void>) {
-  const navigate = useNavigate();
-  const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const from = (location.state as { from?: string } | null)?.from ?? '/projects';
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -30,7 +28,6 @@ function useAuthForm(submit: (email: string, password: string) => Promise<void>)
     setBusy(true);
     try {
       await submit(email.trim(), password);
-      navigate(from, { replace: true });
     } catch (err) {
       setError(errorText(err, 'Something went wrong. Try again.'));
     } finally {
@@ -44,6 +41,8 @@ function useAuthForm(submit: (email: string, password: string) => Promise<void>)
 /** Sign in and create account: the form on the left, the product's own scene on the right. */
 export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const { user, login, register, expired } = useAuth();
+  const location = useLocation();
+  const from = safeRedirect((location.state as { from?: unknown } | null)?.from);
   const form = useAuthForm(mode === 'login' ? login : register);
   const wide = useMediaQuery('(min-width: 1024px)');
   useStageView(wide ? DEMO : idleView('auth'));
@@ -52,7 +51,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     document.title = `${mode === 'login' ? 'Sign in' : 'Create account'} · MoodyBlues`;
   }, [mode]);
 
-  if (user) return <Navigate to="/projects" replace />;
+  if (user) return <Navigate to={from} replace />;
   const login_ = mode === 'login';
 
   return (

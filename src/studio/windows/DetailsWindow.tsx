@@ -46,8 +46,11 @@ function healthRows(session: SessionDetail, replay: Replay | null): HealthRow[] 
   ];
 }
 
-/** Recording health, the session's facts, and what can be done with it. */
-export function DetailsWindow({ session, replay, sceneHref }: { session: SessionDetail; replay: Replay | null; sceneHref: string }) {
+/**
+ * Recording health, the session's facts, and what can be done with it. `sceneHref` is where the
+ * scene page is, once the session is deleted; null for a shared view, which has no actions at all.
+ */
+export function DetailsWindow({ session, replay, sceneHref }: { session: SessionDetail; replay: Replay | null; sceneHref: string | null }) {
   const rows = useMemo(() => healthRows(session, replay), [session, replay]);
   const recompile = useRecompileSession();
   const remove = useDeleteSession();
@@ -95,58 +98,62 @@ export function DetailsWindow({ session, replay, sceneHref }: { session: Session
       <p className="mt-3 break-all font-mono text-[11px] text-fg-3" title="Scene version hash">
         {session.sceneHash}
       </p>
-      <Rule />
-      <div className="flex flex-col gap-2">
-        <Button
-          variant="secondary"
-          className="justify-start"
-          loading={recompile.isPending}
-          disabled={session.status !== 'Ready' && session.status !== 'Failed'}
-          onClick={async () => {
-            try {
-              await recompile.mutateAsync(session.id);
-              notify('Rebuilding the replay.');
-            } catch (err) {
-              notify(errorText(err), 'error');
-            }
-          }}
-        >
-          <RotateCw className="h-4 w-4" />
-          Rebuild replay
-        </Button>
-        <Button
-          variant="secondary"
-          className="justify-start"
-          disabled={session.status !== 'Ready'}
-          onClick={() => saveDownload(`/api/sessions/${encodeURIComponent(session.id)}/replay`, `session-${session.id}.mbr`).catch((err) => notify(errorText(err), 'error'))}
-        >
-          <Download className="h-4 w-4" />
-          Download replay
-        </Button>
-        <Button variant="danger" className="justify-start" onClick={() => setDeleting(true)}>
-          <Trash2 className="h-4 w-4" />
-          Delete session
-        </Button>
-      </div>
+      {sceneHref !== null && (
+        <>
+          <Rule />
+          <div className="flex flex-col gap-2">
+            <Button
+              variant="secondary"
+              className="justify-start"
+              loading={recompile.isPending}
+              disabled={session.status !== 'Ready' && session.status !== 'Failed'}
+              onClick={async () => {
+                try {
+                  await recompile.mutateAsync(session.id);
+                  notify('Rebuilding the replay.');
+                } catch (err) {
+                  notify(errorText(err), 'error');
+                }
+              }}
+            >
+              <RotateCw className="h-4 w-4" />
+              Rebuild replay
+            </Button>
+            <Button
+              variant="secondary"
+              className="justify-start"
+              disabled={session.status !== 'Ready'}
+              onClick={() => saveDownload(`/api/sessions/${encodeURIComponent(session.id)}/replay`, `session-${session.id}.mbr`).catch((err) => notify(errorText(err), 'error'))}
+            >
+              <Download className="h-4 w-4" />
+              Download replay
+            </Button>
+            <Button variant="danger" className="justify-start" onClick={() => setDeleting(true)}>
+              <Trash2 className="h-4 w-4" />
+              Delete session
+            </Button>
+          </div>
 
-      <ConfirmDialog
-        open={deleting}
-        onOpenChange={setDeleting}
-        title="Delete this session?"
-        confirmLabel="Delete session"
-        disabledReason={session.status === 'Recording' || session.status === 'Compiling' ? 'This session is still being recorded or built. Wait for it to finish.' : null}
-        body={
-          <p>
-            The recording from <span className="text-fg">{formatDateTime(session.createdAtUtc)}</span> and its {formatBytes(session.replaySizeBytes + session.rawLogSizeBytes)} of data
-            are deleted for good.
-          </p>
-        }
-        onConfirm={async () => {
-          await remove.mutateAsync(session.id);
-          notify('Session deleted.');
-          navigate(sceneHref);
-        }}
-      />
+          <ConfirmDialog
+            open={deleting}
+            onOpenChange={setDeleting}
+            title="Delete this session?"
+            confirmLabel="Delete session"
+            disabledReason={session.status === 'Recording' || session.status === 'Compiling' ? 'This session is still being recorded or built. Wait for it to finish.' : null}
+            body={
+              <p>
+                The recording from <span className="text-fg">{formatDateTime(session.createdAtUtc)}</span> and its {formatBytes(session.replaySizeBytes + session.rawLogSizeBytes)} of data are deleted
+                for good.
+              </p>
+            }
+            onConfirm={async () => {
+              await remove.mutateAsync(session.id);
+              notify('Session deleted.');
+              navigate(sceneHref);
+            }}
+          />
+        </>
+      )}
     </WindowBody>
   );
 }

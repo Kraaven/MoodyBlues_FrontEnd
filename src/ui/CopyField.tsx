@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import { cn } from './cn';
 import { Tooltip } from './Tooltip';
+import { useToast } from './Toast';
 
 /**
  * A monospace value with a copy button. `display` replaces the shown text (masked); the full
@@ -20,6 +21,7 @@ export function CopyField({
   className?: string;
   size?: 'sm' | 'lg';
 }) {
+  const notify = useToast();
   const [copied, setCopied] = useState(false);
 
   const copy = async (e: React.MouseEvent) => {
@@ -30,7 +32,7 @@ export function CopyField({
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
     } catch {
-      // Clipboard blocked: the value is selectable as text anyway.
+      notify(`Could not copy the ${label}.`, 'error');
     }
   };
 

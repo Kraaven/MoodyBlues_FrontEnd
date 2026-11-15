@@ -2,7 +2,8 @@
 
 The web dashboard for MoodyBlues: projects (with the connection string for the Unity client),
 scenes and their versions, and a 3D studio for recorded play sessions with a timeline, logs and an
-object inspector. One persistent 3D stage sits behind the whole app; the pages direct it.
+object inspector. A recording can be made public and shared by link, which anyone can watch
+read-only without signing in. One persistent 3D stage sits behind the whole app; the pages direct it.
 
 [DOCUMENTATION.md](DOCUMENTATION.md) explains how it works and how it connects to the backend and
 the Unity client.

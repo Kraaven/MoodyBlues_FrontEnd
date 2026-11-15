@@ -38,10 +38,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     probeSession()
-      .then((me) => (me ? setUser({ userId: me.userId, email: me.email }) : signOut(false)))
-      .catch(() => signOut(false))
+      .then((me) => setUser(me ? { userId: me.userId, email: me.email } : null))
+      .catch(() => setUser(null))
       .finally(() => setIsLoading(false));
-  }, [signOut]);
+  }, []);
 
   const accept = useCallback((response: UserResponse) => {
     setExpired(false);

@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Link2, MoreHorizontal, RotateCw, Trash2, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, ArrowRight, MoreHorizontal, Share2, RotateCw, Trash2, TriangleAlert } from 'lucide-react';
 import type { SessionSummary } from '../../api/types';
 import { useDeleteSession, useRecompileSession } from '../../api/queries';
 import { errorText } from '../../api/client';
 import { ActivityGlyph } from '../../ui/ActivityGlyph';
-import { SessionStatusLabel } from '../../ui/Chip';
+import { ShareDialog } from '../../share/ShareDialog';
+import { SessionStatusLabel, Tag } from '../../ui/Chip';
 import { ConfirmDialog } from '../../ui/Dialog';
 import { IconButton } from '../../ui/Button';
 import { Menu } from '../../ui/Menu';
@@ -39,20 +40,14 @@ export function RecordingsTable({ sessions, sessionHref, nested = false }: { ses
   const recompile = useRecompileSession();
   const remove = useDeleteSession();
   const [toDelete, setToDelete] = useState<SessionSummary | null>(null);
+  const [toShare, setToShare] = useState<SessionSummary | null>(null);
   const [page, setPage] = useState(0);
 
   const rows = useMemo(() => [...sessions].sort((a, b) => Number(b.status === 'Recording') - Number(a.status === 'Recording')), [sessions]);
   const pages = Math.max(1, Math.ceil(rows.length / PAGE));
-  const shown = rows.slice(page * PAGE, page * PAGE + PAGE);
-
-  const copyLink = async (id: string) => {
-    try {
-      await navigator.clipboard.writeText(new URL(sessionHref(id), window.location.origin).toString());
-      notify('Link copied.');
-    } catch {
-      notify('Could not copy the link.', 'error');
-    }
-  };
+  // Clamp during render so a shrinking list (a delete) never leaves an empty page past the end.
+  const current = Math.min(page, pages - 1);
+  const shown = rows.slice(current * PAGE, current * PAGE + PAGE);
 
   const onRecompile = async (id: string) => {
     try {
@@ -81,7 +76,10 @@ export function RecordingsTable({ sessions, sessionHref, nested = false }: { ses
             <Link to={sessionHref(s.id)} className="flex min-w-0 items-center gap-5 outline-none after:absolute after:inset-0 after:content-[''] focus-visible:after:ring-2 focus-visible:after:ring-accent focus-visible:after:ring-inset">
               <span className="tabular w-[64px] shrink-0 font-mono text-[12px] text-fg-3 transition-colors group-hover:text-accent">{sessionHandle(s.id)}</span>
               <div className="min-w-0">
-                <SessionStatusLabel status={s.status} />
+                <div className="flex items-center gap-2">
+                  <SessionStatusLabel status={s.status} />
+                  {s.isPublic && <Tag tone="accent">Public</Tag>}
+                </div>
                 {s.status === 'Failed' && s.errorMessage ? (
                   <p className="truncate text-[12px] text-danger" title={s.errorMessage}>
                     {s.errorMessage}
@@ -116,7 +114,7 @@ export function RecordingsTable({ sessions, sessionHref, nested = false }: { ses
                   </IconButton>
                 }
                 items={[
-                  { label: 'Copy link', icon: Link2, onSelect: () => void copyLink(s.id) },
+                  { label: 'Share…', icon: Share2, onSelect: () => setToShare(s) },
                   { label: 'Rebuild replay', icon: RotateCw, onSelect: () => void onRecompile(s.id), disabled: s.status !== 'Ready' && s.status !== 'Failed' },
                   { label: 'Delete session', icon: Trash2, danger: true, separated: true, onSelect: () => setToDelete(s) },
                 ]}
@@ -128,16 +126,18 @@ export function RecordingsTable({ sessions, sessionHref, nested = false }: { ses
       {pages > 1 && (
         <div className="mt-4 flex items-center justify-end gap-5 pr-2 text-[12px] text-fg-3">
           <span className="tabular">
-            {page * PAGE + 1}–{Math.min(rows.length, page * PAGE + PAGE)} of {rows.length}
+            {current * PAGE + 1}–{Math.min(rows.length, current * PAGE + PAGE)} of {rows.length}
           </span>
-          <IconButton label="Previous page" size="xs" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
+          <IconButton label="Previous page" size="xs" disabled={current === 0} onClick={() => setPage(current - 1)}>
             <ArrowLeft className="h-3.5 w-3.5" />
           </IconButton>
-          <IconButton label="Next page" size="xs" disabled={page >= pages - 1} onClick={() => setPage((p) => p + 1)}>
+          <IconButton label="Next page" size="xs" disabled={current >= pages - 1} onClick={() => setPage(current + 1)}>
             <ArrowRight className="h-3.5 w-3.5" />
           </IconButton>
         </div>
       )}
+
+      {toShare && <ShareDialog target={toShare} onClose={() => setToShare(null)} />}
 
       <ConfirmDialog
         open={toDelete !== null}

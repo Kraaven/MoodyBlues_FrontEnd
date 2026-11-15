@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { framePose } from '../viewer/core/gltf';
 import { Ground } from '../viewer/core/Ground';
 import { inspectScene } from '../inspector/inspection';
-import { acquireScene, isAbortError, sceneKey } from './sceneAssets';
+import { acquireScene, isAbortError } from './sceneAssets';
 import { captureSnapshot } from './snapshotCapture';
 import { needsFraming, regionFill, useStage, type SceneRef } from './store';
 
@@ -92,18 +92,16 @@ export function useStagedScene(
   const camera = useThree((s) => s.camera);
   const attempt = useStage((s) => s.scene.attempt);
   const [state, setState] = useState<{ root: THREE.Object3D | null; bounds: SceneBounds | null }>({ root: null, bounds: null });
-  const projectId = ref?.projectId;
-  const sceneId = ref?.sceneId;
-  const hash = ref?.hash;
+  const url = ref?.url;
 
   useEffect(() => {
-    if (!projectId || !sceneId || !hash) return;
+    if (!url) return;
     const label = 'Downloading the scene';
     const stage = useStage.getState();
     stage.setSceneState({ status: 'loading', error: null });
     stage.setLoading('scene', { label, received: 0, total: null });
 
-    const lease = acquireScene(gl, { projectId, sceneId, hash }, (received, total) => useStage.getState().setLoading('scene', { label, received, total }));
+    const lease = acquireScene(gl, url, (received, total) => useStage.getState().setLoading('scene', { label, received, total }));
     let alive = true;
     let mounted: THREE.Object3D | null = null;
     let teardown: (() => void) | void;
@@ -122,17 +120,16 @@ export function useStagedScene(
           perspective.near = Math.max(0.01, pose.distance / 1000);
           perspective.far = Math.max(1000, pose.distance * 20);
           perspective.updateProjectionMatrix();
-          const key = sceneKey({ projectId, sceneId, hash });
-          if (needsFraming(key, fill)) {
+          if (needsFraming(url, fill)) {
             useStage.getState().setCameraPose({ position: pose.position, target: pose.target }, 1000);
-            useStage.getState().setFramedKey(key, fill);
+            useStage.getState().setFramedKey(url, fill);
           }
         }
         teardown = onReady?.(root, master);
-        if (!useStage.getState().summaries[sceneKey({ projectId, sceneId, hash })]) {
+        if (!useStage.getState().summaries[url]) {
           const found = inspectScene(master);
           useStage.getState().setSummary({
-            key: sceneKey({ projectId, sceneId, hash }),
+            key: url,
             nodes: found.nodeCount,
             meshes: found.meshCount,
             materials: found.materials.length,
@@ -164,7 +161,7 @@ export function useStagedScene(
     };
     // `pick` and `onReady` are expected to be stable for one scene; the scene identity drives this.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, sceneId, hash, attempt, gl, scene, camera, variant]);
+  }, [url, attempt, gl, scene, camera, variant]);
 
   return state;
 }

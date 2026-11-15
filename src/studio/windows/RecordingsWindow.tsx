@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Play } from 'lucide-react';
 import type { SessionSummary } from '../../api/types';
-import { SessionStatusLabel, versionLabel } from '../../ui/Chip';
+import { SessionStatusLabel, Tag, versionLabel } from '../../ui/Chip';
 import { Skeleton } from '../../ui/States';
 import { cn } from '../../ui/cn';
 import { formatCaptured, formatCount, formatDuration, plural, sessionHandle } from '../../lib/format';
@@ -51,6 +51,7 @@ export function RecordingsWindow({
                         <span className={cn('block truncate text-[14px]', current ? 'text-accent' : 'text-fg')}>{formatCaptured(s.createdAtUtc)}</span>
                         <span className="mt-0.5 flex items-center gap-3 text-[12px] text-fg-3">
                           <SessionStatusLabel status={s.status} />
+                          {s.isPublic && <Tag tone="accent" className="h-5 px-1.5 text-[11px]">Public</Tag>}
                           <span className="tabular">{s.durationSeconds > 0 ? formatDuration(s.durationSeconds) : '—'}</span>
                           {s.status === 'Ready' && s.errorLogCount > 0 && <span className="text-danger">{formatCount(s.errorLogCount)} err</span>}
                           {s.status === 'Ready' && s.warningLogCount > 0 && <span className="text-caution">{formatCount(s.warningLogCount)} warn</span>}

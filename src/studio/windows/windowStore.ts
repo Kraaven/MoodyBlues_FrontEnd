@@ -63,12 +63,12 @@ export const useWindows = create<WindowsState>()(
         }),
       setBounds: (bounds) => set({ bounds }),
     }),
-    { name: 'moodyblues.windows.v2', version: 2, storage: createJSONStorage(() => safeStorage), partialize: (s) => ({ scopes: s.scopes }) },
+    { name: 'moodyblues.windows.v3', version: 3, storage: createJSONStorage(() => safeStorage), partialize: (s) => ({ scopes: s.scopes }) },
   ),
 );
 
-/** What is docked the first time a kind of view is opened: a session starts with its events beside it. */
-const DEFAULT_DOCKED: Record<string, string[]> = { session: ['events'] };
+/** What is docked the first time a kind of view is opened: a session starts with its logs beside it. */
+const DEFAULT_DOCKED: Record<string, string[]> = { session: ['logs'], share: ['logs'] };
 
 /** The layout for a scope, cleaned against the windows this view actually has. */
 export function useWindowLayout(scope: string, available: string[]): ScopeLayout {

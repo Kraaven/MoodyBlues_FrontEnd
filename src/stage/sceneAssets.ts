@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { clone as cloneWithSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { disposeObject3D } from '../viewer/core/gltf';
 import { loadSceneGltf } from './sceneSource';
-import { refKey, type SceneRef } from './store';
+import type { SceneRef } from './store';
 
 /**
  * Downloaded scene versions, shared between views (going from a scene into one of
@@ -38,10 +38,6 @@ interface Entry {
 const entries = new Map<string, Entry>();
 const MAX_IDLE = 2;
 
-export function sceneKey(ref: SceneRef): string {
-  return refKey(ref);
-}
-
 interface SceneLease {
   /** Resolves to the shared master graph. Rejects with an AbortError if released first. */
   promise: Promise<THREE.Object3D>;
@@ -59,10 +55,10 @@ function prune(): void {
 
 export function acquireScene(
   renderer: THREE.WebGLRenderer,
-  ref: SceneRef,
+  url: string,
   onProgress?: (received: number, total: number | null) => void,
 ): SceneLease {
-  const key = sceneKey(ref);
+  const key = url;
   let entry = entries.get(key);
 
   if (!entry) {
@@ -80,9 +76,7 @@ export function acquireScene(
     };
     created.promise = loadSceneGltf(
       renderer,
-      ref.projectId,
-      ref.sceneId,
-      ref.hash,
+      url,
       (received, total) => {
         created.last = { received, total };
         created.listeners.forEach((l) => l(received, total));
@@ -145,7 +139,7 @@ export function cloneScene(master: THREE.Object3D): THREE.Object3D {
 
 /** The glTF file's own description of a cached scene, or null if it has not loaded. */
 export function sceneInfo(ref: SceneRef): SceneInfo | null {
-  return entries.get(sceneKey(ref))?.info ?? null;
+  return entries.get(ref.url)?.info ?? null;
 }
 
 /** For the Debug panel: what is cached and who holds it. */

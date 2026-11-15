@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronsLeft, ChevronsRight, Pause, Play } from 'lucide-react';
 import { LogLevel, logColorHex, type Replay, type ReplayLog } from '../viewer/replay/replayFile';
+import { binLogs, type LogBin } from './logMarkers';
 import { nextLogTime, previousLogTime } from './logNav';
 import { SPEEDS, usePlaybackState, type Playback } from './playback';
 import { IconButton } from '../ui/Button';
@@ -8,15 +9,13 @@ import { Menu } from '../ui/Menu';
 import { cn } from '../ui/cn';
 import { formatPlayhead } from '../lib/format';
 
-/** Markers closer than this many pixels are drawn as one cluster. */
-const CLUSTER_PX = 4;
-const ACTIVITY_BINS = 200;
+/** Logs that land within this many pixels of each other share one marker. */
+const BIN_PX = 5;
 
-const INFO_TICK = '#9fc7aa';
+const LEVEL_NAME: Record<number, string> = { [LogLevel.Info]: 'Info', [LogLevel.Warning]: 'Warning', [LogLevel.Error]: 'Error' };
 
 /**
- * The timeline: transport, time, speed, and the rail with every log marked by severity, gaps and
- * disconnects shaded, and spawn and delete activity above it. The playhead and the time readout are
+ * The timeline: transport, time, speed, and the rail with every log marked in its own colour. The playhead and the time readout are
  * written to the DOM by the playback clock, never through React, so playing costs no re-renders.
  */
 export function Timeline({
@@ -96,6 +95,7 @@ function Rail({ playback, replay, total, disabled }: { playback: Playback; repla
   const headRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [hover, setHover] = useState<{ x: number; time: number } | null>(null);
+  const [hoverBin, setHoverBin] = useState<LogBin | null>(null);
   const scrubbing = useRef<{ wasPlaying: boolean } | null>(null);
 
   useEffect(() => {
@@ -152,18 +152,11 @@ function Rail({ playback, replay, total, disabled }: { playback: Playback; repla
     e.stopPropagation();
   };
 
-  const clusters = useMemo(() => (replay ? clusterLogs(replay.logs, total, width) : []), [replay, total, width]);
-  const marks = useMemo(() => (replay ? sessionMarkers(replay, total) : { gaps: [], offline: [] }), [replay, total]);
-  const activity = useMemo(() => (replay ? activityBins(replay, total) : null), [replay, total]);
+  const logs = replay?.logs;
+  const bins = useMemo(() => (logs ? binLogs(logs, total, width, BIN_PX) : []), [logs, total, width]);
 
   return (
     <div className="relative mt-2">
-      {/* When spawns and deletes happened. */}
-      <div className="flex h-2.5 items-end gap-px px-0.5" aria-hidden="true">
-        {activity?.bins.map((n, i) => (
-          <div key={i} className="flex-1 rounded-t-[1px] bg-fg-3/35" style={{ height: n === 0 ? 0 : `${Math.max(20, (n / activity.max) * 100)}%` }} />
-        ))}
-      </div>
       <div
         ref={railRef}
         role="slider"
@@ -177,35 +170,37 @@ function Rail({ playback, replay, total, disabled }: { playback: Playback; repla
         onPointerUp={endScrub}
         onPointerCancel={endScrub}
         onLostPointerCapture={endScrub}
-        onPointerLeave={() => setHover(null)}
+        onPointerLeave={() => {
+          setHover(null);
+          setHoverBin(null);
+        }}
         onKeyDown={onKeyDown}
         className={cn('group relative h-7 touch-none select-none', disabled ? 'cursor-default opacity-50' : 'cursor-pointer')}
       >
         <div className="absolute inset-x-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-fg-3/30">
-          {marks.offline.map((span, i) => (
-            <div
-              key={i}
-              title="Disconnected"
-              className="absolute -inset-y-[3px] bg-[repeating-linear-gradient(135deg,rgb(184_161_255/0.5)_0_2px,transparent_2px_5px)]"
-              style={{ left: `${span.from * 100}%`, width: `${Math.max(0.3, (span.to - span.from) * 100)}%` }}
-            />
-          ))}
           <div ref={playedRef} className="absolute inset-y-0 left-0 rounded-full bg-accent" style={{ width: 0 }} />
         </div>
 
-        {clusters.map((c) => (
-          <Marker key={c.key} cluster={c} />
-        ))}
-
-        {marks.gaps.map((x, i) => (
-          <div key={`gap-${i}`} title="Data gap" className="absolute bottom-0 h-2 w-[2px] -translate-x-1/2 bg-wait" style={{ left: `${x * 100}%` }} />
-        ))}
+        {logs &&
+          bins.map((bin) => (
+            <Marker
+              key={bin.key}
+              bin={bin}
+              log={logs[bin.worst]}
+              onHover={setHoverBin}
+              onSeek={(t) => {
+                if (!disabled) playback.seek(t);
+              }}
+            />
+          ))}
 
         <div ref={headRef} className="pointer-events-none absolute inset-y-0 w-0" style={{ left: 0 }}>
           <div className="absolute left-0 top-1/2 h-[18px] w-[6px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent shadow-[0_0_14px_rgb(245_181_68/0.75)] transition-transform group-hover:scale-110" />
         </div>
 
-        {hover && !disabled && (
+        {hoverBin && logs && !disabled && <MarkerTip bin={hoverBin} logs={logs} />}
+
+        {hover && !hoverBin && !disabled && (
           <div className="elevated pointer-events-none absolute -top-8 -translate-x-1/2 rounded-[5px] border border-rule-strong bg-ink-3 px-1.5 py-0.5 font-mono text-[11px] text-fg" style={{ left: hover.x }}>
             {formatPlayhead(hover.time)}
           </div>
@@ -215,80 +210,43 @@ function Rail({ playback, replay, total, disabled }: { playback: Playback; repla
   );
 }
 
-interface Cluster {
-  key: string;
-  fraction: number;
-  count: number;
-  level: LogLevel;
-  color: string;
-}
-
-function tickColor(log: ReplayLog): string {
-  if (log.level === LogLevel.Error) return '#ff6d5e';
-  if (log.level === LogLevel.Warning) return '#f5b544';
-  return log.color > 1 ? logColorHex(log.color) : INFO_TICK;
-}
-
-/** Groups log markers that would be closer than CLUSTER_PX apart; the most severe sets the look. */
-function clusterLogs(logs: ReplayLog[], total: number, width: number): Cluster[] {
-  if (total <= 0 || width <= 0) return [];
-  const out: Cluster[] = [];
-  let current: Cluster | null = null;
-  let lastPx = -Infinity;
-  for (const log of logs) {
-    const fraction = Math.min(1, log.time / total);
-    const px = fraction * width;
-    if (current && px - lastPx < CLUSTER_PX) {
-      current.count++;
-      if (log.level > current.level) {
-        current.level = log.level;
-        current.color = tickColor(log);
-      }
-      continue;
-    }
-    current = { key: `${log.time}-${out.length}`, fraction, count: 1, level: log.level, color: tickColor(log) };
-    out.push(current);
-    lastPx = px;
-  }
-  return out;
-}
-
-function Marker({ cluster }: { cluster: Cluster }) {
-  const severe = cluster.level !== LogLevel.Info;
+function Marker({ bin, log, onHover, onSeek }: { bin: LogBin; log: ReplayLog; onHover: (bin: LogBin | null) => void; onSeek: (time: number) => void }) {
+  const severe = log.level !== LogLevel.Info;
+  const color = logColorHex(log.color);
   return (
+    // A wide invisible hit area around the visible tick; stops the rail from starting a scrub.
     <span
-      title={cluster.count > 1 ? `${cluster.count} logs` : undefined}
-      className={cn('pointer-events-none absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-[2px]', severe ? 'h-3 w-[5px]' : 'h-2.5 w-[4px]')}
-      style={{ left: `${cluster.fraction * 100}%`, backgroundColor: cluster.color, boxShadow: cluster.level === LogLevel.Error ? '0 0 8px rgb(255 109 94 / 0.6)' : undefined }}
-    />
+      onPointerDown={(e) => e.stopPropagation()}
+      onPointerEnter={() => onHover(bin)}
+      onPointerLeave={() => onHover(null)}
+      onClick={() => onSeek(log.time)}
+      className="absolute inset-y-0 flex w-[9px] -translate-x-1/2 cursor-pointer items-center justify-center"
+      style={{ left: `${bin.fraction * 100}%` }}
+    >
+      <span
+        className={cn('rounded-[2px]', severe ? 'h-3 w-[5px]' : 'h-2.5 w-[4px]')}
+        style={{ backgroundColor: color, boxShadow: log.level === LogLevel.Error ? `0 0 8px ${color}` : undefined }}
+      />
+    </span>
   );
 }
 
-/** Disconnected spans and data gaps, as fractions of the session. */
-function sessionMarkers(replay: Replay, total: number): { gaps: number[]; offline: { from: number; to: number }[] } {
-  if (total <= 0) return { gaps: [], offline: [] };
-  const gaps: number[] = [];
-  const offline: { from: number; to: number }[] = [];
-  let down: number | null = null;
-  for (const e of replay.events) {
-    if (e.type === 'DataGap') gaps.push(Math.min(1, e.time / total));
-    else if (e.type === 'Disconnected' && e.time < total - 0.05) down = e.time;
-    else if (e.type === 'Connected' && down !== null) {
-      offline.push({ from: down / total, to: Math.min(1, e.time / total) });
-      down = null;
-    }
-  }
-  return { gaps, offline };
-}
-
-function activityBins(replay: Replay, total: number): { bins: number[]; max: number } | null {
-  if (total <= 0) return null;
-  const bins = new Array<number>(ACTIVITY_BINS).fill(0);
-  let any = false;
-  for (const e of replay.events) {
-    if (e.type !== 'Spawn' && e.type !== 'Delete') continue;
-    bins[Math.min(ACTIVITY_BINS - 1, Math.floor((e.time / total) * ACTIVITY_BINS))]++;
-    any = true;
-  }
-  return any ? { bins, max: Math.max(...bins) } : null;
+function MarkerTip({ bin, logs }: { bin: LogBin; logs: ReplayLog[] }) {
+  const log = logs[bin.worst];
+  const first = (log.text || '(empty)').split('\n')[0];
+  return (
+    <div
+      className="elevated pointer-events-none absolute bottom-full z-10 mb-1 w-max max-w-[min(320px,80vw)] -translate-x-1/2 rounded-[6px] border border-rule-strong bg-ink-3 px-2 py-1.5 font-mono text-[11px] text-fg"
+      style={{ left: `clamp(80px, ${bin.fraction * 100}%, calc(100% - 80px))` }}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="uppercase tracking-[0.04em]" style={{ color: logColorHex(log.color) }}>
+          {LEVEL_NAME[log.level] ?? 'Log'}
+          {bin.count > 1 && ` + ${bin.count - 1} more`}
+        </span>
+        <span className="tabular text-fg-3">{formatPlayhead(log.time, 3)}</span>
+      </div>
+      <p className="mt-1 line-clamp-3 break-words text-fg-2">{first}</p>
+    </div>
+  );
 }

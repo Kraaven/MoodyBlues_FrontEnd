@@ -5,6 +5,7 @@ import { SPEEDS, TICK_SECONDS, type Playback } from './playback';
 import { unityPath } from './unityPath';
 import { Dialog } from '../ui/Dialog';
 import { Kbd } from '../ui/States';
+import { useToast } from '../ui/Toast';
 import { useStudio } from './studioStore';
 import { windowActions } from './windows/windowStore';
 
@@ -14,7 +15,7 @@ const GENERAL: [string[], string][] = [
   [['Esc'], 'Clear the selection'],
   [['C'], "Copy the selection's Unity path"],
   [['G'], 'Grid on / off'],
-  [['Alt', '1–9'], 'Open the tool windows, in rail order'],
+  [['Alt', '1–9, 0'], 'Open the tool windows, in rail order'],
   [['\\'], 'Show / hide the dock'],
   [['?'], 'This list'],
 ];
@@ -37,6 +38,20 @@ function isTyping(target: EventTarget | null): boolean {
   return el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT';
 }
 
+/** A menu or dialog is open (Radix marks them with a role), so keys belong to it. */
+function overlayOpen(target: EventTarget | null): boolean {
+  if (target instanceof Element && target.closest('[role="dialog"],[role="alertdialog"],[role="menu"],[role="listbox"]')) return true;
+  return document.querySelector('[role="menu"], [role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]') !== null;
+}
+
+/** Alt+1..9 is windows 1-9 and Alt+0 the tenth, by physical key so Option+digit on a Mac works too. */
+function windowIndex(code: string): number {
+  const m = /^Digit(\d)$/.exec(code);
+  if (!m) return -1;
+  const d = Number(m[1]);
+  return d === 0 ? 9 : d - 1;
+}
+
 // oxlint-disable-next-line react/only-export-components -- the hook and its help dialog share one table
 export function useStudioShortcuts({
   scope,
@@ -49,15 +64,15 @@ export function useStudioShortcuts({
   playback: Playback | null;
   logs: readonly ReplayLog[];
 }) {
+  const notify = useToast();
   const windowKey = windows.join(',');
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || isTyping(e.target)) return;
+      if (e.defaultPrevented || e.ctrlKey || e.metaKey || isTyping(e.target) || overlayOpen(e.target)) return;
       const studio = useStudio.getState();
       if (e.altKey) {
-        const n = Number(e.key);
-        const id = windowKey.split(',')[n - 1];
-        if (!id || !Number.isInteger(n)) return;
+        const id = windowKey.split(',')[windowIndex(e.code)];
+        if (!id) return;
         windowActions(scope).toggle(id);
         e.preventDefault();
         return;
@@ -91,7 +106,10 @@ export function useStudioShortcuts({
           const node = studio.selected;
           const root = studio.player?.sceneRoot ?? studio.root;
           if (!node || !root) return;
-          void navigator.clipboard.writeText(unityPath(node, root)).catch(() => undefined);
+          navigator.clipboard.writeText(unityPath(node, root)).then(
+            () => notify('Unity path copied.'),
+            () => notify('Could not copy the path.', 'error'),
+          );
           break;
         }
         case '\\':
@@ -164,7 +182,7 @@ export function useStudioShortcuts({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [scope, windowKey, playback, logs]);
+  }, [scope, windowKey, playback, logs, notify]);
 }
 
 function Table({ title, rows }: { title: string; rows: [string[], string][] }) {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
@@ -24,8 +24,9 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-react';
-import { downloadWithProgress, useProject, useRecompileSession, useScene, useSession, useSessions } from '../api/queries';
-import { errorText } from '../api/client';
+import { downloadWithProgress, useProject, useRecompileSession, useScene, useSession, useSessions, useSharedSession } from '../api/queries';
+import { ApiError, errorText } from '../api/client';
+import { useAuth } from '../auth/useAuth';
 import type { SceneVersion, SessionDetail } from '../api/types';
 import { parseReplay } from '../viewer/replay/replayFile';
 import { useReplayBinding } from './binding';
@@ -35,19 +36,22 @@ import { StageSurface } from '../stage/StageSurface';
 import { idleView, useStage, type StageView } from '../stage/store';
 import { useStageRegion } from '../stage/useStageInset';
 import { useStageView } from '../stage/useStageView';
-import { Button, IconButton } from '../ui/Button';
+import { Button, IconButton, LinkButton } from '../ui/Button';
 import { versionLabel } from '../ui/Chip';
 import { ErrorState } from '../ui/States';
 import { useToast } from '../ui/Toast';
 import { cn } from '../ui/cn';
 import { formatAgo, formatCaptured, sceneTitle, sessionHandle } from '../lib/format';
+import { parseStartTime, viewLink } from '../lib/shareLink';
 import { useMediaQuery } from '../lib/useMediaQuery';
+import { ShareDialog } from '../share/ShareDialog';
+import { replayPath, sceneRef as sceneRefFor, type StudioSource } from './source';
 import { useWindowTitle } from '../lib/useWindowTitle';
 import { ShortcutsDialog, useStudioShortcuts } from './shortcuts';
 import { useStudio } from './studioStore';
 import { Timeline } from './Timeline';
 import { DetailsWindow } from './windows/DetailsWindow';
-import { EventsWindow } from './windows/EventsWindow';
+import { LogsWindow } from './windows/LogsWindow';
 import { GeometryWindow } from './windows/GeometryWindow';
 import { HierarchyWindow } from './windows/HierarchyWindow';
 import { InspectorWindow } from './windows/InspectorWindow';
@@ -65,44 +69,60 @@ import { FloatingWindows, WindowDock, WindowRail, type RailTool, type WindowDef 
  * `/scenes/:sceneId/view?version=N` inspects a version; `/scenes/:sceneId/sessions/:id?t=`
  * plays a session. Both are this page, so moving between them is a camera move
  * over the same loaded scene, never a reload.
+ *
+ * `/share/:token` is the same studio for an anonymous visitor: one public session, read only (see
+ * StudioSource). It has no project, scene list, recordings or session actions, and never calls an
+ * endpoint that needs sign-in.
  */
 export default function StudioPage() {
-  const { projectId, sceneId, sessionId } = useParams<{ projectId: string; sceneId: string; sessionId?: string }>();
+  const { projectId, sceneId, sessionId, token } = useParams<{ projectId: string; sceneId: string; sessionId?: string; token?: string }>();
   const [params] = useSearchParams();
+  const location = useLocation();
+  const { user } = useAuth();
   const notify = useToast();
   const phone = useMediaQuery('(max-width: 767px)');
   const project = useProject(projectId);
   const scene = useScene(projectId, sceneId);
   const session = useSession(sessionId);
+  const shared = useSharedSession(token);
+  const sharedView = token !== undefined;
+  const source = useMemo<StudioSource>(
+    () => (token !== undefined ? { kind: 'share', token } : { kind: 'owner', projectId: projectId ?? '', sceneId: sceneId ?? '', sessionId: sessionId ?? null }),
+    [token, projectId, sceneId, sessionId],
+  );
   const [playback] = useState(() => new Playback());
   const sceneState = useStage((s) => s.scene);
   const region = useRef<HTMLDivElement>(null);
   const [fullscreen, setFullscreen] = useState(false);
+  const [sharing, setSharing] = useState<{ time: number | null } | null>(null);
 
   const base = `/projects/${projectId}/scenes/${encodeURIComponent(sceneId ?? '')}`;
-  const scope = sessionId ? 'session' : 'scene';
+  const detail = sharedView ? shared.data?.session : session.data;
+  const hasSession = sharedView || Boolean(sessionId);
+  const scope = sharedView ? 'share' : sessionId ? 'session' : 'scene';
 
   // ---- Which scene version is on screen ------------------------------------------------------
   const versions = useMemo(() => (scene.data ? [scene.data.current, ...scene.data.archived].filter((v): v is SceneVersion => v !== null) : []), [scene.data]);
   const requested = Number(params.get('version'));
   const sessionVersion = session.data ? (versions.find((v) => v.hash === session.data.sceneHash) ?? null) : null;
   const version: SceneVersion | null = sessionId ? sessionVersion : (versions.find((v) => v.version === requested) ?? scene.data?.current ?? null);
-  const sceneRef = useMemo(
-    () => (projectId && sceneId && version ? { projectId, sceneId: scene.data?.sceneId ?? sceneId, hash: version.hash } : null),
-    [projectId, sceneId, version, scene.data?.sceneId],
-  );
+  const sceneRef = useMemo(() => {
+    if (sharedView) return detail ? sceneRefFor(source, detail.sceneId, detail.sceneHash) : null;
+    return projectId && sceneId && version ? sceneRefFor(source, scene.data?.sceneId ?? sceneId, version.hash) : null;
+  }, [sharedView, detail, source, projectId, sceneId, version, scene.data?.sceneId]);
 
   // ---- The replay -------------------------------------------------------------------------------
-  const status = session.data?.status;
+  const status = detail?.status;
   const ready = status === 'Ready';
+  const replayUrl = replayPath(source);
   const replay = useQuery({
-    queryKey: ['replay', sessionId, session.data?.compiledAtUtc],
-    enabled: Boolean(sessionId && ready),
+    queryKey: ['replay', replayUrl, detail?.compiledAtUtc],
+    enabled: Boolean(replayUrl && ready),
     staleTime: Infinity,
     gcTime: 60_000,
     queryFn: async ({ signal }) => {
       const buffer = await downloadWithProgress(
-        `/api/sessions/${encodeURIComponent(sessionId!)}/replay`,
+        replayUrl!,
         (received, total) => useStage.getState().setLoading('replay', { label: 'Downloading the replay', received, total }),
         signal,
       );
@@ -116,25 +136,23 @@ export default function StudioPage() {
   }, [replay.isError]);
 
   useEffect(() => {
-    useReplayBinding.getState().bind(replay.data && sessionId ? replay.data : null, replay.data && sessionId ? playback : null);
+    useReplayBinding.getState().bind(replay.data && hasSession ? replay.data : null, replay.data && hasSession ? playback : null);
     return () => useReplayBinding.getState().bind(null, null);
-  }, [replay.data, playback, sessionId]);
-
-  const detail = session.data;
+  }, [replay.data, playback, hasSession]);
 
   // Start at ?t= (a shared link), once per session.
   useEffect(() => {
-    const t = Number(params.get('t'));
-    playback.time = Number.isFinite(t) && t > 0 ? t : 0;
-    playback.playing = !(Number.isFinite(t) && t > 0);
+    const t = parseStartTime(params.get('t'));
+    playback.time = t;
+    playback.playing = t === 0;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, [replayUrl]);
 
   // ---- The Stage ---------------------------------------------------------------------------------
   const waiting = status === 'WaitingForScene';
   const fallbackRef = useMemo(
-    () => (projectId && scene.data?.current ? { projectId, sceneId: scene.data.sceneId, hash: scene.data.current.hash } : null),
-    [projectId, scene.data],
+    () => (!sharedView && projectId && scene.data?.current ? sceneRefFor(source, scene.data.sceneId, scene.data.current.hash) : null),
+    [sharedView, source, projectId, scene.data],
   );
   let view: StageView = idleView('studio');
   if (sceneRef) view = { id: 'studio', content: 'studio', scene: sceneRef, control: 'free', dim: 1, durationMs: 900 };
@@ -146,45 +164,51 @@ export default function StudioPage() {
   const sessions = useSessions(projectId, scene.data?.sceneId, version ? { version: version.version } : null);
   const sessionHref = useCallback((id: string) => `${base}/sessions/${encodeURIComponent(id)}`, [base]);
 
+  // With a session open the share button opens the sharing dialog; on a bare scene it copies the link to this version.
   const share = async () => {
-    const url = new URL(window.location.href);
-    if (sessionId) url.searchParams.set('t', playback.time.toFixed(2));
+    if (hasSession) {
+      setSharing({ time: playback.time });
+      return;
+    }
+    if (!version) return;
     try {
-      await navigator.clipboard.writeText(url.toString());
-      notify(sessionId ? 'Link to this moment copied.' : 'Link copied.');
+      await navigator.clipboard.writeText(viewLink(window.location.origin, base, version.version));
+      notify('Link copied.');
     } catch {
       notify('Could not copy the link.', 'error');
     }
   };
 
   // ---- Windows -----------------------------------------------------------------------------------
-  const name = scene.data ? sceneTitle(scene.data) : 'Scene';
+  const name = sharedView ? (shared.data?.sceneName ?? 'Scene') : scene.data ? sceneTitle(scene.data) : 'Scene';
   const sessionLabel = detail ? `${sessionHandle(detail.id)} / ${formatCaptured(detail.createdAtUtc)}` : '';
   const windows: WindowDef[] = useMemo(() => {
-    const list: WindowDef[] = [
-      {
-        id: 'recordings',
-        title: 'Recordings',
-        icon: ListVideo,
-        group: 'recordings',
-        render: () => <RecordingsWindow sessions={sessions.data} version={version?.version ?? null} currentId={sessionId ?? null} sessionHref={sessionHref} />,
-      },
-    ];
-    if (sessionId) {
+    const list: WindowDef[] = sharedView
+      ? []
+      : [
+          {
+            id: 'recordings',
+            title: 'Recordings',
+            icon: ListVideo,
+            group: 'recordings',
+            render: () => <RecordingsWindow sessions={sessions.data} version={version?.version ?? null} currentId={sessionId ?? null} sessionHref={sessionHref} />,
+          },
+        ];
+    if (hasSession) {
       list.push(
         {
-          id: 'events',
-          title: 'Events & logs',
+          id: 'logs',
+          title: 'Logs',
           icon: SquareTerminal,
           group: 'recordings',
           render: () =>
             replay.data ? (
-              <EventsWindow replay={replay.data} playback={playback} label={sessionLabel} />
+              <LogsWindow replay={replay.data} playback={playback} label={sessionLabel} />
             ) : (
-              <p className="px-6 py-6 text-[14px] text-fg-2">The events appear once the replay is built.</p>
+              <p className="px-6 py-6 text-[14px] text-fg-2">The logs appear once the replay is built.</p>
             ),
         },
-        { id: 'details', title: 'Session details', icon: Activity, group: 'recordings', render: () => (detail ? <DetailsWindow session={detail} replay={replay.data ?? null} sceneHref={base} /> : null) },
+        { id: 'details', title: 'Session details', icon: Activity, group: 'recordings', render: () => (detail ? <DetailsWindow session={detail} replay={replay.data ?? null} sceneHref={sharedView ? null : base} /> : null) },
       );
     }
     list.push(
@@ -196,8 +220,8 @@ export default function StudioPage() {
       { id: 'view', title: 'View settings', icon: SlidersHorizontal, group: 'scene', render: () => <ViewSettingsWindow scope={scope} /> },
       { id: 'raw', title: 'Raw data', icon: Braces, group: 'scene', render: () => <RawWindow session={detail ?? null} /> },
     );
-    return list.map((w, i) => ({ ...w, shortcut: `Alt+${i + 1}` }));
-  }, [name, version, scope, detail, sessionId, replay.data, playback, sessionLabel, base, sessions.data, sessionHref]);
+    return list.map((w, i) => ({ ...w, shortcut: i < 10 ? `Alt+${(i + 1) % 10}` : undefined }));
+  }, [name, version, scope, detail, sharedView, hasSession, sessionId, replay.data, playback, sessionLabel, base, sessions.data, sessionHref]);
 
   useStudioShortcuts({ scope, windows: windows.map((w) => w.id), playback: replay.data ? playback : null, logs: replay.data?.logs ?? [] });
 
@@ -209,8 +233,8 @@ export default function StudioPage() {
 
   useWindowTitle(detail ? `${sessionHandle(detail.id)} · ${name}` : `${name} in 3D`);
 
-  const error = project.error ?? scene.error ?? session.error;
-  const showTimeline = Boolean(sessionId);
+  const error = sharedView ? shared.error : (project.error ?? scene.error ?? session.error);
+  const showTimeline = hasSession;
   const backHref = version && !version.isCurrent ? `${base}?version=${version.version}` : base;
 
   const tools: RailTool[] = [
@@ -228,6 +252,8 @@ export default function StudioPage() {
         ]),
   ];
 
+  if (sharedView && shared.error instanceof ApiError && shared.error.status === 404) return <LinkUnavailable signedIn={user !== null} />;
+
   return (
     <div className="fixed inset-0 flex overflow-hidden">
       <div className="relative min-w-0 flex-1">
@@ -243,33 +269,51 @@ export default function StudioPage() {
 
         <div className="pointer-events-none absolute inset-0 z-10 p-4 sm:p-6">
           {/* Top left: where you are, and the way back. */}
-          <Link
-            to={backHref}
-            className="glass group pointer-events-auto absolute left-4 top-4 flex h-14 w-[min(320px,calc(100%-88px))] items-center gap-3.5 rounded-[10px] border border-rule-strong/60 px-4 transition-colors hover:border-fg-3/60 sm:left-6 sm:top-6"
-          >
-            <ArrowLeft className="h-5 w-5 shrink-0 text-fg transition-transform group-hover:-translate-x-0.5" />
-            <span className="min-w-0">
-              <span className="block truncate text-[15px] font-medium leading-5 text-fg">{name}</span>
-              <span className="block truncate text-[12px] text-fg-3">
-                {detail ? (
-                  <>
-                    <span className="font-mono text-accent">{sessionHandle(detail.id)}</span> · {formatCaptured(detail.createdAtUtc)}
-                  </>
-                ) : (
-                  <>
-                    {project.data?.name ?? '…'} · {version ? versionLabel(version.version) : '…'}
-                    {version && !version.isCurrent && ' · archived'}
-                  </>
-                )}
+          {(() => {
+            const cardClass = 'glass group pointer-events-auto absolute left-4 top-4 flex h-14 w-[min(320px,calc(100%-88px))] items-center gap-3.5 rounded-[10px] border border-rule-strong/60 px-4 sm:left-6 sm:top-6';
+            const label = (
+              <span className="min-w-0">
+                <span className="block truncate text-[15px] font-medium leading-5 text-fg">{name}</span>
+                <span className="block truncate text-[12px] text-fg-3">
+                  {detail ? (
+                    <>
+                      {sharedView && <>{shared.data?.projectName} · </>}
+                      <span className="font-mono text-accent">{sessionHandle(detail.id)}</span> · {formatCaptured(detail.createdAtUtc)}
+                    </>
+                  ) : (
+                    <>
+                      {project.data?.name ?? '…'} · {version ? versionLabel(version.version) : '…'}
+                      {version && !version.isCurrent && ' · archived'}
+                    </>
+                  )}
+                </span>
               </span>
-            </span>
-          </Link>
+            );
+            return sharedView ? (
+              <div className={cardClass}>{label}</div>
+            ) : (
+              <Link to={backHref} className={cn(cardClass, 'transition-colors hover:border-fg-3/60')}>
+                <ArrowLeft className="h-5 w-5 shrink-0 text-fg transition-transform group-hover:-translate-x-0.5" />
+                {label}
+              </Link>
+            );
+          })()}
 
-          {/* Top right: share. */}
+          {/* Top right: share, or for a visitor, the way to sign in. */}
           <div className="pointer-events-auto absolute right-4 top-4 sm:right-6 sm:top-6">
-            <IconButton label={sessionId ? 'Copy a link to this moment' : 'Copy a link'} className="glass h-11 w-11 border border-rule-strong/60" onClick={() => void share()}>
-              <Share className="h-5 w-5" strokeWidth={1.6} />
-            </IconButton>
+            {sharedView ? (
+              !user && (
+                <LinkButton to="/login" state={{ from: location.pathname + location.search }} variant="secondary" className="glass h-11 border-rule-strong/60">
+                  Sign in
+                </LinkButton>
+              )
+            ) : (
+              (hasSession || version) && (
+                <IconButton label={hasSession ? 'Share this recording' : 'Copy a link'} className="glass h-11 w-11 border border-rule-strong/60" onClick={() => void share()}>
+                  <Share className="h-5 w-5" strokeWidth={1.6} />
+                </IconButton>
+              )
+            )}
           </div>
 
           {/* Right: the tools. */}
@@ -285,9 +329,11 @@ export default function StudioPage() {
             error={error ?? replay.error ?? null}
             sceneError={sceneState.status === 'error' && view.content !== 'none' ? sceneState.error : null}
             session={detail ?? null}
-            noVersion={Boolean(scene.data && !version && !sessionId)}
+            readOnly={sharedView}
+            noVersion={Boolean(scene.data && !version && !hasSession)}
             onRetry={() => {
               void session.refetch();
+              void shared.refetch();
               void replay.refetch();
               useStage.getState().retryScene();
             }}
@@ -295,7 +341,7 @@ export default function StudioPage() {
 
           <SelectionCard timelineShown={showTimeline} />
 
-          {sessionId && (
+          {hasSession && (
             <div className="pointer-events-auto absolute inset-x-4 bottom-4 sm:inset-x-6">
               <Timeline playback={playback} replay={replay.data ?? null} disabled={!replay.data || sceneState.status !== 'ready'} />
             </div>
@@ -310,7 +356,8 @@ export default function StudioPage() {
       </div>
 
       <WindowDock scope={scope} windows={windows} />
-      <ShortcutsDialog playback={Boolean(sessionId)} />
+      <ShortcutsDialog playback={hasSession} />
+      {sharing && detail && !sharedView && <ShareDialog target={detail} time={sharing.time} onClose={() => setSharing(null)} />}
     </div>
   );
 }
@@ -345,12 +392,15 @@ function CentreState({
   error,
   sceneError,
   session,
+  readOnly,
   noVersion,
   onRetry,
 }: {
   error: unknown;
   sceneError: unknown;
   session: SessionDetail | null;
+  /** A shared view: nothing to fix or rebuild from here. */
+  readOnly: boolean;
   noVersion: boolean;
   onRetry: () => void;
 }) {
@@ -398,6 +448,7 @@ function CentreState({
             title="The replay could not be built"
             body={session.errorMessage ?? 'The server did not say why.'}
             action={
+              readOnly ? undefined : (
               <Button
                 variant="secondary"
                 loading={recompile.isPending}
@@ -412,6 +463,7 @@ function CentreState({
                 <RotateCw className="h-4 w-4" />
                 Rebuild replay
               </Button>
+              )
             }
           />
         );
@@ -430,6 +482,25 @@ function StateCard({ icon, title, body, action, working }: { icon: React.ReactNo
       <div className="mt-2.5 text-[14px] leading-6 text-fg-2">{body}</div>
       {working && <div className="sweep mx-auto mt-6 h-[3px] w-48 rounded-full bg-ink-4" />}
       {action && <div className="mt-6">{action}</div>}
+    </div>
+  );
+}
+
+/** The share link is private, reset, deleted or mistyped; the server answers all of those the same way. */
+function LinkUnavailable({ signedIn }: { signedIn: boolean }) {
+  useWindowTitle('Link not available');
+  return (
+    <div className="flex min-h-dvh items-center justify-center p-6">
+      <StateCard
+        icon={<TriangleAlert className="h-5 w-5 text-caution" />}
+        title="This link is not available"
+        body="It may have been made private, reset or deleted by its owner, or the address is incomplete. Ask whoever sent it for a new link."
+        action={
+          <LinkButton to={signedIn ? '/projects' : '/login'} variant="secondary">
+            {signedIn ? 'Go to your projects' : 'Sign in'}
+          </LinkButton>
+        }
+      />
     </div>
   );
 }

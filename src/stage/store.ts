@@ -10,10 +10,12 @@ interface CameraPose {
   fov?: number;
 }
 
-/** One uploaded version of a scene: exactly what the backend keys its GLB by. */
+/**
+ * One uploaded version of a scene: where its GLB is served from (an owner path or a share path,
+ * see studio/source.ts) and the content hash that identifies the version.
+ */
 export interface SceneRef {
-  projectId: string;
-  sceneId: string;
+  url: string;
   hash: string;
 }
 
@@ -65,7 +67,7 @@ interface SceneState {
 
 /** What a loaded scene version contains, measured once it is in the Stage; read by the pages. */
 interface SceneSummary {
-  /** sceneKey() of the version it describes. */
+  /** The scene URL of the version it describes. */
   key: string;
   nodes: number;
   meshes: number;
@@ -97,10 +99,6 @@ export interface Inset {
 
 export const NO_INSET: Inset = { left: 0, right: 0, top: 0, bottom: 0 };
 
-/** The identity of a scene version, as the scene cache and the summaries key it. */
-export function refKey(ref: SceneRef): string {
-  return `${ref.projectId}/${ref.sceneId}/${ref.hash}`;
-}
 export const DEFAULT_CAMERA: Required<CameraPose> = { position: [0, 9, 30], target: [0, -1, 0], fov: 50 };
 
 interface StageState {
@@ -113,7 +111,7 @@ interface StageState {
   /** Downloads in progress, by name (the scene and the replay can load together). */
   loading: Record<string, LoadingState>;
   scene: SceneState;
-  /** Measured contents of scene versions loaded in this tab, by sceneKey. */
+  /** Measured contents of scene versions loaded in this tab, by scene URL. */
   summaries: Record<string, SceneSummary>;
   setSummary: (summary: SceneSummary) => void;
   /**

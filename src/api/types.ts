@@ -119,6 +119,8 @@ export interface SessionSummary {
   errorLogCount: number;
   /** Null until the replay is built. */
   activity: SessionActivity | null;
+  isPublic: boolean;
+  shareToken: string | null;
 }
 
 export interface SessionDetail {
@@ -149,6 +151,22 @@ export interface SessionDetail {
   errorLogCount: number;
   /** Null until the replay is built. */
   activity: SessionActivity | null;
+  isPublic: boolean;
+  shareToken: string | null;
+}
+
+/** A session's public link state. The token is stable while public and replaced by a reset. */
+export interface SharingResponse {
+  isPublic: boolean;
+  shareToken: string | null;
+}
+
+/** What an anonymous visitor gets for a share link. The session's own share fields are not meaningful there. */
+export interface SharedSessionResponse {
+  session: SessionDetail;
+  projectName: string;
+  sceneName: string;
+  sceneVersion: number | null;
 }
 
 /** Statuses that can still change on their own, so lists showing them keep refreshing. */

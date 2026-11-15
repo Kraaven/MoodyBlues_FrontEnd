@@ -42,6 +42,8 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<AuthPage mode="login" />} />
           <Route path="/register" element={<AuthPage mode="register" />} />
+          {/* Public and anonymous: one shared session in the studio, read only. */}
+          <Route path="/share/:token" element={<StudioPage />} />
 
           <Route element={<ProtectedRoute />}>
             <Route path="/projects" element={<LobbyPage />} />

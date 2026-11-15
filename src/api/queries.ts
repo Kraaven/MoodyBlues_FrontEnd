@@ -9,6 +9,8 @@ import {
   type SceneDetail,
   type SessionDetail,
   type SessionSummary,
+  type SharedSessionResponse,
+  type SharingResponse,
 } from './types';
 
 /**
@@ -37,6 +39,7 @@ export const keys = {
   sessions: (projectId: string, sceneId: string, filter: SessionFilter) => ['sessions', projectId, sceneId, filter] as const,
   sceneSessions: (projectId: string, sceneId: string) => ['sessions', projectId, sceneId] as const,
   session: (sessionId: string) => ['session', sessionId] as const,
+  shared: (token: string) => ['share', token] as const,
 };
 
 type SessionFilter = { version: number } | { awaitingScene: true };
@@ -183,6 +186,43 @@ export function useSession(sessionId: string | undefined) {
       const status = query.state.data?.status;
       return status && CHANGING_STATUSES.has(status) ? 4_000 : false;
     },
+  });
+}
+
+/** An anonymous visitor's view of a public session. A bad, private or reset token is a 404. */
+export function useSharedSession(token: string | undefined) {
+  return useQuery({
+    queryKey: keys.shared(token ?? ''),
+    queryFn: () => apiJson<SharedSessionResponse>(`/api/share/${enc(token!)}`),
+    enabled: Boolean(token),
+    refetchInterval: (query) => {
+      const status = query.state.data?.session.status;
+      return status && CHANGING_STATUSES.has(status) ? 4_000 : false;
+    },
+  });
+}
+
+/** Writes a sharing change into the session's detail and refreshes the lists that show the Public badge. */
+function applySharing(client: QueryClient, sessionId: string, sharing: SharingResponse) {
+  client.setQueryData<SessionDetail>(keys.session(sessionId), (old) => (old ? { ...old, ...sharing } : old));
+  void client.invalidateQueries({ queryKey: keys.session(sessionId) });
+  void client.invalidateQueries({ queryKey: ['sessions'] });
+}
+
+export function useSetSharing(sessionId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (isPublic: boolean) => apiJson<SharingResponse>(`/api/sessions/${enc(sessionId)}/sharing`, { method: 'PUT', body: { isPublic } }),
+    onSuccess: (sharing) => applySharing(client, sessionId, sharing),
+  });
+}
+
+/** Replaces the share token: the old link stops working at once. */
+export function useResetShare(sessionId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiJson<SharingResponse>(`/api/sessions/${enc(sessionId)}/sharing/reset`, { method: 'POST' }),
+    onSuccess: (sharing) => applySharing(client, sessionId, sharing),
   });
 }
 

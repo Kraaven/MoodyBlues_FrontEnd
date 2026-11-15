@@ -6,7 +6,7 @@ import { IconButton } from '../../ui/Button';
 import { Tooltip } from '../../ui/Tooltip';
 import { cn } from '../../ui/cn';
 import { useMediaQuery } from '../../lib/useMediaQuery';
-import { clampRect, isShown, type WindowRect } from './windowLayout';
+import { clampRect, fromFrame, isShown, toFrame, type FrameRect } from './windowLayout';
 import { useWindowLayout, useWindows, windowActions } from './windowStore';
 
 export interface WindowDef {
@@ -150,17 +150,17 @@ export function FloatingWindows({ scope, windows }: { scope: string; windows: Wi
     <div ref={ref} className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
       {phone
         ? open.slice(-1).map((w) => <PhoneSheet key={w.id} scope={scope} window={w} />)
-        : open.map((w, z) => <FloatingWindow key={w.id} scope={scope} window={w} rect={clampRect(layout.rects[w.id] ?? { x: 24, y: 120, w: 380, h: 520 }, bounds)} bounds={bounds} z={z} />)}
+        : open.map((w, z) => <FloatingWindow key={w.id} scope={scope} window={w} rect={layout.rects[w.id] ? toFrame(layout.rects[w.id], bounds) : { x: 24, y: 120, w: 380, h: 520 }} bounds={bounds} z={z} />)}
     </div>
   );
 }
 
 const STEP = 16;
 
-function FloatingWindow({ scope, window: w, rect, bounds, z }: { scope: string; window: WindowDef; rect: WindowRect; bounds: { w: number; h: number }; z: number }) {
+function FloatingWindow({ scope, window: w, rect, bounds, z }: { scope: string; window: WindowDef; rect: FrameRect; bounds: { w: number; h: number }; z: number }) {
   const actions = windowActions(scope);
-  const [live, setLive] = useState<WindowRect | null>(null);
-  const gesture = useRef<{ kind: 'move' | 'resize'; x: number; y: number; start: WindowRect } | null>(null);
+  const [live, setLive] = useState<FrameRect | null>(null);
+  const gesture = useRef<{ kind: 'move' | 'resize'; x: number; y: number; start: FrameRect } | null>(null);
   const shown = live ?? rect;
 
   const begin = (kind: 'move' | 'resize') => (e: React.PointerEvent) => {
@@ -177,7 +177,7 @@ function FloatingWindow({ scope, window: w, rect, bounds, z }: { scope: string; 
     setLive(clampRect(g.kind === 'move' ? { ...g.start, x: g.start.x + dx, y: g.start.y + dy } : { ...g.start, w: g.start.w + dx, h: g.start.h + dy }, bounds));
   };
   const end = () => {
-    if (gesture.current && live) actions.move(w.id, live);
+    if (gesture.current && live) actions.move(w.id, fromFrame(live, bounds));
     gesture.current = null;
     setLive(null);
   };
@@ -186,7 +186,7 @@ function FloatingWindow({ scope, window: w, rect, bounds, z }: { scope: string; 
     const delta = { ArrowLeft: [-STEP, 0], ArrowRight: [STEP, 0], ArrowUp: [0, -STEP], ArrowDown: [0, STEP] }[e.key];
     if (!delta) return;
     e.preventDefault();
-    actions.move(w.id, clampRect(e.shiftKey ? { ...rect, w: rect.w + delta[0], h: rect.h + delta[1] } : { ...rect, x: rect.x + delta[0], y: rect.y + delta[1] }, bounds));
+    actions.move(w.id, fromFrame(clampRect(e.shiftKey ? { ...rect, w: rect.w + delta[0], h: rect.h + delta[1] } : { ...rect, x: rect.x + delta[0], y: rect.y + delta[1] }, bounds), bounds));
   };
 
   return (

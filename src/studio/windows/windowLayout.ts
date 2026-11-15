@@ -6,8 +6,22 @@
  * while it is closed, per kind of view, and must never leave a window out of reach.
  */
 
-export interface WindowRect {
+/** A window's place on screen, in pixels from the left of the floating area. */
+export interface FrameRect {
   x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * A window's remembered place. Horizontally it is anchored to the nearer edge of the floating area:
+ * `offset` is the gap to the left edge (anchor 'left') or from the window's right side to the right
+ * edge (anchor 'right'). A right-anchored window therefore follows the tool rail when the dock opens.
+ */
+export interface WindowRect {
+  anchor: 'left' | 'right';
+  offset: number;
   y: number;
   w: number;
   h: number;
@@ -50,7 +64,7 @@ export function clampDockWidth(width: number): number {
 }
 
 /** Fits a window inside `bounds`: no bigger than it, and with its header always reachable. */
-export function clampRect(rect: WindowRect, bounds: Bounds, min: Bounds = WINDOW_MIN): WindowRect {
+export function clampRect(rect: FrameRect, bounds: Bounds, min: Bounds = WINDOW_MIN): FrameRect {
   const w = Math.round(Math.min(Math.max(rect.w, Math.min(min.w, bounds.w)), Math.max(bounds.w, 1)));
   const h = Math.round(Math.min(Math.max(rect.h, Math.min(min.h, bounds.h)), Math.max(bounds.h, 1)));
   const x = Math.round(Math.min(Math.max(rect.x, GRAB - w), Math.max(bounds.w - GRAB, 0)));
@@ -58,11 +72,24 @@ export function clampRect(rect: WindowRect, bounds: Bounds, min: Bounds = WINDOW
   return { x, y, w, h };
 }
 
+/** Where a remembered window is on screen right now, kept inside `bounds`. */
+export function toFrame(rect: WindowRect, bounds: Bounds): FrameRect {
+  const x = rect.anchor === 'right' ? bounds.w - rect.offset - rect.w : rect.offset;
+  return clampRect({ x, y: rect.y, w: rect.w, h: rect.h }, bounds);
+}
+
+/** Remembers an on-screen place, anchored to whichever edge the window's centre is nearer. */
+export function fromFrame(frame: FrameRect, bounds: Bounds): WindowRect {
+  const anchor = frame.x + frame.w / 2 > bounds.w / 2 ? 'right' : 'left';
+  const offset = Math.round(anchor === 'right' ? bounds.w - frame.x - frame.w : frame.x);
+  return { anchor, offset, y: frame.y, w: frame.w, h: frame.h };
+}
+
 /** Where a window opens the first time: beside the rail, each further one a little lower and to the left. */
 function defaultRect(bounds: Bounds, existing: number): WindowRect {
   const w = Math.min(WINDOW_DEFAULT.w, Math.max(WINDOW_MIN.w, bounds.w - RAIL_ROOM - 32));
   const h = Math.min(WINDOW_DEFAULT.h, Math.max(WINDOW_MIN.h, bounds.h - 140));
-  return clampRect({ x: bounds.w - RAIL_ROOM - w - 16 - existing * 28, y: 112 + existing * 28, w, h }, bounds);
+  return { anchor: 'right', offset: RAIL_ROOM + 16 + existing * 28, y: 112 + existing * 28, w, h };
 }
 
 const without = (list: string[], id: string) => list.filter((x) => x !== id);
@@ -85,7 +112,7 @@ export function isShown(layout: ScopeLayout, id: string): boolean {
 export function openWindow(layout: ScopeLayout, id: string, bounds: Bounds): ScopeLayout {
   if (layout.docked.includes(id)) return { ...layout, dockOpen: true, dockActive: id };
   if (layout.open.includes(id)) return { ...layout, open: [...without(layout.open, id), id] };
-  const rect = clampRect(layout.rects[id] ?? defaultRect(bounds, layout.open.length), bounds);
+  const rect = layout.rects[id] ?? defaultRect(bounds, layout.open.length);
   return { ...layout, open: [...layout.open, id], rects: { ...layout.rects, [id]: rect } };
 }
 
@@ -113,7 +140,7 @@ export function dockWindow(layout: ScopeLayout, id: string): ScopeLayout {
 /** Pop a docked window out into a window over the view. */
 export function floatWindow(layout: ScopeLayout, id: string, bounds: Bounds): ScopeLayout {
   const removed = closeWindow(layout, id);
-  const rect = clampRect(layout.rects[id] ?? defaultRect(bounds, removed.open.length), bounds);
+  const rect = layout.rects[id] ?? defaultRect(bounds, removed.open.length);
   return { ...removed, open: [...removed.open, id], rects: { ...removed.rects, [id]: rect } };
 }
 

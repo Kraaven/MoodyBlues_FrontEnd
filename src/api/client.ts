@@ -55,7 +55,7 @@ function apiUrl(path: string): string {
 interface RequestOptions {
   method?: string;
   body?: unknown;
-  /** False for sign-in, registration and the session probe: a 401 there is an answer, not an expiry. */
+  /** False for sign-in, registration, the session probe and anonymous share paths: a 401 there is an answer, not an expiry. */
   auth?: boolean;
   signal?: AbortSignal;
 }
@@ -90,8 +90,13 @@ export function refreshSession(): Promise<boolean> {
   return refreshing;
 }
 
+/** Share links are served without sign-in: a 401 or 404 there is an answer, never an expiry to refresh or sign out over. */
+export function isAnonymousPath(path: string): boolean {
+  return path.startsWith('/api/share/');
+}
+
 /** Raw fetch with cookies: for binary downloads. Throws ApiError on failure. */
-export async function apiFetch(path: string, { method = 'GET', body, auth = true, signal }: RequestOptions = {}): Promise<Response> {
+export async function apiFetch(path: string, { method = 'GET', body, auth = !isAnonymousPath(path), signal }: RequestOptions = {}): Promise<Response> {
   let res: Response;
   try {
     res = await send(path, method, body, signal);

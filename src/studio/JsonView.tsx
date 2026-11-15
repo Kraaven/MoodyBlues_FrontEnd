@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Copy } from 'lucide-react';
 import { IconButton } from '../ui/Button';
 import { cn } from '../ui/cn';
+import { useToast } from '../ui/Toast';
 
 /**
  * Raw data: the escape hatch to the truth, so anything the interface says can be checked against
  * what the server or the file actually holds. Read only, collapsible, copyable.
  */
 export function JsonView({ value, label }: { value: unknown; label: string }) {
+  const notify = useToast();
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
@@ -16,7 +18,7 @@ export function JsonView({ value, label }: { value: unknown; label: string }) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
-      /* the clipboard is not available here */
+      notify('Could not copy the data.', 'error');
     }
   };
 

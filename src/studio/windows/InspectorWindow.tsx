@@ -7,6 +7,7 @@ import { unityPath } from '../unityPath';
 import { nodeType, triangleCount } from '../../inspector/inspection';
 import { Button, IconButton } from '../../ui/Button';
 import { cn } from '../../ui/cn';
+import { useToast } from '../../ui/Toast';
 import { formatCount, formatPlayhead } from '../../lib/format';
 import { useStudio } from '../studioStore';
 import { kindOf, NodeIcon, ObjectHeading, Row, Rule, SectionTitle, WindowBody } from './parts';
@@ -87,6 +88,7 @@ function TransformTable({ node, live }: { node: THREE.Object3D; live: boolean })
 
 /** What is selected: its name, its ObjectID, its live transform and where it sits in Unity's hierarchy. */
 export function InspectorWindow() {
+  const notify = useToast();
   const selected = useStudio((s) => s.selected);
   const selectedId = useStudio((s) => s.selectedId);
   const player = useStudio((s) => s.player);
@@ -180,7 +182,12 @@ export function InspectorWindow() {
           <SectionTitle>Unity path</SectionTitle>
           <button
             type="button"
-            onClick={() => void navigator.clipboard.writeText(path).catch(() => undefined)}
+            onClick={() =>
+              navigator.clipboard.writeText(path).then(
+                () => notify('Unity path copied.'),
+                () => notify('Could not copy the path.', 'error'),
+              )
+            }
             title="Copy the path"
             className="group flex w-full items-start gap-2 rounded-[6px] bg-ink-0/50 px-3 py-2.5 text-left font-mono text-[12px] leading-5 text-fg-2 hover:text-fg"
           >

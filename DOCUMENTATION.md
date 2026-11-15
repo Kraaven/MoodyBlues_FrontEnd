@@ -51,6 +51,10 @@ README "Dashboard sign-in"). Script cannot read them, and nothing about the sess
   failed at the same moment (the backend rotates the refresh token on each use, so parallel
   refreshes would sign the user out), then retries once. If the refresh fails, the user is signed
   out with "Your session expired".
+- **Returning after sign-in.** `ProtectedRoute` sends a signed-out visitor to `/login` with the
+  page they wanted in the route state, and sign-in returns them there. `safeRedirect`
+  (`src/auth/redirect.ts`) accepts only same-origin relative paths (not `//...` or with a
+  backslash) and falls back to `/projects`.
 - Sign out calls `POST /auth/logout`, which revokes the refresh token and clears both cookies.
 - **Hosting.** When the dashboard is on a different site from the API (a `*.vercel.app` address
   and your own domain, say), the cookies are third-party cookies, which Safari blocks. Host the
@@ -193,16 +197,20 @@ directly. React re-renders on user actions and, for the current log row, about 8
   selection outline via `@react-three/postprocessing`, only while something is selected), frame
   all / frame selected, follow camera.
 - **Windows** (`src/studio/windows/`): each tool is a window that is closed, floating over the 3D
-  view, or a tab in the dock at the right edge; the rail of icons opens them (Alt+1 to Alt+9). On
-  a phone each opens as a sheet from the bottom. Where each floating window sits is remembered per
-  kind of view (`scene` or `session`) in `localStorage` (`moodyblues.windows.v2`); the layout rules
-  are pure functions in `windowLayout.ts`, with tests. The view settings (grid, shadows,
+  view, or a tab in the dock at the right edge; the rail of icons opens them (Alt+1 to Alt+9, and
+  Alt+0 for the tenth). On a phone each opens as a sheet from the bottom. Where each floating
+  window sits is remembered per kind of view (`scene`, `session` or `share`) in `localStorage`
+  (`moodyblues.windows.v3`). A remembered place is a `WindowRect { anchor, offset, y, w, h }`
+  (`windowLayout.ts`): horizontally the window is anchored to the nearer edge, `offset` being the
+  gap to that edge, and `toFrame` / `fromFrame` convert to and from pixels. A right-anchored
+  window therefore follows the rail when the dock opens. The layout rules are pure functions, with
+  tests. The view settings (grid, shadows,
   wireframe, axes, field of view) are kept under `moodyblues.view.v1`.
 
   | Window | Content |
   |---|---|
   | Recordings | The sessions of the version on screen; choosing one plays it on this scene |
-  | Events & logs | Logs and the replay's own events (spawns, deletes, disconnects, gaps) in time order; filters, search, virtualized, follows the playhead; every row is a seek. Only with a session |
+  | Logs (`LogsWindow.tsx`) | The session's logs only, in time order, each in its own Unity colour; All / Info / Warnings / Errors filters, search, virtualized, follows the playhead; every row is a seek. Only with a session |
   | Session details | Recording health (the client's counters, including rotation widenings), session facts, rebuild, download, delete. Only with a session |
   | Hierarchy | The scene's tree, searchable; during a replay the recorded objects as they are now |
   | Inspector | The selected object: name, ObjectID, live local and world transform, Unity path |
@@ -211,11 +219,36 @@ directly. React re-renders on user actions and, for the current log row, about 8
   | Raw data | The selection, the session record from the server, or the file's glTF JSON, as collapsible JSON |
 
 - **Timeline** (`studio/Timeline.tsx`, only with a session): transport, speeds 0.25-4x,
-  previous/next log, the rail with every log marked by severity (in the log's Unity colour,
-  clustered when closer than 4 px), disconnected spans, data gaps, and a spawn/delete activity
-  strip.
-- **Keyboard**: `studio/shortcuts.tsx` holds the table; `?` shows it.
-- **Share** copies the page URL, with `?t=` set to the playhead when a session is open.
+  previous/next log, and the rail with the Info, Warning and Error logs marked. Markers are
+  binned by pixel (`studio/logMarkers.ts`, one bin per 5 px, so the DOM holds a bounded number),
+  a bin is shown as its most severe log in that log's colour (`logColorHex(log.color)`), and a
+  marker can be hovered for a tip and clicked to seek there.
+- **Keyboard**: `studio/shortcuts.tsx` holds the table; `?` shows it. Alt+1...9 and Alt+0 match
+  `e.code` (the physical key, so Option+digit works on a Mac), and shortcuts are ignored while a
+  menu or dialog is open.
+- **Share** (top right). With a session open it opens the ShareDialog (next section); on a bare
+  scene it copies the owner-only link to that version, `<scene>/view?version=N`, which reopens the
+  same version.
+
+### Public share links (`src/share/`, `src/studio/source.ts`)
+
+Each recording is **Private** (the default) or **Public**. The ShareDialog
+(`share/ShareDialog.tsx`, opened from the studio's share button and the recordings table) has a
+Public toggle, the link in a copy field, an optional "Start at mm:ss" that appends `?t=<seconds>`
+to the link, and **Reset link**, which replaces the token so the old link stops working at once.
+A Public badge marks public recordings in the recordings table and the Recordings window.
+
+- `PUT /api/sessions/{id}/sharing` (`{ isPublic }`) and `POST /api/sessions/{id}/sharing/reset`
+  both answer `{ isPublic, shareToken }`, which is written into the cached session detail.
+- `/share/:token` is a public route (not behind `ProtectedRoute`): the same `StudioPage`, for an
+  anonymous visitor, read only. It loads `GET /api/share/{token}` (session, project and scene
+  names, scene version), then `/api/share/{token}/replay` and `/api/share/{token}/scene`. A
+  visitor sees the logs, details, hierarchy and inspection windows, but no Recordings window, and
+  can change nothing. A 401 or 404 on `/api/share/` paths is an answer, never a session expiry; an
+  unknown or revoked token shows "link unavailable". `?t=` starts the replay at that time.
+- `StudioSource` (`studio/source.ts`) is where the studio's data comes from: `owner` (project,
+  scene and session ids, with the signed-in paths) or `share` (a token). It builds the replay path
+  and the scene file reference for either. Link builders are in `lib/shareLink.ts`.
 
 Texture previews are drawn from the decoded image; textures the browser cannot draw (KTX2) are
 rendered through the Stage's renderer (`inspector/thumbnails.ts`; `?thumbnails=gpu` forces that
@@ -228,11 +261,12 @@ glb-viewer-core (MIT) and re-implemented here; it is not a dependency.
 src/
   api/          client.ts (fetch with cookies, CSRF header, refresh and retry on 401), types.ts (contracts),
                 queries.ts (TanStack Query hooks, polling, mutations, scene file download)
-  auth/         AuthProvider, ProtectedRoute, useAuth
+  auth/         AuthProvider, ProtectedRoute, useAuth, redirect.ts (safeRedirect)
+  share/        ShareDialog
   ui/           the component kit on Radix (Button, Dialog, Menu, Tabs, Toast, Chip, ...), ActivityGlyph, SnapshotImage
   stage/        the root canvas: store (views, content types, camera), StageHost, CameraRig, DemoScene,
                 scene cache (sceneAssets, sceneSource), snapshots, StageSurface, StagePreloader
-  studio/       the 3D studio: page, Stage content, playback clock, replay binding, timeline, shortcuts,
+  studio/       the 3D studio: page, Stage content, playback clock, replay binding, timeline, logMarkers, source (StudioSource), shortcuts,
                 logNav, unityPath, studioStore, windows/ (the tool windows and their layout)
   inspector/    inspection.ts (reads a loaded scene), thumbnails.ts
   shell/        WorkspaceLayout and TopBar (page frame), ConnectionDialog, SetupGuide
