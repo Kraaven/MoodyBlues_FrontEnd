@@ -18,6 +18,7 @@ const GENERAL: [string[], string][] = [
   [['G'], 'Grid on / off'],
   [['V'], 'Next exported camera'],
   [['Shift', 'V'], 'Free camera'],
+  [['P'], 'First person / follow, on the focused camera'],
   [['Alt', '1–9, 0'], 'Open the tool windows, in rail order'],
   [['\\'], 'Show / hide the dock'],
   [['?'], 'This list'],
@@ -105,6 +106,11 @@ export function useStudioShortcuts({
         }
         case 'V':
           studio.setFocusCamera(null);
+          break;
+        case 'p':
+        case 'P':
+          if (studio.focusCameraId === null) return;
+          studio.setCameraMode(studio.focusCameraId, studio.cameraMode === 'firstPerson' ? 'follow' : 'firstPerson');
           break;
         case 'g':
         case 'G':

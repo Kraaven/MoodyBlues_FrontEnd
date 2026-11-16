@@ -99,6 +99,16 @@ export interface Inset {
 
 export const NO_INSET: Inset = { left: 0, right: 0, top: 0, bottom: 0 };
 
+const DEBUG_OPEN_KEY = 'moodyblues.debug.open';
+
+function readDebugOpen(): boolean {
+  try {
+    return localStorage.getItem(DEBUG_OPEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 export const DEFAULT_CAMERA: Required<CameraPose> = { position: [0, 9, 30], target: [0, -1, 0], fov: 50 };
 
 interface StageState {
@@ -134,6 +144,8 @@ interface StageState {
   insetSmooth: boolean;
   statsEnabled: boolean;
   stats: StageStats | null;
+  /** The studio's Debug window is open (remembered). Its effects load only then. */
+  debugOpen: boolean;
   /** Debug toggles. */
   debug: { wireframe: boolean; axes: boolean; bounds: boolean; showHidden: boolean; fog: boolean };
   setView: (view: StageView) => void;
@@ -150,6 +162,7 @@ interface StageState {
   setStatsEnabled: (enabled: boolean) => void;
   setStats: (stats: StageStats) => void;
   setDebug: (patch: Partial<StageState['debug']>) => void;
+  setDebugOpen: (open: boolean) => void;
 }
 
 function toPose(camera: CameraPose, dim: number, drift: boolean): Pose {
@@ -199,6 +212,7 @@ export const useStage = create<StageState>((set, get) => ({
   insetSmooth: false,
   statsEnabled: false,
   stats: null,
+  debugOpen: readDebugOpen(),
   debug: { wireframe: false, axes: false, bounds: false, showHidden: false, fog: true },
 
   setView: (view) => {
@@ -240,6 +254,14 @@ export const useStage = create<StageState>((set, get) => ({
   setStatsEnabled: (statsEnabled) => set({ statsEnabled }),
   setStats: (stats) => set({ stats }),
   setDebug: (patch) => set({ debug: { ...get().debug, ...patch } }),
+  setDebugOpen: (debugOpen) => {
+    try {
+      localStorage.setItem(DEBUG_OPEN_KEY, debugOpen ? '1' : '0');
+    } catch {
+      // Private mode: the window still opens, it just is not remembered.
+    }
+    set({ debugOpen });
+  },
 }));
 
 /** Used by a view's cleanup: only clears the Stage if no other view has taken over. */

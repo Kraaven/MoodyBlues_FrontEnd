@@ -53,7 +53,7 @@ export function railGroups(windows: readonly { id: string; group: string; title:
     ...windows.map((w) => ({ id: w.id, group: w.group, title: w.title, icon: w.icon, description: w.description })),
     ...tools.map((t) => ({ id: t.id, group: '~tools', title: t.label, icon: t.icon, description: t.description })),
   ];
-  const order = ['recordings', 'scene', 'session', '~tools'];
+  const order = ['recordings', 'scene', 'view', '~tools'];
   return order
     .map((group) =>
       entries

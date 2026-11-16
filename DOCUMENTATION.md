@@ -121,9 +121,12 @@ it) and is never unmounted. A view directs it with `useStageView(view)`, where a
   `activity` shows its state instead (recording, waiting for its scene, failed, building). Nothing
   is computed in the browser or cached there.
 
-`?debug` turns on the Debug panel (frame times, renderer memory, replay clock, scene and query
-caches, wireframe/axes/bounds/show-inactive/fog toggles). It is remembered in `localStorage`;
-`?debug=0` turns it off. Its code is a separate chunk and is never requested while it is off.
+The studio's rail has a Debug tool (signed-in owners only, never on share links). It toggles a
+translucent, movable window (drag its header; it starts under the scene-name card) with frame
+times, renderer memory, replay clock, scene and query caches, and wireframe/axes/bounds/show-inactive/fog
+toggles. Open/closed (`moodyblues.debug.open`) and its position (`moodyblues.debug.position`) are
+kept in `localStorage`. Frame statistics are collected only while it is open, and its code
+(`debug/DebugWindow.tsx`, `DebugEffects.tsx`) is a separate chunk never requested while it is closed.
 
 Lists refresh themselves: every 5 s while something can change (a session recording, building or
 waiting, a version optimizing), every 30 s otherwise (a project page every 15 s), and never in a
@@ -205,7 +208,7 @@ directly. React re-renders on user actions and, for the current log row, about 8
   gap to that edge, and `toFrame` / `fromFrame` convert to and from pixels. A right-anchored
   window therefore follows the rail when the dock opens. The layout rules are pure functions, with
   tests. The view settings (grid, shadows,
-  wireframe, axes, scene lights, camera gizmos, field of view) are kept under `moodyblues.view.v1`.
+  wireframe, axes, scene lights, camera lines, field of view) are kept under `moodyblues.view.v1`.
 
   | Window | Content |
   |---|---|
@@ -215,7 +218,7 @@ directly. React re-renders on user actions and, for the current log row, about 8
   | Hierarchy | The scene's tree, searchable; during a replay the recorded objects as they are now |
   | Inspector | The selected object: name, ObjectID, live local and world transform, Unity path |
   | Materials, Textures, Geometry | Read from the loaded GLB by `inspector/inspection.ts`: materials with every texture channel, de-duplicated textures with estimated GPU memory, geometries and what shares them, vertex statistics |
-  | Viewpoint (`ViewpointWindow.tsx`) | The cameras the Unity scene exported (a node's `extras.camera` = `{ index, tag }`, index 0 the MainCamera) as a radio list plus Free camera, Replay intro (with a recording), and the display settings; display only |
+  | Viewpoint (`ViewpointWindow.tsx`) | The cameras the Unity scene exported (a node's `extras.camera` = `{ index, tag }`, index 0 the MainCamera) with a 1st person / Follow pair per camera (Follow has a Behind / Front style), Free camera, Frame the scene, Replay intro (with a recording), and the display toggles and field of view; display only |
   | Raw data | The selection, the session record from the server, or the file's glTF JSON, as collapsible JSON |
 
 - **Cameras** (`studio/cameras.ts`, `CameraGizmos.tsx`, `intro.ts`): focusing a camera
@@ -283,7 +286,7 @@ src/
   inspector/    inspection.ts (reads a loaded scene), thumbnails.ts
   shell/        WorkspaceLayout and TopBar (page frame), ConnectionDialog, SetupGuide
   pages/        auth/, lobby, new project, project, scene/ (page, recordings table, versions dialog)
-  debug/        the ?debug panel and its scene effects (lazy)
+  debug/        the studio's Debug window and its scene effects (lazy)
   viewer/       core/ (gltf, palette, atmosphere, outline; imports nothing from the app, which
                 boundary.test.ts checks), replay/ (parser, tracks, player)
   lib/          formatting and small hooks

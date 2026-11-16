@@ -7,7 +7,6 @@ import { NewProjectPage } from './pages/NewProjectPage';
 import { ProjectPage } from './pages/ProjectPage';
 import { ScenePage } from './pages/scene/ScenePage';
 import { StagePreloader } from './stage/StagePreloader';
-import { debugEnabled } from './debug/enabled';
 import { PrefetchHost } from './prefetch/PrefetchHost';
 import { Mark } from './ui/Logo';
 
@@ -15,9 +14,6 @@ import { Mark } from './ui/Logo';
 const StudioPage = lazy(() => import('./studio/StudioPage'));
 // The persistent Stage loads in its own chunk, after the shell has painted.
 const StageHost = lazy(() => import('./stage/StageHost'));
-// Development tools, loaded only with ?debug.
-const DebugPanel = lazy(() => import('./debug/DebugPanel'));
-const debugOn = debugEnabled();
 
 function RouteFallback() {
   return (
@@ -35,11 +31,6 @@ export default function App() {
       </Suspense>
       <StagePreloader />
       <PrefetchHost />
-      {debugOn && (
-        <Suspense fallback={null}>
-          <DebugPanel />
-        </Suspense>
-      )}
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/login" element={<AuthPage mode="login" />} />

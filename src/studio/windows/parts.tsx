@@ -5,9 +5,9 @@ import { cn } from '../../ui/cn';
 import { textureThumbnail } from '../../inspector/thumbnails';
 import { useStudio } from '../studioStore';
 
-/** The padded, scrolling body of a window. */
-export function WindowBody({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn('min-h-0 flex-1 overflow-y-auto px-6 py-5', className)}>{children}</div>;
+/** The padded, scrolling body of a window; `compact` for the denser windows. */
+export function WindowBody({ children, className, compact }: { children: ReactNode; className?: string; compact?: boolean }) {
+  return <div className={cn('min-h-0 flex-1 overflow-y-auto', compact ? 'px-4 py-4' : 'px-6 py-5', className)}>{children}</div>;
 }
 
 /** The quiet line at the bottom of a window: counts, a hint. */

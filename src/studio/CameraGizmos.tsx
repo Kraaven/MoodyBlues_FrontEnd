@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { hex, PALETTE } from '../viewer/core/palette';
 import { ReplayPlayer } from '../viewer/replay/ReplayPlayer';
-import { frustumSegments, gizmoDepth, type CameraInfo } from './cameras';
+import { frustumSegments, type CameraInfo } from './cameras';
 
 const nothing = () => undefined;
 
@@ -13,11 +13,10 @@ const nothing = () => undefined;
  * the cache hold is never touched; each one copies its camera node's world position and rotation
  * every frame, which is what makes it follow the camera through a replay. They are not pickable, cast
  * no shadows, and are left out of the scene's bounds (which count meshes only). A camera that is
- * hidden at the moment hides its gizmo.
+ * hidden at the moment hides its gizmo, and so does the one in `hiddenId` (the first person view's own).
  */
-export function CameraGizmos({ cameras, focusId, radius }: { cameras: CameraInfo[]; focusId: number | null; radius: number }) {
+export function CameraGizmos({ cameras, focusId, hiddenId, depth }: { cameras: CameraInfo[]; focusId: number | null; hiddenId: number | null; depth: number }) {
   const parts = useMemo(() => {
-    const depth = gizmoDepth(radius);
     const focused = new THREE.LineBasicMaterial({ color: hex(PALETTE.accent), toneMapped: false });
     const muted = new THREE.LineBasicMaterial({ color: hex(PALETTE.fg), transparent: true, opacity: 0.45, toneMapped: false });
     const items = cameras.map((camera) => {
@@ -36,7 +35,7 @@ export function CameraGizmos({ cameras, focusId, radius }: { cameras: CameraInfo
       return { camera, lines };
     });
     return { items, focused, muted };
-  }, [cameras, radius]);
+  }, [cameras, depth]);
 
   useEffect(
     () => () => {
@@ -54,7 +53,8 @@ export function CameraGizmos({ cameras, focusId, radius }: { cameras: CameraInfo
         lines.material = material;
         invalidate();
       }
-      lines.visible = ReplayPlayer.isEffectivelyVisible(camera.node);
+      // The camera the view looks through is not drawn: the viewer is inside it.
+      lines.visible = camera.id !== hiddenId && ReplayPlayer.isEffectivelyVisible(camera.node);
       if (!lines.visible) continue;
       camera.node.updateWorldMatrix(true, false);
       // Position and rotation only: a scaled parent must not stretch the gizmo.

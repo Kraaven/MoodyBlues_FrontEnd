@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { setOrbitHasCamera } from './rigState';
+import { nearPlaneOverride, setOrbitHasCamera } from './rigState';
 import { useStage } from './store';
 import { reducedMotion } from './support';
 import { PoseTransition, type Pose } from './transition';
@@ -40,7 +40,8 @@ interface OrbitLike {
  *
  * The canvas draws on demand, so the rig asks for the next frame for as long as something here is
  * still moving: a transition, the idle drift, the inset gliding to its place. The near and far
- * planes follow the distance to what is looked at, so zooming right in does not clip the model.
+ * planes follow the distance to what is looked at, so zooming right in does not clip the model
+ * (unless a view fixes the near plane, see `nearPlaneOverride`).
  */
 export function CameraRig() {
   const size = useThree((s) => s.size);
@@ -170,7 +171,7 @@ export function CameraRig() {
     const perspective = camera as THREE.PerspectiveCamera;
     const looking = handedOver && orbit ? orbit.target : lookTarget.set(base.tx, base.ty, base.tz);
     const distance = Math.max(camera.position.distanceTo(looking), 1e-3);
-    const near = Math.max(0.01, distance * NEAR_PER_DISTANCE);
+    const near = nearPlaneOverride() ?? Math.max(0.01, distance * NEAR_PER_DISTANCE);
     const far = Math.max(MIN_FAR, state.sceneRadius * 20, distance * 10);
     if (Math.abs(near / perspective.near - 1) > CLIP_TOLERANCE || Math.abs(far / perspective.far - 1) > CLIP_TOLERANCE) {
       perspective.near = near;

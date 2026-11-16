@@ -28,7 +28,7 @@ npm run build   # strict type-check (tsc -b) + production build to dist/
 npm run preview # serve dist/
 ```
 
-Add `?debug` to any URL for the developer panel (`?debug=0` turns it off). `?stage=off` shows the
+The studio rail's Debug tool opens the developer window. `?stage=off` shows the
 no-WebGL fallback, and `?motion=reduce` forces reduced motion.
 
 ## Deploying

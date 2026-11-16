@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { ExternalLink, GripHorizontal, PanelRight, X } from 'lucide-react';
@@ -13,8 +13,8 @@ export interface WindowDef {
   id: string;
   title: string;
   icon: LucideIcon;
-  /** Rail buttons are grouped; a rule separates the groups. */
-  group: 'recordings' | 'scene' | 'session';
+  /** Rail buttons are grouped; a short rule separates the groups. */
+  group: 'recordings' | 'scene' | 'view';
   shortcut?: string;
   /** One line on what the window shows, for the welcome card. */
   description?: string;
@@ -37,7 +37,7 @@ export function WindowRail({ scope, windows, tools = [], className }: { scope: s
   const layout = useWindowLayout(scope, windows.map((w) => w.id));
   const actions = windowActions(scope);
   const phone = useMediaQuery('(max-width: 767px)');
-  const groups = (['recordings', 'scene', 'session'] as const).map((g) => windows.filter((w) => w.group === g)).filter((g) => g.length > 0);
+  const groups = (['recordings', 'scene', 'view'] as const).map((g) => windows.filter((w) => w.group === g)).filter((g) => g.length > 0);
 
   return (
     <nav
@@ -49,7 +49,9 @@ export function WindowRail({ scope, windows, tools = [], className }: { scope: s
       )}
     >
       {groups.map((group, gi) => (
-        <div key={gi} className={cn('flex gap-1', phone ? 'flex-row' : 'flex-col', gi > 0 && (phone ? 'border-l border-rule pl-1' : 'border-t border-rule pt-1'))}>
+        <Fragment key={gi}>
+        {gi > 0 && <RailDivider phone={phone} />}
+        <div className={cn('flex gap-1', phone ? 'flex-row' : 'flex-col')}>
           {group.map((w) => {
             const shown = isShown(layout, w.id);
             return (
@@ -70,9 +72,12 @@ export function WindowRail({ scope, windows, tools = [], className }: { scope: s
             );
           })}
         </div>
+        </Fragment>
       ))}
       {tools.length > 0 && (
-        <div className={cn('flex gap-1', phone ? 'flex-row border-l border-rule pl-1' : 'flex-col border-t border-rule pt-1')}>
+        <>
+        {groups.length > 0 && <RailDivider phone={phone} />}
+        <div className={cn('flex gap-1', phone ? 'flex-row' : 'flex-col')}>
           {tools.map((tool) => (
             <Tooltip key={tool.id} side={phone ? 'top' : 'left'} content={tool.hint ? `${tool.label} (${tool.hint})` : tool.label}>
               <button
@@ -90,9 +95,15 @@ export function WindowRail({ scope, windows, tools = [], className }: { scope: s
             </Tooltip>
           ))}
         </div>
+        </>
       )}
     </nav>
   );
+}
+
+/** A quiet rule between rail groups, inset so it does not touch the rail's edges. */
+function RailDivider({ phone }: { phone: boolean }) {
+  return <div role="separator" aria-orientation={phone ? 'vertical' : 'horizontal'} className={cn('shrink-0 bg-rule/60', phone ? 'mx-0.5 my-2.5 w-px' : 'mx-2.5 my-0.5 h-px')} />;
 }
 
 /** The window chrome shared by floating windows and the dock: a title, a grip, and its controls. */

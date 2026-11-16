@@ -12,3 +12,14 @@ export function orbitHasCamera(): boolean {
 export function setOrbitHasCamera(value: boolean): void {
   controlsHaveCamera = value;
 }
+
+let nearPlane: number | null = null;
+
+/** A near plane some view insists on (first person sits inside a camera), or null for the rig's own. */
+export function nearPlaneOverride(): number | null {
+  return nearPlane;
+}
+
+export function setNearPlaneOverride(value: number | null): void {
+  nearPlane = value;
+}

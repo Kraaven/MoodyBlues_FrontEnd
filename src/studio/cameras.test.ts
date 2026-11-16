@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { cameraForward, framingDistance, framingPose, frustumSegments, gizmoDepth, listCameras } from './cameras';
+import { cameraForward, frustumSegments, gizmoDepth, listCameras } from './cameras';
 
 /** The exported shape of the sample scene: Player > CameraPivot > Main Camera (turned 180 degrees about Y by the exporter). */
 function sampleRig() {
@@ -69,40 +69,17 @@ describe('listCameras', () => {
   });
 });
 
-describe('framingPose', () => {
-  it('stands behind and above the camera, looking at it', () => {
-    const pose = framingPose(new THREE.Vector3(1, 2, 3), new THREE.Vector3(0, 0, 1), 10);
-    const d = framingDistance(10);
-    expect(pose.target).toEqual([1, 2, 3]);
-    expect(pose.position[0]).toBeCloseTo(1);
-    expect(pose.position[1]).toBeCloseTo(2 + d * 0.45);
-    expect(pose.position[2]).toBeCloseTo(3 - d);
-  });
-
-  it('keeps the angle level when the camera looks steeply down', () => {
-    const pose = framingPose(new THREE.Vector3(), new THREE.Vector3(0.6, -0.8, 0), 10);
-    expect(pose.position[0]).toBeLessThan(0);
-    expect(pose.position[1]).toBeGreaterThan(0);
-  });
-
-  it('has a fallback for a camera looking straight down', () => {
-    const pose = framingPose(new THREE.Vector3(), new THREE.Vector3(0, -1, 0), 10);
-    expect(pose.position.every(Number.isFinite)).toBe(true);
-    expect(Math.hypot(pose.position[0], pose.position[2])).toBeGreaterThan(1);
-  });
-
-  it('clamps the distance to the scene size', () => {
-    expect(framingDistance(1)).toBe(2.5);
-    expect(framingDistance(100)).toBe(4);
-    expect(framingDistance(10_000)).toBe(12);
-  });
-});
-
 describe('gizmo', () => {
-  it('is about 0.6 m in a room-scale scene and clamped', () => {
-    expect(gizmoDepth(10)).toBeCloseTo(0.6);
-    expect(gizmoDepth(0.1)).toBe(0.25);
-    expect(gizmoDepth(1000)).toBe(2.5);
+  it('is 12% of the follow distance with a camera focused, between 0.2 and 0.7 m', () => {
+    expect(gizmoDepth(500, 5)).toBeCloseTo(0.6);
+    expect(gizmoDepth(500, 1)).toBe(0.2);
+    expect(gizmoDepth(500, 40)).toBe(0.7);
+  });
+
+  it('is 1% of the scene radius in the free camera, between 0.25 and 1.5 m', () => {
+    expect(gizmoDepth(100, null)).toBeCloseTo(1);
+    expect(gizmoDepth(1, null)).toBe(0.25);
+    expect(gizmoDepth(10_000, null)).toBe(1.5);
   });
 
   it('draws a frustum that opens along -Z', () => {

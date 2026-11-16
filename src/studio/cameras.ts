@@ -40,34 +40,15 @@ export function cameraForward(node: THREE.Object3D, out = new THREE.Vector3()): 
   return out.copy(FORWARD).applyQuaternion(worldQuaternion);
 }
 
-/** How far behind a camera the viewer stands when it frames it, in metres. */
-export function framingDistance(sceneRadius: number): number {
-  return Math.min(12, Math.max(2.5, sceneRadius * 0.04));
-}
-
 /**
- * Where the viewer stands to look at a camera: the camera is the target, and the viewer sits behind
- * it (against its look direction, kept level so the angle stays pleasant) and above, so the camera's
- * own view direction reads from here. A camera looking straight up or down has no "behind" on the
- * ground, so the viewer falls back to its own side of the scene.
+ * The depth of a camera's gizmo, in metres. With a camera focused it is sized by how far the view
+ * stands from the player (a close follow must not be crossed by a big frustum): 12% of that distance,
+ * between 0.2 and 0.7 m. With the free camera it is 1% of the scene's radius, 0.25 to 1.5 m, so it
+ * stays readable in an overview.
  */
-export function framingPose(
-  position: THREE.Vector3,
-  forward: THREE.Vector3,
-  sceneRadius: number,
-): { position: [number, number, number]; target: [number, number, number] } {
-  const distance = framingDistance(sceneRadius);
-  const level = new THREE.Vector3(forward.x, 0, forward.z);
-  if (level.lengthSq() < 1e-4) level.set(-1, 0, -1);
-  level.normalize();
-  const eye = position.clone().addScaledVector(level, -distance);
-  eye.y += distance * 0.45;
-  return { position: [eye.x, eye.y, eye.z], target: [position.x, position.y, position.z] };
-}
-
-/** The depth of a camera's gizmo, in metres: about 0.6 in a room, clamped for tiny and huge scenes. */
-export function gizmoDepth(sceneRadius: number): number {
-  return Math.min(2.5, Math.max(0.25, sceneRadius * 0.06));
+export function gizmoDepth(sceneRadius: number, followDistance: number | null): number {
+  if (followDistance !== null) return Math.min(0.7, Math.max(0.2, followDistance * 0.12));
+  return Math.min(1.5, Math.max(0.25, sceneRadius * 0.01));
 }
 
 /**

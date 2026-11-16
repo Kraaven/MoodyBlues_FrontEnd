@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { FRAME_DIRECTION, framePose } from '../viewer/core/gltf';
 import { Ground } from '../viewer/core/Ground';
 import { SelectionOutline } from '../viewer/core/SelectionOutline';
@@ -9,17 +8,15 @@ import { ReplayPlayer } from '../viewer/replay/ReplayPlayer';
 import { useReplayBinding } from './binding';
 import { cloneScene } from '../stage/sceneAssets';
 import { applySceneLights, applyShadows, gridCell, prepareScene, SceneLights, useStagedScene } from '../stage/SceneContent';
-import { orbitHasCamera } from '../stage/rigState';
 import { reducedMotion } from '../stage/support';
 import { useRedraw } from '../stage/redraw';
 import { captureSnapshot } from '../stage/snapshotCapture';
 import { regionFill, useStage } from '../stage/store';
 import { CameraGizmos } from './CameraGizmos';
-import { cameraForward, framingPose, listCameras } from './cameras';
+import { gizmoDepth, listCameras } from './cameras';
 import { Intro } from './intro';
 import { useStudio } from './studioStore';
-
-const followShift = new THREE.Vector3();
+import { useViewRig } from './viewRig/useViewRig';
 
 function effectivelyVisible(node: THREE.Object3D): boolean {
   for (let n: THREE.Object3D | null = node; n; n = n.parent) if (!n.visible) return false;
@@ -41,7 +38,7 @@ export default function StudioContent() {
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
-  const controls = useThree((s) => s.controls) as OrbitControlsImpl | null;
+  const controls = useThree((s) => s.controls) as { target: THREE.Vector3 } | null;
   const ref = useStage((s) => s.view.scene ?? null);
   const surface = useStage((s) => s.surface);
   const replay = useReplayBinding((s) => s.replay);
@@ -50,8 +47,8 @@ export default function StudioContent() {
   const selected = useStudio((s) => s.selected);
   const frameAllRequest = useStudio((s) => s.frameAllRequest);
   const frameSelectedRequest = useStudio((s) => s.frameSelectedRequest);
-  const focusFlyRequest = useStudio((s) => s.focusFlyRequest);
   const focusCameraId = useStudio((s) => s.focusCameraId);
+  const cameraMode = useStudio((s) => s.cameraMode);
   const introRequest = useStudio((s) => s.introRequest);
   const [player, setPlayer] = useState<ReplayPlayer | null>(null);
   const { redraw, shadowsChanged } = useRedraw();
@@ -92,16 +89,7 @@ export default function StudioContent() {
   useEffect(() => {
     cameraNodes.current = new Map(cameras.map((c) => [c.id, c.node]));
   }, [cameras]);
-  /** Where the view stands to look at a camera, at the current time of the recording. */
-  const cameraPose = useCallback(
-    (id: number) => {
-      const node = player?.getObject(id) ?? cameraNodes.current.get(id);
-      if (!node) return null;
-      node.updateWorldMatrix(true, false);
-      return framingPose(node.getWorldPosition(new THREE.Vector3()), cameraForward(node), bounds?.radius ?? 10);
-    },
-    [player, bounds],
-  );
+  const cameraNode = useCallback((id: number) => player?.getObject(id) ?? cameraNodes.current.get(id), [player]);
 
   // The canvas draws on demand: a seek, a pause or a speed change while the clock is stopped needs a frame.
   useEffect(() => {
@@ -156,8 +144,8 @@ export default function StudioContent() {
     redraw();
   }, [camera, settings.fov, redraw]);
 
-  // Advance the clock; keep the selection pointing at the right node; follow it. While the clock
-  // runs every frame asks for the next one, and the shadows move with the replay.
+  // Advance the clock and keep the selection pointing at the right node. While the clock runs every
+  // frame asks for the next one, and the shadows move with the replay.
   useFrame(({ gl: renderer, invalidate }, delta) => {
     playback?.advance(delta);
     if (playback?.playing) {
@@ -168,35 +156,19 @@ export default function StudioContent() {
     if (player && studio.selectedId !== null) {
       studio.resolveSelected(player.getObject(studio.selectedId) ?? null);
     }
-    // Stay on the focused camera, or on the followed object: the orbit target and the viewer move
-    // together, so the user can still orbit and zoom around it. Not while a camera move is running
-    // (the rig rewrites both then) or the intro is still flying in.
-    const focused = studio.focusCameraId !== null && !studio.introRunning ? (player?.getObject(studio.focusCameraId) ?? cameraNodes.current.get(studio.focusCameraId)) : null;
-    const followed = focused ?? (studio.follow ? studio.selected : null);
-    if (!followed || !controls || !orbitHasCamera()) return;
-    const shift = followed.getWorldPosition(followShift).sub(controls.target);
-    if (shift.lengthSq() < 1e-12) return;
-    controls.target.add(shift);
-    camera.position.add(shift);
-    controls.update();
-    invalidate();
   });
 
-  // Fly to frame a camera the user picked.
-  useEffect(() => {
-    if (focusFlyRequest === 0) return;
-    const id = useStudio.getState().focusCameraId;
-    const pose = id === null ? null : cameraPose(id);
-    if (pose) useStage.getState().setCameraPose({ ...pose, fov: useStudio.getState().settings.fov }, 700);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusFlyRequest]);
+  // The view of a focused camera (1st person, Follow) and of the followed selection. Registered after
+  // the clock above, so it sees the objects where the replay just put them.
+  const { introPose, followDistanceOf } = useViewRig({ root, replay, playback, cameraNode });
+  const gizmoSize = useMemo(() => gizmoDepth(bounds?.radius ?? 10, focusCameraId !== null ? followDistanceOf(focusCameraId) : null), [bounds, focusCameraId, followDistanceOf]);
 
-  // The gizmos mark which camera is focused.
+  // The gizmos mark which camera is focused, and the focused one is hidden while the view is through it.
   useEffect(() => {
     redraw();
-  }, [focusCameraId, settings.cameraGizmos, redraw]);
+  }, [focusCameraId, cameraMode, settings.cameraGizmos, redraw]);
 
-  // Opening a recording (a shared link waits at the overview for the welcome card's Play): the whole scene, a beat, then a flight to the main camera, and play. Any
+  // Opening a recording (a shared link waits at the overview for the welcome card's Play): the whole scene, a beat, then a flight to where following the main camera's player starts, and play. Any
   // input, or asking for less motion, goes straight to the end. Runs for every recording opened, even
   // when the scene page already framed this scene, and again from the Viewpoint window.
   useEffect(() => {
@@ -213,7 +185,7 @@ export default function StudioContent() {
         pause: () => {
           playback.seek(startTime);
           playback.setPlaying(false);
-          if (main) useStudio.getState().setFocusCamera(main.id, false);
+          if (main) useStudio.getState().setFocusCamera(main.id);
         },
         showScene: () => {
           const fill = regionFill(window.innerWidth, window.innerHeight, useStage.getState().inset);
@@ -221,7 +193,7 @@ export default function StudioContent() {
           if (pose) useStage.getState().setCameraPose({ position: pose.position, target: pose.target, fov: fov() }, 0);
         },
         flyToCamera: (durationMs) => {
-          const pose = main ? cameraPose(main.id) : null;
+          const pose = main ? introPose(main.id) : null;
           if (pose) useStage.getState().setCameraPose({ ...pose, fov: fov() }, durationMs);
         },
         play: () => playback.setPlaying(play),
@@ -247,9 +219,10 @@ export default function StudioContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player, root, bounds, playback, cameras, introRequest]);
 
-  // Frame requests from the UI, flown by the camera rig.
+  // Frame requests from the UI, flown by the camera rig. They end the camera focus, which would fight the move.
   useEffect(() => {
     if (frameAllRequest === 0 || !root) return;
+    useStudio.getState().setFocusCamera(null);
     const pose = framePose(root, camera.fov, { direction: camera.position.clone().sub(controls?.target ?? new THREE.Vector3()) });
     if (pose) useStage.getState().setCameraPose({ position: pose.position, target: pose.target }, 700);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -258,6 +231,7 @@ export default function StudioContent() {
   useEffect(() => {
     const node = useStudio.getState().selected;
     if (frameSelectedRequest === 0 || !node) return;
+    useStudio.getState().setFocusCamera(null);
     const pose = framePose(node, camera.fov, { padding: 2.4, direction: camera.position.clone().sub(controls?.target ?? new THREE.Vector3()) });
     if (pose) useStage.getState().setCameraPose({ position: pose.position, target: pose.target }, 700);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -300,7 +274,7 @@ export default function StudioContent() {
       {bounds && (
         <>
           <Ground plan={bounds.ground} fadeDistance={Math.max(40, bounds.radius * 5)} cellSize={gridCell(bounds.radius)} grid={settings.grid} shadows={settings.shadows} />
-          {settings.cameraGizmos && cameras.length > 0 && <CameraGizmos cameras={cameras} focusId={focusCameraId} radius={bounds.radius} />}
+          {settings.cameraGizmos && cameras.length > 0 && <CameraGizmos cameras={cameras} focusId={focusCameraId} hiddenId={cameraMode === 'firstPerson' ? focusCameraId : null} depth={gizmoSize} />}
           {settings.axes && <axesHelper args={[Math.max(1, bounds.radius * 0.5)]} position={[bounds.center.x, bounds.ground.floorY + 0.01, bounds.center.z]} />}
           {/* The outline pass renders the scene through a buffer every frame, so it exists only while something is selected. */}
           {selected && <SelectionOutline object={selected} />}

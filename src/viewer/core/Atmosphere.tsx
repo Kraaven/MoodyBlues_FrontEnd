@@ -6,10 +6,10 @@ import { PALETTE } from './palette';
 /**
  * Background and fog. The background is a screen-space gradient texture (not CSS behind a
  * transparent canvas) so post-processing keeps it: a cool charcoal, a touch lighter at the top, with
- * a faint vignette. Fog follows the camera's distance to what it orbits, so small and huge scenes
- * both fade only far away.
+ * a faint vignette. Fog is set by the scene's size (and the camera's distance when it is farther out than that),
+ * so small and huge scenes both fade only far away and a close follow stays lit.
  */
-export function Atmosphere() {
+export function Atmosphere({ sceneRadius }: { sceneRadius: number }) {
   const scene = useThree((s) => s.scene);
   const fog = useMemo(() => new THREE.Fog(PALETTE.world1, 60, 400), []);
 
@@ -44,8 +44,9 @@ export function Atmosphere() {
   useFrame(({ camera, controls }) => {
     const target = (controls as { target?: THREE.Vector3 } | null)?.target;
     const distance = target ? camera.position.distanceTo(target) : camera.position.length();
-    fog.near = Math.max(10, distance * 2.5);
-    fog.far = Math.max(60, distance * 9);
+    // The scene's size sets the fog, so a close follow does not fog the world; only a camera farther out than that pushes it back.
+    fog.near = Math.max(sceneRadius * 1.5, 60, distance * 2.5);
+    fog.far = Math.max(sceneRadius * 5, 300, distance * 9);
   });
 
   return null;

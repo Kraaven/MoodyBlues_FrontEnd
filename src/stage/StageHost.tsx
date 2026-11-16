@@ -5,7 +5,6 @@ import * as THREE from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { Atmosphere } from '../viewer/core/Atmosphere';
 import { StudioEnvironment } from '../viewer/core/StudioEnvironment';
-import { debugEnabled } from '../debug/enabled';
 import { useToast } from '../ui/Toast';
 import { cn } from '../ui/cn';
 import { CameraRig } from './CameraRig';
@@ -16,9 +15,8 @@ import { reducedMotion, webglSupported } from './support';
 
 // The studio (inspection and replay) loads only when a scene is opened in 3D.
 const StudioContent = lazy(() => import('../studio/StudioContent'));
-// Debug toggles only load with ?debug.
+// Debug toggles load only while the studio's Debug window is open.
 const DebugEffects = lazy(() => import('../debug/DebugEffects'));
-const debugOn = debugEnabled();
 
 /** Pixel ratio ceiling. Past 1.5 the sharpness is hard to see and the fill cost is not. */
 const DPR_MAX = 1.5;
@@ -192,6 +190,8 @@ export default function StageHost() {
   const status = useStage((s) => s.status);
   const content = useStage((s) => s.view.content);
   const dim = useStage((s) => s.pose.dim);
+  const debugOn = useStage((s) => s.debugOpen && s.view.content === 'studio');
+  const sceneRadius = useStage((s) => s.sceneRadius);
   const active = content !== 'none';
   const notify = useToast();
   const supported = useRef(webglSupported());
@@ -238,7 +238,7 @@ export default function StageHost() {
           >
             <Wake active={active} />
             <AdaptiveQuality onDpr={setDpr} />
-            <Atmosphere />
+            <Atmosphere sceneRadius={sceneRadius} />
             <StudioEnvironment />
             <CameraRig />
             <StageControls />

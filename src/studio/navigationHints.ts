@@ -20,6 +20,7 @@ export const POINTER_HINTS: readonly NavigationHint[] = [
   { keys: ['Space'], action: 'Play / pause' },
   { keys: ['←', '→'], action: 'Step back / forward' },
   { keys: ['V'], action: 'Next camera' },
+  { keys: ['P'], action: 'First person / follow' },
   { keys: ['F'], action: 'Follow the selection' },
   { keys: ['A'], action: 'Frame the whole scene' },
   { keys: ['?'], action: 'All shortcuts' },

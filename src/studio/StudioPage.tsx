@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -6,10 +6,10 @@ import {
   ArrowLeft,
   Box,
   Braces,
+  Bug,
   Crosshair,
   Expand,
   Eye,
-  Focus,
   Hourglass,
   Image,
   Info,
@@ -76,6 +76,9 @@ import { FloatingWindows, WindowDock, WindowRail, type RailTool, type WindowDef 
  * StudioSource). It has no project, scene list, recordings or session actions, and never calls an
  * endpoint that needs sign-in.
  */
+// The Debug window is for developers: its code is a separate chunk, requested only once it is opened.
+const DebugWindow = lazy(() => import('../debug/DebugWindow'));
+
 export default function StudioPage() {
   const { projectId, sceneId, sessionId, token } = useParams<{ projectId: string; sceneId: string; sessionId?: string; token?: string }>();
   const [params] = useSearchParams();
@@ -102,6 +105,7 @@ export default function StudioPage() {
   const [played, setPlayed] = useState(false);
   const [welcomed, setWelcomed] = useState(false);
   const player = useStudio((s) => s.player);
+  const debugOpen = useStage((s) => s.debugOpen);
 
   const base = `/projects/${projectId}/scenes/${encodeURIComponent(sceneId ?? '')}`;
   const detail = sharedView ? shared.data?.session : session.data;
@@ -235,8 +239,8 @@ export default function StudioPage() {
       { id: 'materials', title: 'Materials', icon: Palette, group: 'scene', description: 'Every material, with its properties', render: () => <MaterialsWindow sceneName={name} /> },
       { id: 'textures', title: 'Textures', icon: Image, group: 'scene', description: 'The images the scene uses', render: () => <TexturesWindow /> },
       { id: 'geometry', title: 'Geometry', icon: Box, group: 'scene', description: 'Meshes, triangles and bounds', render: () => <GeometryWindow version={version} /> },
-      { id: 'viewpoint', title: 'Viewpoint', icon: Eye, group: 'scene', description: 'Cameras to follow and display settings', render: () => <ViewpointWindow scope={scope} playback={playback} /> },
-      { id: 'raw', title: 'Raw data', icon: Braces, group: 'scene', description: 'The recording as data', render: () => <RawWindow session={detail ?? null} /> },
+      { id: 'viewpoint', title: 'Viewpoint', icon: Eye, group: 'view', description: 'Cameras to follow and display settings', render: () => <ViewpointWindow scope={scope} playback={playback} /> },
+      { id: 'raw', title: 'Raw data', icon: Braces, group: 'view', description: 'The recording as data', render: () => <RawWindow session={detail ?? null} /> },
     );
     return list.map((w, i) => ({ ...w, shortcut: i < 10 ? `Alt+${(i + 1) % 10}` : undefined }));
   }, [name, version, scope, detail, sharedView, hasSession, sessionId, replay.data, playback, sessionLabel, base, sessions.data, sessionHref]);
@@ -268,21 +272,16 @@ export default function StudioPage() {
   const showTimeline = hasSession;
   const backHref = version && !version.isCurrent ? `${base}?version=${version.version}` : base;
 
-  const tools: RailTool[] = [
-    { id: 'frame', label: 'Frame the whole scene', hint: 'A', icon: Focus, description: 'Fit everything in view', onClick: () => useStudio.getState().frameAll() },
-    ...(phone
-      ? []
-      : [
-          {
-            id: 'fullscreen',
-            label: fullscreen ? 'Leave full screen' : 'Full screen',
-            icon: fullscreen ? Shrink : Expand,
-            description: 'Fill the screen with the view',
-            onClick: () => (document.fullscreenElement ? void document.exitFullscreen() : void document.documentElement.requestFullscreen?.().catch(() => undefined)),
-          },
-          { id: 'keys', label: 'Keyboard shortcuts', hint: '?', icon: Keyboard, description: 'Every key and what it does', onClick: () => useStudio.getState().setShortcutsOpen(true) },
-        ]),
-  ];
+  const toggleFullscreen = () => (document.fullscreenElement ? void document.exitFullscreen() : void document.documentElement.requestFullscreen?.().catch(() => undefined));
+  const tools: RailTool[] = phone
+    ? []
+    : [
+        // Owners only: a share link is for looking, not for development tools.
+        ...(sharedView
+          ? []
+          : [{ id: 'debug', label: 'Debug', icon: Bug, active: debugOpen, onClick: () => useStage.getState().setDebugOpen(!debugOpen) }]),
+        { id: 'keys', label: 'Keyboard shortcuts', hint: '?', icon: Keyboard, description: 'Every key and what it does', onClick: () => useStudio.getState().setShortcutsOpen(true) },
+      ];
 
   const showWelcome =
     sharedView && !welcomed && Boolean(shared.data) && shared.data?.session.status === 'Ready' && !error && !replay.isError && sceneState.status !== 'error';
@@ -334,8 +333,13 @@ export default function StudioPage() {
             );
           })()}
 
-          {/* Top right: share, or for a visitor, the way to sign in. */}
-          <div className="pointer-events-auto absolute right-4 top-4 sm:right-6 sm:top-6">
+          {/* Top right: full screen, and share, or for a visitor, the way to sign in. */}
+          <div className="pointer-events-auto absolute right-4 top-4 flex items-center gap-2 sm:right-6 sm:top-6">
+            {!phone && (
+              <IconButton label={fullscreen ? 'Leave full screen' : 'Full screen'} className="glass h-11 w-11 border border-rule-strong/60" onClick={toggleFullscreen}>
+                {fullscreen ? <Shrink className="h-5 w-5" strokeWidth={1.6} /> : <Expand className="h-5 w-5" strokeWidth={1.6} />}
+              </IconButton>
+            )}
             {sharedView ? (
               !user && (
                 <LinkButton to="/login" state={{ from: location.pathname + location.search }} variant="secondary" className="glass h-11 border-rule-strong/60">
@@ -391,6 +395,11 @@ export default function StudioPage() {
       </div>
 
       <WindowDock scope={scope} windows={windows} />
+      {debugOpen && !sharedView && (
+        <Suspense fallback={null}>
+          <DebugWindow />
+        </Suspense>
+      )}
       <ShortcutsDialog playback={hasSession} />
       {showWelcome && shared.data && (
         <WelcomeCard

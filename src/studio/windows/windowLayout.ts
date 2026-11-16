@@ -49,7 +49,7 @@ export interface ScopeLayout {
 const DOCK_MIN = 320;
 const DOCK_MAX = 520;
 const WINDOW_MIN: Bounds = { w: 280, h: 200 };
-const WINDOW_DEFAULT: Bounds = { w: 380, h: 540 };
+const WINDOW_DEFAULT: Bounds = { w: 380, h: 600 };
 /** How much of a window's header must stay inside the view so it can always be grabbed. */
 const GRAB = 72;
 /** Room kept free on the right for the tool rail. */
