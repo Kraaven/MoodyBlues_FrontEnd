@@ -121,9 +121,9 @@ it) and is never unmounted. A view directs it with `useStageView(view)`, where a
   `activity` shows its state instead (recording, waiting for its scene, failed, building). Nothing
   is computed in the browser or cached there.
 
-The studio's rail has a Debug tool (signed-in owners only, never on share links). It toggles a
+The studio's rail has a Debug tool (owners and share links alike). It toggles a
 translucent, movable window (drag its header; it starts under the scene-name card) with frame
-times, renderer memory, replay clock, scene and query caches, and wireframe/axes/bounds/show-inactive/fog
+times, renderer memory, replay clock, scene and query caches, and wireframe/bounds/show-inactive/fog
 toggles. Open/closed (`moodyblues.debug.open`) and its position (`moodyblues.debug.position`) are
 kept in `localStorage`. Frame statistics are collected only while it is open, and its code
 (`debug/DebugWindow.tsx`, `DebugEffects.tsx`) is a separate chunk never requested while it is closed.
@@ -208,7 +208,7 @@ directly. React re-renders on user actions and, for the current log row, about 8
   gap to that edge, and `toFrame` / `fromFrame` convert to and from pixels. A right-anchored
   window therefore follows the rail when the dock opens. The layout rules are pure functions, with
   tests. The view settings (grid, shadows,
-  wireframe, axes, scene lights, camera lines, field of view) are kept under `moodyblues.view.v1`.
+  scene lights, camera lines, field of view) are kept under `moodyblues.view.v1`.
 
   | Window | Content |
   |---|---|

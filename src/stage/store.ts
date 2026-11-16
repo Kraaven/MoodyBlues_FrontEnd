@@ -147,7 +147,7 @@ interface StageState {
   /** The studio's Debug window is open (remembered). Its effects load only then. */
   debugOpen: boolean;
   /** Debug toggles. */
-  debug: { wireframe: boolean; axes: boolean; bounds: boolean; showHidden: boolean; fog: boolean };
+  debug: { wireframe: boolean; bounds: boolean; showHidden: boolean; fog: boolean };
   setView: (view: StageView) => void;
   /** Move the camera to a new pose without changing anything else about the view. */
   setCameraPose: (camera: CameraPose, durationMs?: number) => void;
@@ -213,7 +213,7 @@ export const useStage = create<StageState>((set, get) => ({
   statsEnabled: false,
   stats: null,
   debugOpen: readDebugOpen(),
-  debug: { wireframe: false, axes: false, bounds: false, showHidden: false, fog: true },
+  debug: { wireframe: false, bounds: false, showHidden: false, fog: true },
 
   setView: (view) => {
     const previous = get();

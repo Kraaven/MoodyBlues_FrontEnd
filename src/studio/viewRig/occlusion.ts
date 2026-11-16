@@ -1,8 +1,12 @@
 /** How far short of an obstacle the view stops, in metres. */
 export const ARM_MARGIN = 0.3;
-/** The view never comes in closer than this share of its distance (or this many metres, if that is less). */
-const MIN_SHARE = 0.2;
-const MIN_METRES = 1.2;
+/**
+ * The view never comes in closer than this share of its distance, or this many metres if that is more
+ * (and never more than the distance itself). Closer than that the player is shown through the
+ * obstruction instead (see occluderFade.ts).
+ */
+const MIN_SHARE = 0.6;
+const MIN_METRES = 3;
 /** Seconds the arm takes to come in (fast: the view must not sit inside a wall) and to go back out (slow: no pumping). */
 const IN_TIME = 0.08;
 const OUT_TIME = 0.7;
@@ -16,8 +20,17 @@ const SWITCH_EVERY = 1.5;
  */
 export function armShare(hit: number | null, distance: number): number {
   if (hit === null || distance < 1e-6) return 1;
-  const floor = Math.min(1, Math.max(MIN_SHARE, MIN_METRES / distance));
-  return Math.min(1, Math.max(floor, (hit - ARM_MARGIN) / distance));
+  return Math.min(1, Math.max(armFloor(distance), (hit - ARM_MARGIN) / distance));
+}
+
+/** The smallest share of `distance` the arm may keep. */
+export function armFloor(distance: number): number {
+  return Math.min(1, Math.max(MIN_SHARE, MIN_METRES / distance));
+}
+
+/** The obstruction is closer than the arm may come in: the view stays at its floor and sees through what is in the way. */
+export function armSqueezed(hit: number | null, distance: number): boolean {
+  return hit !== null && distance >= 1e-6 && (hit - ARM_MARGIN) / distance < armFloor(distance);
 }
 
 /** Eases the share towards its goal: in quickly, out slowly, the same at any frame rate. */

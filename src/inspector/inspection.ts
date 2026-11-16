@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { originalTransmission } from '../viewer/core/transmission';
+import { originalMaterials } from '../studio/viewRig/occluderFade';
 
 /**
  * Reading a loaded scene for the inspector.
@@ -64,7 +65,7 @@ export function triangleCount(geometry: THREE.BufferGeometry): number {
 }
 
 function materialsOf(mesh: THREE.Mesh): THREE.Material[] {
-  return (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).filter(Boolean);
+  return originalMaterials(mesh).filter(Boolean);
 }
 
 function channelTexture(material: THREE.Material, key: string): THREE.Texture | null {

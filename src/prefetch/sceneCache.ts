@@ -8,7 +8,8 @@ import { createStore, del, get, set } from 'idb-keyval';
  * Bytes live in the Cache Storage API; a small LRU index (size, last use) lives in IndexedDB.
  * Both sit behind interfaces so the eviction logic is testable. Every operation degrades to "no
  * cache" when storage is unavailable (private mode, quota, no Cache API): errors are swallowed and
- * the caller just downloads.
+ * the caller just downloads. The storage is best effort (the browser may evict it); the cache is
+ * rebuildable, so it never asks for persistent storage, which some browsers answer with a prompt.
  */
 
 export interface ByteStore {
@@ -34,8 +35,6 @@ export interface SceneCacheOptions {
   /** Storage quota in bytes when the browser reports one; the cache never takes more than half. */
   quota: () => Promise<number | null>;
   now: () => number;
-  /** Called once, before the first write (asks the browser not to evict the origin's storage). */
-  onFirstWrite?: () => void;
 }
 
 export interface CacheInfo {
@@ -51,7 +50,6 @@ export class SceneCache {
   // Every operation runs through this chain: the index is read-modify-write.
   private chain: Promise<unknown> = Promise.resolve();
   private generation = 0;
-  private wrote = false;
 
   private readonly bytes: ByteStore;
   private readonly index: IndexStore;
@@ -124,11 +122,6 @@ export class SceneCache {
       const size = data.byteLength;
       const budget = await this.budget();
       if (size > budget) return false;
-
-      if (!this.wrote) {
-        this.wrote = true;
-        this.options.onFirstWrite?.();
-      }
 
       const entries = await this.load();
       entries.delete(key);
@@ -216,7 +209,6 @@ export const sceneCache = new SceneCache(browserBytes, browserIndex, {
   maxBytes: MAX_BYTES,
   quota: async () => (await navigator.storage?.estimate?.())?.quota ?? null,
   now: () => Date.now(),
-  onFirstWrite: () => void navigator.storage?.persist?.().catch(() => undefined),
 });
 
 /** Scene URLs worth caching: an owner scene file pinned to one revision by its hash. Share links are never cached. */

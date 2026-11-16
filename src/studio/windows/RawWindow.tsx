@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import type { SessionDetail } from '../../api/types';
 import { ReplayObjectKind } from '../../viewer/replay/replayFile';
 import { materialRows, nodeType } from '../../inspector/inspection';
+import { originalMaterials } from '../viewRig/occluderFade';
 import { usePlaybackTime } from '../playback';
 import { useReplayBinding } from '../binding';
 import { unityPath } from '../unityPath';
@@ -20,7 +21,7 @@ function nodeRaw(node: THREE.Object3D, root: THREE.Object3D, id: number | null) 
   const player = useStudio.getState().player;
   const meta = id !== null ? player?.replay.objectsById.get(id) : undefined;
   const mesh = (node as THREE.Mesh).isMesh ? (node as THREE.Mesh) : null;
-  const materials = mesh ? (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) : [];
+  const materials = mesh ? originalMaterials(mesh) : [];
   return {
     objectId: id,
     name: node.name,

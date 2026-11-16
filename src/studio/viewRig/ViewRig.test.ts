@@ -217,18 +217,31 @@ describe('ViewRig obstruction', () => {
   const distance = (out: { position: THREE.Vector3; target: THREE.Vector3 }) => out.position.distanceTo(out.target);
 
   it('Behind pulls in to just before a wall and eases back out when it is clear', () => {
-    let wall: number | null = 3;
-    const { frame } = setup({ probe: () => wall });
     const clear = distance(settle(setup().frame));
+    let wall: number | null = clear * 0.9;
+    const { frame } = setup({ probe: () => wall });
     for (let i = 0; i < 120; i++) frame();
-    const blocked = distance(frame());
-    expect(blocked).toBeLessThan(clear * 0.6);
-    expect(blocked).toBeCloseTo(3 - 0.3, 0);
+    const blocked = frame();
+    expect(distance(blocked)).toBeCloseTo(clear * 0.9 - 0.3, 0);
+    expect(blocked.squeezed).toBe(false);
     wall = null;
-    const first = distance(frame());
-    expect(first - blocked).toBeLessThan(0.3);
     for (let i = 0; i < 400; i++) frame();
     expect(distance(frame())).toBeCloseTo(clear, 1);
+  });
+
+  it('stops at the floor, 60% of the distance, when the obstruction is closer, and says so', () => {
+    const clear = distance(settle(setup().frame));
+    let wall: number | null = 1;
+    const { frame } = setup({ probe: () => wall });
+    for (let i = 0; i < 120; i++) frame();
+    const blocked = frame();
+    expect(distance(blocked)).toBeCloseTo(Math.max(0.6 * clear, 3), 1);
+    expect(blocked.squeezed).toBe(true);
+    wall = null;
+    for (let i = 0; i < 400; i++) frame();
+    const free = frame();
+    expect(distance(free)).toBeCloseTo(clear, 1);
+    expect(free.squeezed).toBe(false);
   });
 
   it('Front goes round to the other side when its own is blocked and the other is clear', () => {

@@ -118,27 +118,6 @@ export default function StudioContent() {
   }, [root, player, settings.sceneLights, redraw]);
 
   useEffect(() => {
-    if (!root || !settings.wireframe) return;
-    const changed = new Set<THREE.Material>();
-    root.traverse((n) => {
-      const mesh = n as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
-        const w = m as THREE.Material & { wireframe?: boolean };
-        if (w && 'wireframe' in w && !w.wireframe) {
-          w.wireframe = true;
-          changed.add(w);
-        }
-      }
-    });
-    redraw();
-    return () => {
-      changed.forEach((m) => ((m as THREE.Material & { wireframe: boolean }).wireframe = false));
-      redraw();
-    };
-  }, [root, settings.wireframe, redraw]);
-
-  useEffect(() => {
     camera.fov = settings.fov;
     camera.updateProjectionMatrix();
     redraw();
@@ -275,7 +254,6 @@ export default function StudioContent() {
         <>
           <Ground plan={bounds.ground} fadeDistance={Math.max(40, bounds.radius * 5)} cellSize={gridCell(bounds.radius)} grid={settings.grid} shadows={settings.shadows} />
           {settings.cameraGizmos && cameras.length > 0 && <CameraGizmos cameras={cameras} focusId={focusCameraId} hiddenId={cameraMode === 'firstPerson' ? focusCameraId : null} depth={gizmoSize} />}
-          {settings.axes && <axesHelper args={[Math.max(1, bounds.radius * 0.5)]} position={[bounds.center.x, bounds.ground.floorY + 0.01, bounds.center.z]} />}
           {/* The outline pass renders the scene through a buffer every frame, so it exists only while something is selected. */}
           {selected && <SelectionOutline object={selected} />}
         </>

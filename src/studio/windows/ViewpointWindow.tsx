@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Axis3d, Clapperboard, Cuboid, Focus, Grid3x3, Keyboard, LayoutPanelLeft, Lightbulb, Navigation, ScanEye, SunMedium, Video } from 'lucide-react';
+import { Clapperboard, Focus, Grid3x3, Keyboard, LayoutPanelLeft, Lightbulb, Navigation, ScanEye, SunMedium, Video } from 'lucide-react';
 import { Button } from '../../ui/Button';
 import { Tooltip } from '../../ui/Tooltip';
 import { cn } from '../../ui/cn';
@@ -16,8 +16,6 @@ type ToggleKey = { [K in keyof ViewSettings]: ViewSettings[K] extends boolean ? 
 const TOGGLES: { key: ToggleKey; label: string; icon: LucideIcon }[] = [
   { key: 'grid', label: 'Grid', icon: Grid3x3 },
   { key: 'shadows', label: 'Shadows', icon: SunMedium },
-  { key: 'wireframe', label: 'Wireframe', icon: Cuboid },
-  { key: 'axes', label: 'Axes', icon: Axis3d },
   { key: 'sceneLights', label: 'Scene lights', icon: Lightbulb },
   { key: 'cameraGizmos', label: 'Camera lines', icon: Video },
 ];

@@ -276,10 +276,7 @@ export default function StudioPage() {
   const tools: RailTool[] = phone
     ? []
     : [
-        // Owners only: a share link is for looking, not for development tools.
-        ...(sharedView
-          ? []
-          : [{ id: 'debug', label: 'Debug', icon: Bug, active: debugOpen, onClick: () => useStage.getState().setDebugOpen(!debugOpen) }]),
+        { id: 'debug', label: 'Debug', icon: Bug, description: 'Frame times, memory and caches, with a wireframe switch', active: debugOpen, onClick: () => useStage.getState().setDebugOpen(!debugOpen) },
         { id: 'keys', label: 'Keyboard shortcuts', hint: '?', icon: Keyboard, description: 'Every key and what it does', onClick: () => useStudio.getState().setShortcutsOpen(true) },
       ];
 
@@ -355,9 +352,9 @@ export default function StudioPage() {
             )}
           </div>
 
-          {/* Right: the tools. */}
+          {/* Right: the tools, centred between the top buttons and the timeline; too many for the space, they fill it and scroll. */}
           <div
-            className={cn('pointer-events-none absolute z-20', phone ? 'inset-x-4 flex justify-center' : 'right-6 flex items-start justify-end')}
+            className={cn('pointer-events-none absolute z-20', phone ? 'inset-x-4 flex justify-center' : 'right-6 flex items-center justify-end')}
             style={phone ? { bottom: showTimeline ? 176 : 24 } : { top: 80, bottom: showTimeline ? 148 : 24 }}
           >
             <WindowRail scope={scope} windows={windows} tools={tools} />
@@ -395,7 +392,7 @@ export default function StudioPage() {
       </div>
 
       <WindowDock scope={scope} windows={windows} />
-      {debugOpen && !sharedView && (
+      {debugOpen && (
         <Suspense fallback={null}>
           <DebugWindow />
         </Suspense>

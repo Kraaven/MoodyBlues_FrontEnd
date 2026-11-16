@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ARM_MARGIN, armShare, SideChooser, stepArm } from './occlusion';
+import { ARM_MARGIN, armShare, armSqueezed, SideChooser, stepArm } from './occlusion';
 
 describe('armShare', () => {
   it('is 1 with nothing in the way, or the obstacle beyond the view', () => {
@@ -9,13 +9,28 @@ describe('armShare', () => {
   });
 
   it('stops a margin short of the obstacle', () => {
-    expect(armShare(3.3, 6) * 6).toBeCloseTo(3.3 - ARM_MARGIN);
+    expect(armShare(5, 6) * 6).toBeCloseTo(5 - ARM_MARGIN);
   });
 
-  it('never comes closer than about a metre, or a fifth of the distance', () => {
-    expect(armShare(0.1, 6) * 6).toBeCloseTo(1.2);
-    expect(armShare(0, 20)).toBeCloseTo(0.2);
+  it('never comes closer than 60% of the distance, or 3 m if that is more', () => {
+    expect(armShare(0.1, 6) * 6).toBeCloseTo(3.6);
+    expect(armShare(0, 20)).toBeCloseTo(0.6);
+    expect(armShare(0, 4) * 4).toBeCloseTo(3);
+    expect(armShare(0, 5) * 5).toBeCloseTo(3);
+  });
+
+  it('keeps the whole distance when that is shorter than 3 m', () => {
+    expect(armShare(0, 2.5)).toBe(1);
     expect(armShare(0, 0.5)).toBe(1);
+  });
+});
+
+describe('armSqueezed', () => {
+  it('is true only when the obstruction is nearer than the floor', () => {
+    expect(armSqueezed(null, 6)).toBe(false);
+    expect(armSqueezed(2, 6)).toBe(true);
+    expect(armSqueezed(4.2, 6)).toBe(false);
+    expect(armSqueezed(4, 2)).toBe(false);
   });
 });
 

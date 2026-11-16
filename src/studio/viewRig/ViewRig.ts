@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { FollowStyle } from '../studioStore';
 import { FreeLook } from './freeLook';
-import { armShare, SideChooser, stepArm } from './occlusion';
+import { armShare, armSqueezed, SideChooser, stepArm } from './occlusion';
 import { chasePose, chooseSide, followDistance, headingOf, restPose, sidePose, travelDirection, type PlayerSize, type PoseGoal } from './poses';
 import { AngleSpring, Spring, Spring3, wrapAngle } from './springs';
 import { VelocityEstimator } from './velocity';
@@ -69,6 +69,8 @@ export interface RigOutput {
   orbitEnabled: boolean;
   /** Something is still moving, so the next frame is needed. */
   animating: boolean;
+  /** An obstruction is closer than the spring arm may come in, so what blocks the view should be shown through. */
+  squeezed: boolean;
 }
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -99,6 +101,7 @@ export class ViewRig {
   private blend = 0;
   /** Spring arm: the share of the distance kept when something is in the way. */
   private arm = 1;
+  private squeezed = false;
   private readonly sides = new SideChooser();
   /** After Front changes side on purpose, the viewer needs a moment to swing before its side is judged again. */
   private sideLock = 0;
@@ -130,6 +133,7 @@ export class ViewRig {
     firstPerson: 0,
     orbitEnabled: true,
     animating: false,
+    squeezed: false,
   };
 
   /** 0 to 1: how far into first person the view is. */
@@ -211,6 +215,7 @@ export class ViewRig {
       this.hasWritten = true;
     }
     out.firstPerson = eased;
+    out.squeezed = this.squeezed;
     out.orbitEnabled = !first && this.blend === 0;
 
     const nudged = Math.abs(this.yaw.value) > SETTLED || Math.abs(this.pitch.value) > SETTLED;
@@ -239,6 +244,7 @@ export class ViewRig {
     this.lastInput = -Infinity;
     this.hasWritten = false;
     this.arm = 1;
+    this.squeezed = false;
     this.sides.reset();
     this.sideLock = 0;
     this.velocity.reset();
@@ -268,7 +274,10 @@ export class ViewRig {
   /** Spring arm: bring the viewer in towards what it looks at when something is in the way, and ease back out when it is clear. */
   private springArm(i: RigInput, dt: number, cut: boolean): void {
     const out = this.out;
-    const goal = i.probe && i.mode === 'follow' ? armShare(i.probe(out.target, out.position), out.position.distanceTo(out.target)) : 1;
+    const hit = i.probe && i.mode === 'follow' ? i.probe(out.target, out.position) : null;
+    const length = out.position.distanceTo(out.target);
+    const goal = armShare(hit, length);
+    this.squeezed = armSqueezed(hit, length);
     this.arm = cut ? goal : stepArm(this.arm, goal, dt);
     out.position.sub(out.target).multiplyScalar(this.arm).add(out.target);
   }

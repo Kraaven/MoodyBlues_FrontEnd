@@ -26,9 +26,12 @@ describe('railGroups', () => {
   it('groups windows as the rail does, tools last, and skips undescribed entries', () => {
     const groups = railGroups(
       [win('hier', 'scene', 'a'), win('logs', 'recordings', 'b'), win('quiet', 'scene')],
-      [{ id: 'frame', label: 'Frame', icon: Box, description: 'c' }],
+      [
+        { id: 'debug', label: 'Debug', icon: Box, description: 'd' },
+        { id: 'frame', label: 'Frame', icon: Box, description: 'c' },
+      ],
     );
-    expect(groups.map((g) => g.map((r) => r.id))).toEqual([['logs'], ['hier'], ['frame']]);
+    expect(groups.map((g) => g.map((r) => r.id))).toEqual([['logs'], ['hier'], ['debug', 'frame']]);
   });
 });
 

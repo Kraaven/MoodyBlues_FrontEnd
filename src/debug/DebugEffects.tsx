@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useStage } from '../stage/store';
+import { originalMaterials } from '../studio/viewRig/occluderFade';
 
 function carriesObjectId(root: THREE.Object3D): boolean {
   let found = false;
@@ -17,7 +18,6 @@ export default function DebugEffects() {
   const gl = useThree((s) => s.gl);
   const invalidate = useThree((s) => s.invalidate);
   const wireframe = useStage((s) => s.debug.wireframe);
-  const axes = useStage((s) => s.debug.axes);
   const bounds = useStage((s) => s.debug.bounds);
   const showHidden = useStage((s) => s.debug.showHidden);
   const fog = useStage((s) => s.debug.fog);
@@ -30,7 +30,7 @@ export default function DebugEffects() {
       scene.traverse((node) => {
         const mesh = node as THREE.Mesh;
         if (!mesh.isMesh || mesh.userData.__debug) return;
-        for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        for (const m of originalMaterials(mesh)) {
           const material = m as THREE.Material & { wireframe?: boolean };
           if (typeof material.wireframe === 'boolean' && !touched.has(material as never)) {
             touched.add(material as never);
@@ -88,19 +88,6 @@ export default function DebugEffects() {
       invalidate();
     };
   }, [fog, scene, invalidate]);
-
-  useEffect(() => {
-    if (!axes) return;
-    const helper = new THREE.AxesHelper(5);
-    helper.userData.__debug = true;
-    scene.add(helper);
-    invalidate();
-    return () => {
-      scene.remove(helper);
-      helper.dispose();
-      invalidate();
-    };
-  }, [axes, scene, invalidate]);
 
   // Bounds of everything in the scene except the helpers and the ground, refreshed as it changes.
   useEffect(() => {

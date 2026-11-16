@@ -11,7 +11,6 @@ import { cn } from '../ui/cn';
 
 const TOGGLES = [
   ['wireframe', 'Wireframe'],
-  ['axes', 'Axes'],
   ['bounds', 'Bounds'],
   ['showHidden', 'Show inactive'],
   ['fog', 'Fog'],

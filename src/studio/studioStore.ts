@@ -14,8 +14,6 @@ import type { ReplayPlayer } from '../viewer/replay/ReplayPlayer';
 export interface ViewSettings {
   grid: boolean;
   shadows: boolean;
-  wireframe: boolean;
-  axes: boolean;
   fov: number;
   /** The lights the Unity scene exported. Off by default: the viewer's own lighting reads better and costs less. */
   sceneLights: boolean;
@@ -35,8 +33,6 @@ const SETTINGS_KEY = 'moodyblues.view.v1';
 const DEFAULT_SETTINGS: ViewSettings = {
   grid: true,
   shadows: true,
-  wireframe: false,
-  axes: false,
   fov: 45,
   sceneLights: false,
   cameraGizmos: true,
@@ -47,7 +43,11 @@ const DEFAULT_SETTINGS: ViewSettings = {
 function readSettings(): ViewSettings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
-    return raw ? { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<ViewSettings>) } : DEFAULT_SETTINGS;
+    if (!raw) return DEFAULT_SETTINGS;
+    // Only the keys that still exist: a stored `wireframe` or `axes` from an older version is dropped.
+    const stored = JSON.parse(raw) as Record<string, unknown>;
+    const known = Object.fromEntries(Object.entries(stored).filter(([k]) => k in DEFAULT_SETTINGS));
+    return { ...DEFAULT_SETTINGS, ...known };
   } catch {
     return DEFAULT_SETTINGS;
   }

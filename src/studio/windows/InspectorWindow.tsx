@@ -5,6 +5,7 @@ import { ReplayObjectKind } from '../../viewer/replay/replayFile';
 import { useReplayBinding } from '../binding';
 import { unityPath } from '../unityPath';
 import { nodeType, triangleCount } from '../../inspector/inspection';
+import { originalMaterials } from '../viewRig/occluderFade';
 import { Button, IconButton } from '../../ui/Button';
 import { cn } from '../../ui/cn';
 import { useToast } from '../../ui/Toast';
@@ -170,8 +171,8 @@ export function InspectorWindow() {
         {mesh && <Row label="Vertices">{formatCount(mesh.geometry.attributes.position?.count ?? 0)}</Row>}
         {mesh && <Row label="Triangles">{formatCount(triangleCount(mesh.geometry))}</Row>}
         {mesh && (
-          <Row label="Materials" title={(Array.isArray(mesh.material) ? mesh.material : [mesh.material]).map((m) => m.name || m.type).join(', ')}>
-            {(Array.isArray(mesh.material) ? mesh.material : [mesh.material]).map((m) => m.name || m.type).join(', ')}
+          <Row label="Materials" title={originalMaterials(mesh).map((m) => m.name || m.type).join(', ')}>
+            {originalMaterials(mesh).map((m) => m.name || m.type).join(', ')}
           </Row>
         )}
         {meta && meta.spawnTime >= 0 && <Row label="Spawned">{formatPlayhead(meta.spawnTime)}</Row>}

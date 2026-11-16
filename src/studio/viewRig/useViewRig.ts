@@ -10,6 +10,7 @@ import { cameraForward } from '../cameras';
 import type { Playback } from '../playback';
 import { useStudio } from '../studioStore';
 import { measurePlayer, objectMoves, resolveFollowTarget } from './followTarget';
+import { OccluderFade, MAX_FADED } from './occluderFade';
 import { hideOwnMeshes } from './ownBody';
 import { firstPersonNear, followDistance, type PlayerSize } from './poses';
 import { followRestPose, ViewRig } from './ViewRig';
@@ -30,29 +31,47 @@ raycaster.firstHitOnly = true;
 /** Things smaller than this (grass, flowers, small props) do not hide the view. */
 const MIN_OBSTACLE_RADIUS = 0.5;
 
-/** The first thing along from -> to that would hide the view: a visible, big enough mesh outside the nodes being followed. */
-function firstObstacle(root: THREE.Object3D, ignore: readonly THREE.Object3D[], from: THREE.Vector3, to: THREE.Vector3): number | null {
+/** Is this hit a visible, big enough mesh outside the nodes being followed (one that would hide the view)? */
+function hides(mesh: THREE.Mesh, root: THREE.Object3D, ignore: readonly THREE.Object3D[]): boolean {
+  if (!mesh.isMesh) return false;
+  for (let n: THREE.Object3D | null = mesh; n && n !== root; n = n.parent) if (!n.visible || ignore.includes(n)) return false;
+  const sphere = (mesh.geometry.boundingSphere ??= (mesh.geometry.computeBoundingSphere(), mesh.geometry.boundingSphere));
+  return !sphere || sphere.radius * mesh.matrixWorld.getMaxScaleOnAxis() >= MIN_OBSTACLE_RADIUS;
+}
+
+/**
+ * Casts the ray from -> to and calls `each` with every mesh that would hide the view, nearest first,
+ * until it returns false.
+ */
+function castObstacles(
+  root: THREE.Object3D,
+  ignore: readonly THREE.Object3D[],
+  from: THREE.Vector3,
+  to: THREE.Vector3,
+  each: (mesh: THREE.Mesh, distance: number) => boolean,
+): void {
   const length = rayDirection.copy(to).sub(from).length();
-  if (length < 1e-3) return null;
+  if (length < 1e-3) return;
   raycaster.set(from, rayDirection.divideScalar(length));
   raycaster.near = 0;
   raycaster.far = length;
   for (const hit of raycaster.intersectObject(root, true)) {
     const mesh = hit.object as THREE.Mesh;
-    if (!mesh.isMesh) continue;
-    let skipped = false;
-    for (let n: THREE.Object3D | null = mesh; n && n !== root; n = n.parent) {
-      if (!n.visible || ignore.includes(n)) {
-        skipped = true;
-        break;
-      }
-    }
-    if (skipped) continue;
-    const sphere = (mesh.geometry.boundingSphere ??= (mesh.geometry.computeBoundingSphere(), mesh.geometry.boundingSphere));
-    if (sphere && sphere.radius * mesh.matrixWorld.getMaxScaleOnAxis() < MIN_OBSTACLE_RADIUS) continue;
-    return hit.distance;
+    if (hides(mesh, root, ignore) && !each(mesh, hit.distance)) return;
   }
-  return null;
+}
+
+/** The first thing along from -> to that would hide the view. */
+function firstObstacle(root: THREE.Object3D, ignore: readonly THREE.Object3D[], from: THREE.Vector3, to: THREE.Vector3): number | null {
+  let found: number | null = null;
+  castObstacles(root, ignore, from, to, (_mesh, distance) => ((found = distance), false));
+  return found;
+}
+
+/** Fills `out` with the first few meshes along from -> to that hide the view. */
+function collectObstacles(root: THREE.Object3D, ignore: readonly THREE.Object3D[], from: THREE.Vector3, to: THREE.Vector3, out: THREE.Mesh[]): void {
+  out.length = 0;
+  castObstacles(root, ignore, from, to, (mesh) => (out.push(mesh), out.length < MAX_FADED));
 }
 
 /** What the controls were set to before the rig took the camera, so they can be given back. */
@@ -77,6 +96,9 @@ interface Options {
  * is focused the controls are still the input device (see ViewRig), except in first person, where
  * the rig takes over the pointer on the stage's surface for the free look.
  *
+ * Where the spring arm cannot come in far enough (see occlusion.ts), the meshes in the way fade out
+ * so the player stays visible, and fade back when they no longer block.
+ *
  * It waits while the camera rig is moving the view (a transition, the intro) and takes over from
  * wherever the camera then is, so nothing cuts. Asks for the next frame while anything moves.
  */
@@ -90,6 +112,9 @@ export function useViewRig({ root, replay, playback, cameraNode }: Options): {
   const surface = useStage((s) => s.surface);
   const [rig] = useState(() => new ViewRig());
   const [tracker] = useState(() => new ObjectTracker());
+  const [fade] = useState(() => new OccluderFade());
+  /** The meshes blocking the view this frame, found by the rig's frame and faded by the one after it. */
+  const blockers = useRef<THREE.Mesh[]>([]);
   const claimed = useRef<Claimed | null>(null);
   const followNode = useRef<{ camera: THREE.Object3D; node: THREE.Object3D; size: PlayerSize } | null>(null);
   const dragging = useRef(false);
@@ -118,6 +143,7 @@ export function useViewRig({ root, replay, playback, cameraNode }: Options): {
   }, [camera, controls, invalidate, rig, showOwn]);
 
   useEffect(() => release, [release]);
+  useEffect(() => () => fade.clear(), [fade, root]);
 
   useEffect(() => {
     if (!controls) return;
@@ -209,6 +235,7 @@ export function useViewRig({ root, replay, playback, cameraNode }: Options): {
 
   useFrame((_, rawDelta) => {
     const studio = useStudio.getState();
+    blockers.current.length = 0;
     // While the camera rig moves the view (a transition, the intro) it has the camera; the rig takes over from where that ends.
     if (!controls || !orbitHasCamera() || studio.introRunning) {
       rig.reset();
@@ -264,6 +291,7 @@ export function useViewRig({ root, replay, playback, cameraNode }: Options): {
       if (out.firstPerson > 0.6 && !ownHidden.current) ownHidden.current = { eye, restore: hideOwnMeshes(eye) };
       setNearPlaneOverride(out.firstPerson > 0 ? firstPersonNear(studio.settings.firstPersonNear, size) : null);
       if (out.animating) invalidate();
+      if (out.squeezed && root) collectObstacles(root, [followed, eye], out.target, out.position, blockers.current);
       return;
     }
 
@@ -278,6 +306,12 @@ export function useViewRig({ root, replay, playback, cameraNode }: Options): {
     controls.target.add(shift);
     camera.position.add(shift);
     if (tracker.moving) invalidate();
+  });
+
+  // After the rig's frame (same priority, registered later): fades what it found, and what it no longer finds back in.
+  useFrame((_, rawDelta) => {
+    fade.set(blockers.current);
+    if (fade.step(Math.min(rawDelta, 0.1))) invalidate();
   });
 
   return { introPose, followDistanceOf };
