@@ -17,10 +17,14 @@ export interface ViewSettings {
   wireframe: boolean;
   axes: boolean;
   fov: number;
+  /** The lights the Unity scene exported. Off by default: the viewer's own lighting reads better and costs less. */
+  sceneLights: boolean;
+  /** A small frustum drawn at each camera the Unity scene exported. */
+  cameraGizmos: boolean;
 }
 
 const SETTINGS_KEY = 'moodyblues.view.v1';
-const DEFAULT_SETTINGS: ViewSettings = { grid: true, shadows: true, wireframe: false, axes: false, fov: 45 };
+const DEFAULT_SETTINGS: ViewSettings = { grid: true, shadows: true, wireframe: false, axes: false, fov: 45, sceneLights: false, cameraGizmos: true };
 
 function readSettings(): ViewSettings {
   try {
@@ -48,6 +52,24 @@ interface StudioState {
   /** The ObjectID of the selection, when it has one. */
   selectedId: number | null;
   follow: boolean;
+  /**
+   * The ObjectID of the exported camera the view stays on, or null for the free camera. While set,
+   * the orbit target follows that camera so the user can still orbit and zoom around it. Exclusive
+   * with `follow` (the selected object).
+   */
+  focusCameraId: number | null;
+  /** The recording's opening move is running: the camera is not followed until it ends. */
+  introRunning: boolean;
+  /** Bumped to run the intro again; `introFromStart` says it begins at 0 and plays (the button) rather than where the link started. */
+  introRequest: number;
+  introFromStart: boolean;
+  /**
+   * 'waiting' holds a recording's intro at the whole-scene overview until it is 'open' (the welcome
+   * card of a shared link, until Play). Owners' pages never close it.
+   */
+  introGate: 'open' | 'waiting';
+  /** Bumped when the user picked a camera, so the view flies to frame it. */
+  focusFlyRequest: number;
   settings: ViewSettings;
   /** A material picked in the Materials window, shown in its details. */
   materialId: string | null;
@@ -62,6 +84,11 @@ interface StudioState {
   /** The replay changed which node is behind the selected ID. */
   resolveSelected: (node: THREE.Object3D | null) => void;
   setFollow: (follow: boolean) => void;
+  /** Focus an exported camera (null: the free camera). `fly` moves the view to frame it. */
+  setFocusCamera: (id: number | null, fly?: boolean) => void;
+  setIntroRunning: (running: boolean) => void;
+  setIntroGate: (gate: 'open' | 'waiting') => void;
+  replayIntro: () => void;
   setSetting: <K extends keyof ViewSettings>(key: K, value: ViewSettings[K]) => void;
   setMaterial: (id: string | null) => void;
   frameAll: () => void;
@@ -84,6 +111,12 @@ export const useStudio = create<StudioState>((set, get) => ({
   selected: null,
   selectedId: null,
   follow: false,
+  focusCameraId: null,
+  introRunning: false,
+  introRequest: 0,
+  introFromStart: false,
+  introGate: 'open',
+  focusFlyRequest: 0,
   settings: readSettings(),
   materialId: null,
   frameAllRequest: 0,
@@ -92,12 +125,13 @@ export const useStudio = create<StudioState>((set, get) => ({
   attach: (scene) => {
     const previousId = get().selectedId;
     if (!scene) {
-      set({ root: null, master: null, renderer: null, player: null, selected: null, follow: false });
+      set({ root: null, master: null, renderer: null, player: null, selected: null, follow: false, focusCameraId: null, introRunning: false, introFromStart: false });
       return;
     }
     // Keep the selection across scene and session when the same object exists in both.
     const node = previousId !== null ? (scene.player?.getObject(previousId) ?? findById(scene.root, previousId)) : null;
-    set({ ...scene, selected: node ?? null, selectedId: node ? previousId : null, follow: node ? get().follow : false });
+    // A new scene or recording starts on the free camera; a recording's intro picks the main camera.
+    set({ ...scene, selected: node ?? null, selectedId: node ? previousId : null, follow: node ? get().follow : false, focusCameraId: null, introRunning: false });
   },
   select: (selected) => {
     const selectedId = idOf(selected, get().player);
@@ -111,7 +145,12 @@ export const useStudio = create<StudioState>((set, get) => ({
   resolveSelected: (node) => {
     if (node !== get().selected) set({ selected: node });
   },
-  setFollow: (follow) => set({ follow }),
+  setFollow: (follow) => set(follow ? { follow, focusCameraId: null } : { follow }),
+  setFocusCamera: (id, fly = true) =>
+    set((s) => ({ focusCameraId: id, follow: id === null ? s.follow : false, focusFlyRequest: id !== null && fly ? s.focusFlyRequest + 1 : s.focusFlyRequest })),
+  setIntroRunning: (introRunning) => set({ introRunning }),
+  setIntroGate: (introGate) => set({ introGate }),
+  replayIntro: () => set((s) => ({ introRequest: s.introRequest + 1, introFromStart: true })),
   setSetting: (key, value) => {
     const settings = { ...get().settings, [key]: value };
     storeSettings(settings);

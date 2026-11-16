@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Bug, ChevronDown, ChevronUp } from 'lucide-react';
+import { prefetcher } from '../prefetch/prefetcher';
+import { sceneCache, type CacheInfo } from '../prefetch/sceneCache';
 import { useReplayBinding } from '../studio/binding';
 import { sceneCacheInfo } from '../stage/sceneAssets';
 import { useStage } from '../stage/store';
@@ -21,6 +23,7 @@ const TOGGLES = [
 export default function DebugPanel() {
   const [open, setOpen] = useState(true);
   const [, tick] = useState(0);
+  const [disk, setDisk] = useState<CacheInfo | null>(null);
   const queries = useQueryClient();
   const stats = useStage((s) => s.stats);
   const debug = useStage((s) => s.debug);
@@ -36,6 +39,13 @@ export default function DebugPanel() {
     };
   }, []);
 
+  useEffect(() => {
+    const read = () => void sceneCache.info().then(setDisk);
+    read();
+    const timer = window.setInterval(read, 2_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const playback = useReplayBinding.getState().playback;
   const cache = sceneCacheInfo();
   const rows: [string, string][] = [
@@ -46,6 +56,8 @@ export default function DebugPanel() {
     ['GPU holds', stats ? `${stats.geometries} geometries · ${stats.textures} textures` : '—'],
     ['Replay clock', playback ? `${playback.time.toFixed(2)} s${playback.playing ? ' · playing' : ''}` : '—'],
     ['Scene cache', cache.length ? cache.map((c) => `${c.key.slice(-8)}×${c.refs}${c.loaded ? '' : '…'}`).join(' ') : 'empty'],
+    ['Disk cache', disk ? `${disk.count} scenes · ${(disk.bytes / 1048576).toFixed(0)} / ${(disk.budget / 1048576).toFixed(0)} MB` : '—'],
+    ['Prefetch', `${prefetcher.status().pending} queued${prefetcher.status().downloading ? ' · downloading' : ''}`],
     ['Query cache', `${queries.getQueryCache().getAll().length} queries`],
   ];
 

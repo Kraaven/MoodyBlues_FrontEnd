@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { clone as cloneWithSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { buildBoundsTrees } from '../viewer/core/bvh';
 import { disposeObject3D } from '../viewer/core/gltf';
+import { flattenTransmission } from '../viewer/core/transmission';
 import { loadSceneGltf } from './sceneSource';
 import type { SceneRef } from './store';
 
@@ -12,7 +14,7 @@ import type { SceneRef } from './store';
  * consumer holds a lease while it uses the scene; a scene nobody holds is kept for a moment in case
  * the user comes back, and freed once more than MAX_IDLE are waiting.
  *
- * Consumers must not change the master graph. A replay takes `cloneScene(master)` and animates that.
+ * Consumers must not change the master graph (beyond display settings: shadows, lights). A replay takes `cloneScene(master)` and animates that.
  */
 
 /** What the glTF file itself says, kept for the inspector. */
@@ -84,6 +86,9 @@ export function acquireScene(
       controller.signal,
     ).then(
       (gltf) => {
+        // Display-only changes, made once on the master: replays clone it and share its geometry and materials.
+        buildBoundsTrees(gltf.scene);
+        flattenTransmission(gltf.scene);
         created.root = gltf.scene;
         created.info = {
           json: (gltf.parser.json ?? {}) as Record<string, unknown>,

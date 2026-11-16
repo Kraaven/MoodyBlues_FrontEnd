@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { OrbitControls, PerformanceMonitor } from '@react-three/drei';
 import * as THREE from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { Atmosphere } from '../viewer/core/Atmosphere';
@@ -20,12 +20,28 @@ const StudioContent = lazy(() => import('../studio/StudioContent'));
 const DebugEffects = lazy(() => import('../debug/DebugEffects'));
 const debugOn = debugEnabled();
 
+/** Pixel ratio ceiling. Past 1.5 the sharpness is hard to see and the fill cost is not. */
+const DPR_MAX = 1.5;
+const DPR_MIN = 1;
+/**
+ * Shadow maps are drawn when something asked (`needsUpdate`), not every frame; the replay, the light
+ * fitting and the display settings ask. PCFShadowMap is the soft one now (PCFSoftShadowMap is deprecated).
+ */
+const SHADOWS = { type: THREE.PCFShadowMap, autoUpdate: false };
+
 /** Frame statistics for the Debug panel and the scene stats; only runs while something asked for them. */
 function StatsReporter() {
   const window = useRef({ time: 0, frames: 0, max: 0 });
+  const enabled = useStage((s) => s.statsEnabled);
+  const invalidate = useThree((s) => s.invalidate);
+  // While measured the canvas draws every frame, or the frame rate would read as the idle one.
+  useEffect(() => {
+    if (enabled) invalidate();
+  }, [enabled, invalidate]);
   useFrame(({ gl }, delta) => {
     const state = useStage.getState();
     if (!state.statsEnabled) return;
+    invalidate();
     const w = window.current;
     w.time += delta;
     w.frames += 1;
@@ -63,13 +79,15 @@ function StageControls() {
   const controls = useRef<OrbitControlsImpl | null>(null);
   const timer = useRef<number | null>(null);
   const turning = idleOrbit && !reducedMotion();
+  const invalidate = useThree((s) => s.invalidate);
 
   useEffect(() => {
     if (controls.current) controls.current.autoRotate = turning;
+    invalidate();
     return () => {
       if (timer.current) window.clearTimeout(timer.current);
     };
-  }, [turning]);
+  }, [turning, invalidate]);
 
   if (control !== 'free' || !surface) return null;
   return (
@@ -91,7 +109,44 @@ function StageControls() {
         if (timer.current) window.clearTimeout(timer.current);
         timer.current = window.setTimeout(() => {
           if (controls.current) controls.current.autoRotate = turning;
+          invalidate();
         }, 4000);
+      }}
+    />
+  );
+}
+
+/**
+ * Steps the pixel ratio down from DPR_MAX towards DPR_MIN while the frame rate stays low, and back up
+ * when it recovers. The canvas draws on demand, so frames are measured only while something is
+ * moving; the monitor is started afresh after every pause so a gap between two frames is never
+ * read as a slow frame.
+ */
+function AdaptiveQuality({ onDpr }: { onDpr: (dpr: number) => void }) {
+  const invalidate = useThree((s) => s.invalidate);
+  const dpr = useThree((s) => s.viewport.dpr);
+  const [epoch, setEpoch] = useState(0);
+  const factor = useRef(1);
+  const last = useRef(performance.now());
+
+  // A new pixel ratio clears the canvas; draw it again.
+  useEffect(() => {
+    invalidate();
+  }, [dpr, invalidate]);
+
+  useFrame(() => {
+    const now = performance.now();
+    if (now - last.current > 250) setEpoch((n) => n + 1);
+    last.current = now;
+  });
+
+  return (
+    <PerformanceMonitor
+      key={epoch}
+      factor={factor.current}
+      onChange={({ factor: next }) => {
+        factor.current = next;
+        onDpr(Math.round((DPR_MIN + (DPR_MAX - DPR_MIN) * next) * 4) / 4);
       }}
     />
   );
@@ -111,10 +166,23 @@ function Content() {
   return null;
 }
 
+/** Starting to draw again (leaving a page with no 3D) needs a first frame; `demand` waits for one to be asked for. */
+function Wake({ active }: { active: boolean }) {
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    if (active) invalidate();
+  }, [active, invalidate]);
+  return null;
+}
+
 /**
  * The one persistent WebGL canvas. It sits behind the whole app and is never unmounted while the app
  * is open. Views choose what it shows through `useStageView`, and pages show it through a
  * StageWindow.
+ *
+ * It draws on demand (`frameloop="demand"`): a frame is rendered when something changed and asked for
+ * one, so a still scene costs nothing. Whatever animates keeps asking until it settles. Anything that
+ * changes the picture outside React props must call `invalidate`.
  *
  * Without WebGL, or while the context is lost, a plain gradient takes its place and the rest of the
  * app carries on. The canvas is created the first time a view wants to draw, so a page that never
@@ -128,6 +196,7 @@ export default function StageHost() {
   const notify = useToast();
   const supported = useRef(webglSupported());
   const [started, setStarted] = useState(false);
+  const [dpr, setDpr] = useState(DPR_MAX);
 
   useEffect(() => {
     if (active) setStarted(true);
@@ -147,12 +216,12 @@ export default function StageHost() {
           style={{ opacity: active ? 'var(--stage-dim, 1)' : Math.min(dim, 0) }}
         >
           <Canvas
-            frameloop={active ? 'always' : 'never'}
-            dpr={[1, 1.75]}
-            shadows={{ type: THREE.PCFSoftShadowMap }}
+            frameloop={active ? 'demand' : 'never'}
+            dpr={[1, dpr]}
+            shadows={SHADOWS}
             camera={{ position: DEFAULT_CAMERA.position, fov: DEFAULT_CAMERA.fov, near: 0.1, far: 2000 }}
             gl={{ antialias: true, alpha: false, powerPreference: 'high-performance', preserveDrawingBuffer: false }}
-            onCreated={({ gl }) => {
+            onCreated={({ gl, invalidate }) => {
               gl.toneMapping = THREE.ACESFilmicToneMapping;
               gl.toneMappingExposure = 1.05;
               const element = gl.domElement;
@@ -161,9 +230,14 @@ export default function StageHost() {
                 useStage.getState().setStatus('lost');
                 notify('The 3D view lost its graphics context and is restoring.', 'error');
               });
-              element.addEventListener('webglcontextrestored', () => useStage.getState().setStatus('ok'));
+              element.addEventListener('webglcontextrestored', () => {
+                useStage.getState().setStatus('ok');
+                invalidate();
+              });
             }}
           >
+            <Wake active={active} />
+            <AdaptiveQuality onDpr={setDpr} />
             <Atmosphere />
             <StudioEnvironment />
             <CameraRig />

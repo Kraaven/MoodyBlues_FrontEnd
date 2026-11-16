@@ -58,11 +58,19 @@ interface RequestOptions {
   /** False for sign-in, registration, the session probe and anonymous share paths: a 401 there is an answer, not an expiry. */
   auth?: boolean;
   signal?: AbortSignal;
+  /** Fetch priority hint: 'low' for background work (prefetching) so it yields to what the user is waiting on. */
+  priority?: 'low' | 'high' | 'auto';
 }
 
 const UNREACHABLE = 'Could not reach the MoodyBlues server. Check your connection and try again.';
 
-function send(path: string, method: string, body: unknown, signal: AbortSignal | undefined): Promise<Response> {
+function send(
+  path: string,
+  method: string,
+  body: unknown,
+  signal: AbortSignal | undefined,
+  priority?: RequestOptions['priority'],
+): Promise<Response> {
   const headers: Record<string, string> = { [CLIENT_HEADER]: CLIENT_VALUE };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   return fetch(apiUrl(path), {
@@ -71,7 +79,8 @@ function send(path: string, method: string, body: unknown, signal: AbortSignal |
     body: body !== undefined ? JSON.stringify(body) : undefined,
     credentials: 'include',
     signal,
-  });
+    ...(priority ? { priority } : {}),
+  } as RequestInit);
 }
 
 let refreshing: Promise<boolean> | null = null;
@@ -96,12 +105,12 @@ export function isAnonymousPath(path: string): boolean {
 }
 
 /** Raw fetch with cookies: for binary downloads. Throws ApiError on failure. */
-export async function apiFetch(path: string, { method = 'GET', body, auth = !isAnonymousPath(path), signal }: RequestOptions = {}): Promise<Response> {
+export async function apiFetch(path: string, { method = 'GET', body, auth = !isAnonymousPath(path), signal, priority }: RequestOptions = {}): Promise<Response> {
   let res: Response;
   try {
-    res = await send(path, method, body, signal);
+    res = await send(path, method, body, signal, priority);
     if (res.status === 401 && auth && (await refreshSession())) {
-      res = await send(path, method, body, signal);
+      res = await send(path, method, body, signal, priority);
     }
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') throw err;

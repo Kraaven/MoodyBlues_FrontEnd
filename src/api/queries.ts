@@ -49,8 +49,13 @@ const SLOW_POLL_MS = 30_000;
 
 // ---- Projects ---------------------------------------------------------------------------------
 
+/** Query options for the project list, shared by the hook and the background prefetcher. */
+export function projectsQuery() {
+  return { queryKey: keys.projects, queryFn: () => apiJson<ProjectSummary[]>('/api/projects') };
+}
+
 export function useProjects() {
-  return useQuery({ queryKey: keys.projects, queryFn: () => apiJson<ProjectSummary[]>('/api/projects') });
+  return useQuery(projectsQuery());
 }
 
 /** Query options for one project, shared by the hook and by pages that load several at once. */
@@ -251,17 +256,31 @@ export function useDeleteSession() {
   });
 }
 
-/** Downloads a binary resource with progress (bytes received, total if the server sent it). */
-export async function downloadWithProgress(
+/** A finished download and the response headers that decide whether it may be cached. */
+export interface Download {
+  buffer: ArrayBuffer;
+  /** True when the server marked this exact response as never changing (a final scene revision). */
+  immutable: boolean;
+}
+
+/**
+ * Downloads a binary resource with progress (bytes received, total if the server sent it).
+ * `priority: 'low'` is for background fetches.
+ */
+export async function downloadResource(
   path: string,
   onProgress?: (received: number, total: number | null) => void,
   signal?: AbortSignal,
-): Promise<ArrayBuffer> {
-  const res = await apiFetch(path, { signal });
+  priority?: 'low' | 'high' | 'auto',
+): Promise<Download> {
+  const res = await apiFetch(path, { signal, priority });
+  const immutable = (res.headers.get('Cache-Control') ?? '').includes('immutable');
+  // The scene is served compressed: Content-Length is then the wire size, while the stream we read
+  // is already decoded, so the backend states the decoded size separately.
+  const decoded = res.headers.get('X-MoodyBlues-Decoded-Length');
   const lengthHeader = res.headers.get('Content-Length');
-  // With Content-Encoding the header is the compressed size, not what we will receive.
-  const total = lengthHeader && !res.headers.get('Content-Encoding') ? Number(lengthHeader) : null;
-  if (!res.body || !onProgress) return res.arrayBuffer();
+  const total = decoded ? Number(decoded) : lengthHeader && !res.headers.get('Content-Encoding') ? Number(lengthHeader) : null;
+  if (!res.body || !onProgress) return { buffer: await res.arrayBuffer(), immutable };
 
   const reader = res.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -280,7 +299,15 @@ export async function downloadWithProgress(
     out.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  return out.buffer;
+  return { buffer: out.buffer, immutable };
+}
+
+export async function downloadWithProgress(
+  path: string,
+  onProgress?: (received: number, total: number | null) => void,
+  signal?: AbortSignal,
+): Promise<ArrayBuffer> {
+  return (await downloadResource(path, onProgress, signal)).buffer;
 }
 
 /** Saves an authenticated download to disk (through fetch, so a refresh can happen first if needed). */

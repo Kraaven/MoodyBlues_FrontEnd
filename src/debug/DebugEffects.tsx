@@ -14,6 +14,8 @@ function carriesObjectId(root: THREE.Object3D): boolean {
 /** Whatever the Debug panel's toggles ask of the scene, inside the canvas. Every change is undone when its toggle goes off. */
 export default function DebugEffects() {
   const scene = useThree((s) => s.scene);
+  const gl = useThree((s) => s.gl);
+  const invalidate = useThree((s) => s.invalidate);
   const wireframe = useStage((s) => s.debug.wireframe);
   const axes = useStage((s) => s.debug.axes);
   const bounds = useStage((s) => s.debug.bounds);
@@ -36,13 +38,18 @@ export default function DebugEffects() {
           }
         }
       });
-    apply();
-    const timer = window.setInterval(apply, 1000); // catches scenes that finish loading afterwards
+    const run = () => {
+      apply();
+      invalidate();
+    };
+    run();
+    const timer = window.setInterval(run, 1000); // catches scenes that finish loading afterwards
     return () => {
       window.clearInterval(timer);
       for (const m of touched) m.wireframe = false;
+      invalidate();
     };
-  }, [wireframe, scene]);
+  }, [wireframe, scene, invalidate]);
 
   // Show the nodes the scene marks inactive at start.
   useEffect(() => {
@@ -55,33 +62,45 @@ export default function DebugEffects() {
           node.visible = true;
         }
       });
-    apply();
-    const timer = window.setInterval(apply, 1000);
+    const run = () => {
+      apply();
+      // Shown objects cast shadows too.
+      gl.shadowMap.needsUpdate = true;
+      invalidate();
+    };
+    run();
+    const timer = window.setInterval(run, 1000);
     return () => {
       window.clearInterval(timer);
       for (const node of forced) node.visible = false;
+      gl.shadowMap.needsUpdate = true;
+      invalidate();
     };
-  }, [showHidden, scene]);
+  }, [showHidden, scene, gl, invalidate]);
 
   useEffect(() => {
     if (fog) return;
     const saved = scene.fog;
     scene.fog = null;
+    invalidate();
     return () => {
       scene.fog = saved;
+      invalidate();
     };
-  }, [fog, scene]);
+  }, [fog, scene, invalidate]);
 
   useEffect(() => {
     if (!axes) return;
     const helper = new THREE.AxesHelper(5);
     helper.userData.__debug = true;
     scene.add(helper);
+    invalidate();
     return () => {
       scene.remove(helper);
       helper.dispose();
+      invalidate();
     };
-  }, [axes, scene]);
+  }, [axes, scene, invalidate]);
 
   // Bounds of everything in the scene except the helpers and the ground, refreshed as it changes.
   useEffect(() => {
@@ -90,11 +109,13 @@ export default function DebugEffects() {
     const helper = new THREE.Box3Helper(box, new THREE.Color('#ffb547'));
     helper.userData.__debug = true;
     scene.add(helper);
+    invalidate();
     return () => {
       scene.remove(helper);
       helper.dispose();
+      invalidate();
     };
-  }, [bounds, scene]);
+  }, [bounds, scene, invalidate]);
 
   useFrame(() => {
     if (!bounds) return;

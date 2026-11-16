@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { Line } from '@react-three/drei';
 import * as THREE from 'three';
 import type { Line2 } from 'three-stdlib';
 import { Ground } from '../viewer/core/Ground';
+import type { GroundPlan } from '../viewer/core/floor';
 import { PALETTE } from '../viewer/core/palette';
-import { SceneLights, type SceneBounds } from './SceneContent';
+import { SceneLights } from './SceneContent';
 import { reducedMotion } from './support';
 
 /**
@@ -95,7 +96,9 @@ const LAP_SECONDS = 26;
 const TRAIL_POINTS = 90;
 const TRAIL_SECONDS = 9;
 
-const BOUNDS: SceneBounds = { center: new THREE.Vector3(0, 3, 0), radius: 15, floorY: 0 };
+const BOUNDS = { center: new THREE.Vector3(0, 3, 0), radius: 15 };
+// Its slab is built from boxes, so a catcher under it keeps the shadows on the floor.
+const GROUND: GroundPlan = { floorY: 0, gridY: 0.002, catcher: true, extent: 160, centerX: 0, centerZ: 0, depthBias: -1 };
 
 function Boxes({ boxes, material }: { boxes: Box[]; material: THREE.Material }) {
   const geometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), []);
@@ -148,13 +151,22 @@ export function DemoScene() {
     geometry?.setPositions?.(trailPoints.flatMap((p) => [p.x, p.y, p.z]));
   };
 
+  const invalidate = useThree((s) => s.invalidate);
+  const gl = useThree((s) => s.gl);
+
   useEffect(() => {
     place(demoClock.time);
+    gl.shadowMap.needsUpdate = true;
+    invalidate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The capsule never rests, so the demo draws every frame (the canvas otherwise draws on demand).
   useFrame((_, delta) => {
-    if (calm || document.hidden) return;
+    if (calm) return;
+    invalidate();
+    if (document.hidden) return;
+    gl.shadowMap.needsUpdate = true;
     demoClock.time = (demoClock.time + Math.min(delta, 0.1)) % demoClock.duration;
     place(demoClock.time);
   });
@@ -169,7 +181,7 @@ export function DemoScene() {
         <capsuleGeometry args={[0.32, 0.5, 6, 16]} />
       </mesh>
       <Line ref={trail} points={trailPoints} vertexColors={colors} lineWidth={2.2} transparent opacity={0.95} />
-      <Ground y={0} fadeDistance={90} cellSize={2} shadows extent={160} />
+      <Ground plan={GROUND} fadeDistance={90} cellSize={2} />
     </>
   );
 }

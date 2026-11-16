@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronRight, KeyRound } from 'lucide-react';
 import { useProject } from '../api/queries';
+import { usePrefetchFocus } from '../prefetch/usePrefetchFocus';
 import type { ProjectDetail, ProjectScene } from '../api/types';
 import { ConnectionDialog } from '../shell/ConnectionDialog';
 import { SetupSteps } from '../shell/SetupGuide';
@@ -19,6 +20,7 @@ export function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [params, setParams] = useSearchParams();
   const project = useProject(projectId);
+  usePrefetchFocus(projectId);
   const [connecting, setConnecting] = useState(false);
   const data = project.data;
   useWindowTitle(data?.name ?? 'Project');

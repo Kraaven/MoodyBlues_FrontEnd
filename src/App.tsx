@@ -8,6 +8,7 @@ import { ProjectPage } from './pages/ProjectPage';
 import { ScenePage } from './pages/scene/ScenePage';
 import { StagePreloader } from './stage/StagePreloader';
 import { debugEnabled } from './debug/enabled';
+import { PrefetchHost } from './prefetch/PrefetchHost';
 import { Mark } from './ui/Logo';
 
 // three.js, the replay engine and the studio load only when something is opened in 3D.
@@ -33,6 +34,7 @@ export default function App() {
         <StageHost />
       </Suspense>
       <StagePreloader />
+      <PrefetchHost />
       {debugOn && (
         <Suspense fallback={null}>
           <DebugPanel />

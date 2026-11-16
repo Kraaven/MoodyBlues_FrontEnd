@@ -1,17 +1,25 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import { framePose } from '../viewer/core/gltf';
+import { FRAME_DIRECTION, framePose } from '../viewer/core/gltf';
 import { Ground } from '../viewer/core/Ground';
 import { SelectionOutline } from '../viewer/core/SelectionOutline';
 import { ReplayPlayer } from '../viewer/replay/ReplayPlayer';
 import { useReplayBinding } from './binding';
 import { cloneScene } from '../stage/sceneAssets';
-import { applyShadows, gridCell, SceneLights, useStagedScene } from '../stage/SceneContent';
+import { applySceneLights, applyShadows, gridCell, prepareScene, SceneLights, useStagedScene } from '../stage/SceneContent';
+import { orbitHasCamera } from '../stage/rigState';
+import { reducedMotion } from '../stage/support';
+import { useRedraw } from '../stage/redraw';
 import { captureSnapshot } from '../stage/snapshotCapture';
-import { useStage } from '../stage/store';
+import { regionFill, useStage } from '../stage/store';
+import { CameraGizmos } from './CameraGizmos';
+import { cameraForward, framingPose, listCameras } from './cameras';
+import { Intro } from './intro';
 import { useStudio } from './studioStore';
+
+const followShift = new THREE.Vector3();
 
 function effectivelyVisible(node: THREE.Object3D): boolean {
   for (let n: THREE.Object3D | null = node; n; n = n.parent) if (!n.visible) return false;
@@ -42,7 +50,11 @@ export default function StudioContent() {
   const selected = useStudio((s) => s.selected);
   const frameAllRequest = useStudio((s) => s.frameAllRequest);
   const frameSelectedRequest = useStudio((s) => s.frameSelectedRequest);
+  const focusFlyRequest = useStudio((s) => s.focusFlyRequest);
+  const focusCameraId = useStudio((s) => s.focusCameraId);
+  const introRequest = useStudio((s) => s.introRequest);
   const [player, setPlayer] = useState<ReplayPlayer | null>(null);
+  const { redraw, shadowsChanged } = useRedraw();
 
   const replaying = Boolean(replay && playback);
   const pick = useCallback((master: THREE.Object3D) => (replaying ? cloneScene(master) : master), [replaying]);
@@ -50,6 +62,7 @@ export default function StudioContent() {
     (root: THREE.Object3D, master: THREE.Object3D) => {
       if (replay && playback) {
         const created = new ReplayPlayer(root, replay);
+        created.setSceneLights(useStudio.getState().settings.sceneLights);
         playback.attach(created);
         setPlayer(created);
         useStudio.getState().attach({ root, master, renderer: gl, player: created });
@@ -71,12 +84,50 @@ export default function StudioContent() {
     },
     [replay, playback, gl, scene, ref],
   );
-  const { root, bounds } = useStagedScene(ref, pick, onReady, replaying ? replay : null);
+  const prepare = useCallback((picked: THREE.Object3D) => prepareScene(picked, useStudio.getState().settings.shadows), []);
+  const { root, bounds } = useStagedScene(ref, { pick, prepare, onReady, variant: replaying ? replay : null });
+
+  const cameras = useMemo(() => (root ? listCameras(root) : []), [root]);
+  const cameraNodes = useRef(new Map<number, THREE.Object3D>());
+  useEffect(() => {
+    cameraNodes.current = new Map(cameras.map((c) => [c.id, c.node]));
+  }, [cameras]);
+  /** Where the view stands to look at a camera, at the current time of the recording. */
+  const cameraPose = useCallback(
+    (id: number) => {
+      const node = player?.getObject(id) ?? cameraNodes.current.get(id);
+      if (!node) return null;
+      node.updateWorldMatrix(true, false);
+      return framingPose(node.getWorldPosition(new THREE.Vector3()), cameraForward(node), bounds?.radius ?? 10);
+    },
+    [player, bounds],
+  );
+
+  // The canvas draws on demand: a seek, a pause or a speed change while the clock is stopped needs a frame.
+  useEffect(() => {
+    if (!playback) return;
+    const changed = () => shadowsChanged();
+    const offState = playback.subscribeState(changed);
+    const offSeek = playback.subscribeSeek(changed);
+    return () => {
+      offState();
+      offSeek();
+    };
+  }, [playback, shadowsChanged]);
 
   // Display settings. None of them change the scene's data.
   useEffect(() => {
-    if (root) applyShadows(root, settings.shadows);
-  }, [root, settings.shadows]);
+    if (!root) return;
+    applyShadows(root, settings.shadows);
+    shadowsChanged();
+  }, [root, settings.shadows, shadowsChanged]);
+
+  useEffect(() => {
+    if (!root) return;
+    if (player) player.setSceneLights(settings.sceneLights);
+    else applySceneLights(root, settings.sceneLights);
+    redraw();
+  }, [root, player, settings.sceneLights, redraw]);
 
   useEffect(() => {
     if (!root || !settings.wireframe) return;
@@ -92,27 +143,109 @@ export default function StudioContent() {
         }
       }
     });
-    return () => changed.forEach((m) => ((m as THREE.Material & { wireframe: boolean }).wireframe = false));
-  }, [root, settings.wireframe]);
+    redraw();
+    return () => {
+      changed.forEach((m) => ((m as THREE.Material & { wireframe: boolean }).wireframe = false));
+      redraw();
+    };
+  }, [root, settings.wireframe, redraw]);
 
   useEffect(() => {
     camera.fov = settings.fov;
     camera.updateProjectionMatrix();
-  }, [camera, settings.fov]);
+    redraw();
+  }, [camera, settings.fov, redraw]);
 
-  // Advance the clock; keep the selection pointing at the right node; follow it.
-  useFrame((_, delta) => {
+  // Advance the clock; keep the selection pointing at the right node; follow it. While the clock
+  // runs every frame asks for the next one, and the shadows move with the replay.
+  useFrame(({ gl: renderer, invalidate }, delta) => {
     playback?.advance(delta);
+    if (playback?.playing) {
+      renderer.shadowMap.needsUpdate = true;
+      invalidate();
+    }
     const studio = useStudio.getState();
     if (player && studio.selectedId !== null) {
       studio.resolveSelected(player.getObject(studio.selectedId) ?? null);
     }
-    if (!studio.follow || !studio.selected || !controls) return;
-    const shift = studio.selected.getWorldPosition(new THREE.Vector3()).sub(controls.target);
+    // Stay on the focused camera, or on the followed object: the orbit target and the viewer move
+    // together, so the user can still orbit and zoom around it. Not while a camera move is running
+    // (the rig rewrites both then) or the intro is still flying in.
+    const focused = studio.focusCameraId !== null && !studio.introRunning ? (player?.getObject(studio.focusCameraId) ?? cameraNodes.current.get(studio.focusCameraId)) : null;
+    const followed = focused ?? (studio.follow ? studio.selected : null);
+    if (!followed || !controls || !orbitHasCamera()) return;
+    const shift = followed.getWorldPosition(followShift).sub(controls.target);
+    if (shift.lengthSq() < 1e-12) return;
     controls.target.add(shift);
     camera.position.add(shift);
     controls.update();
+    invalidate();
   });
+
+  // Fly to frame a camera the user picked.
+  useEffect(() => {
+    if (focusFlyRequest === 0) return;
+    const id = useStudio.getState().focusCameraId;
+    const pose = id === null ? null : cameraPose(id);
+    if (pose) useStage.getState().setCameraPose({ ...pose, fov: useStudio.getState().settings.fov }, 700);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusFlyRequest]);
+
+  // The gizmos mark which camera is focused.
+  useEffect(() => {
+    redraw();
+  }, [focusCameraId, settings.cameraGizmos, redraw]);
+
+  // Opening a recording (a shared link waits at the overview for the welcome card's Play): the whole scene, a beat, then a flight to the main camera, and play. Any
+  // input, or asking for less motion, goes straight to the end. Runs for every recording opened, even
+  // when the scene page already framed this scene, and again from the Viewpoint window.
+  useEffect(() => {
+    if (!player || !root || !bounds || !playback) return;
+    const { introFromStart, introGate } = useStudio.getState();
+    const gated = introGate === 'waiting' && !introFromStart;
+    const startTime = introFromStart ? 0 : playback.time;
+    // Pressing Play on the welcome card always ends in playing, whatever ?t= said.
+    const play = introFromStart || gated ? true : playback.playing;
+    const main = cameras[0];
+    const fov = () => useStudio.getState().settings.fov;
+    const intro = new Intro(
+      {
+        pause: () => {
+          playback.seek(startTime);
+          playback.setPlaying(false);
+          if (main) useStudio.getState().setFocusCamera(main.id, false);
+        },
+        showScene: () => {
+          const fill = regionFill(window.innerWidth, window.innerHeight, useStage.getState().inset);
+          const pose = framePose(root, fov(), { direction: FRAME_DIRECTION, fill });
+          if (pose) useStage.getState().setCameraPose({ position: pose.position, target: pose.target, fov: fov() }, 0);
+        },
+        flyToCamera: (durationMs) => {
+          const pose = main ? cameraPose(main.id) : null;
+          if (pose) useStage.getState().setCameraPose({ ...pose, fov: fov() }, durationMs);
+        },
+        play: () => playback.setPlaying(play),
+      },
+      (running) => useStudio.getState().setIntroRunning(running),
+    );
+    const skip = () => intro.skip();
+    surface?.addEventListener('pointerdown', skip);
+    surface?.addEventListener('wheel', skip, { passive: true });
+    window.addEventListener('keydown', skip);
+    intro.start({ hasCameras: cameras.length > 0, reduced: reducedMotion(), waitForGo: gated });
+    const unsubscribe = useStudio.subscribe((state, previous) => {
+      if (previous.introGate === 'waiting' && state.introGate === 'open') intro.go();
+    });
+    return () => {
+      unsubscribe();
+      surface?.removeEventListener('pointerdown', skip);
+      surface?.removeEventListener('wheel', skip);
+      window.removeEventListener('keydown', skip);
+      intro.cancel();
+    };
+    // A new recording, scene or request starts it; moving the camera or settings must not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [player, root, bounds, playback, cameras, introRequest]);
 
   // Frame requests from the UI, flown by the camera rig.
   useEffect(() => {
@@ -135,6 +268,8 @@ export default function StudioContent() {
     if (!root || !surface) return;
     const canvas = gl.domElement;
     const raycaster = new THREE.Raycaster();
+    // Bounds trees answer for the nearest hit of each mesh, which is all a click needs from it.
+    raycaster.firstHitOnly = true;
     let down: { x: number; y: number } | null = null;
     const onDown = (e: PointerEvent) => {
       down = { x: e.clientX, y: e.clientY };
@@ -159,14 +294,18 @@ export default function StudioContent() {
     };
   }, [root, player, surface, gl, camera]);
 
-  if (!bounds) return null;
   return (
     <>
       <SceneLights bounds={bounds} shadows={settings.shadows} />
-      <Ground y={bounds.floorY} fadeDistance={Math.max(40, bounds.radius * 5)} cellSize={gridCell(bounds.radius)} grid={settings.grid} shadows={settings.shadows} extent={bounds.radius * 12} />
-      {settings.axes && <axesHelper args={[Math.max(1, bounds.radius * 0.5)]} position={[bounds.center.x, bounds.floorY + 0.01, bounds.center.z]} />}
-      {/* The outline pass costs a multisampled render every frame, so it exists only while something is selected. */}
-      {selected && <SelectionOutline object={selected} />}
+      {bounds && (
+        <>
+          <Ground plan={bounds.ground} fadeDistance={Math.max(40, bounds.radius * 5)} cellSize={gridCell(bounds.radius)} grid={settings.grid} shadows={settings.shadows} />
+          {settings.cameraGizmos && cameras.length > 0 && <CameraGizmos cameras={cameras} focusId={focusCameraId} radius={bounds.radius} />}
+          {settings.axes && <axesHelper args={[Math.max(1, bounds.radius * 0.5)]} position={[bounds.center.x, bounds.ground.floorY + 0.01, bounds.center.z]} />}
+          {/* The outline pass renders the scene through a buffer every frame, so it exists only while something is selected. */}
+          {selected && <SelectionOutline object={selected} />}
+        </>
+      )}
     </>
   );
 }

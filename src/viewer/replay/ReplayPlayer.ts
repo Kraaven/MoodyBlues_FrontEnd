@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { ReplayObjectKind, type Replay, type ReplayObject } from './replayFile';
+import { ReplayObjectKind, type Replay, type ReplayObject, type ReplayTrack } from './replayFile';
 import { quaternionTrack, vectorTrack, visibilityTrack } from './replayTracks';
 
 /**
@@ -22,6 +22,12 @@ import { quaternionTrack, vectorTrack, visibilityTrack } from './replayTracks';
  * - **Reparenting.** Each frame, every object whose parent changes during the session is moved to
  *   the parent it has at the current time. Tracks hold local transforms, so `add()` (not
  *   `attach()`) is correct.
+ *
+ * Only what actually changes costs anything per frame. A scene object gets an action only if it has
+ * a track that varies (a flat transform track is applied once; a visibility list that never flips
+ * is the node's own state), and a scene node that is never animated or reparented stops recomputing
+ * its local matrix (`matrixAutoUpdate` off after one `updateMatrix`). World matrices still follow
+ * their parents, so children of a moving node move with it. Spawned clones are always dynamic.
  *
  * Time is absolute: `seek(t)` and playback both end in `mixer.setTime(t)`, so scrubbing is a pure
  * function of the playhead with no accumulated state. Clip durations run past the end of the
@@ -48,6 +54,10 @@ export class ReplayPlayer {
   private readonly clonePool = new Map<number, PooledClone[]>();
   /** objectId -> parent changes sorted by time (parent 0 = scene root). */
   private readonly parentChanges = new Map<number, { time: number; parent: number }[]>();
+  /** The scene's own lights, and the ones a visibility track drives (which the mixer would switch back on). */
+  private readonly lights: THREE.Object3D[] = [];
+  private readonly drivenLights: THREE.Object3D[] = [];
+  private showSceneLights = true;
 
   constructor(gltfScene: THREE.Object3D, replay: Replay) {
     this.root = gltfScene;
@@ -59,6 +69,7 @@ export class ReplayPlayer {
       // A skinned mesh's bounding sphere is computed once, from its pose at that moment; once
       // the bones move the mesh can leave it and be culled while on screen.
       if (isSkinned(node)) node.frustumCulled = false;
+      if ((node as THREE.Light).isLight) this.lights.push(node);
       const id = node.userData?.objectId;
       if (typeof id === 'number' && !this.sceneNodes.has(id)) {
         this.sceneNodes.set(id, node);
@@ -85,23 +96,60 @@ export class ReplayPlayer {
     const visibility = this.buildVisibilityChanges();
     const clipDuration = this.duration + 1;
 
+    // Scene nodes whose local matrix changes (an animated transform, or a new parent).
+    const dynamic = new Set<THREE.Object3D>();
+
     for (const obj of replay.objects) {
+      const isScene = obj.kind === ReplayObjectKind.Scene;
+      const node = isScene ? this.sceneNodes.get(obj.objectId) : undefined;
       const tracks: THREE.KeyframeTrack[] = [];
-      if (obj.position) tracks.push(vectorTrack('.position', obj.position));
-      if (obj.rotation) tracks.push(quaternionTrack(obj.rotation));
-      if (obj.scale) tracks.push(vectorTrack('.scale', obj.scale));
+      let moves = false;
+      if (obj.position) {
+        if (isScene && node && isFlat(obj.position)) node.position.fromArray(obj.position.values);
+        else {
+          tracks.push(vectorTrack('.position', obj.position));
+          moves = true;
+        }
+      }
+      if (obj.rotation) {
+        if (isScene && node && isFlat(obj.rotation)) node.quaternion.fromArray(obj.rotation.values);
+        else {
+          tracks.push(quaternionTrack(obj.rotation));
+          moves = true;
+        }
+      }
+      if (obj.scale) {
+        if (isScene && node && isFlat(obj.scale)) node.scale.fromArray(obj.scale.values);
+        else {
+          tracks.push(vectorTrack('.scale', obj.scale));
+          moves = true;
+        }
+      }
       const vis = visibility.get(obj.objectId);
-      if (vis && vis.length > 0) tracks.push(visibilityTrack(vis));
+      if (vis && flips(vis)) tracks.push(visibilityTrack(vis));
       if (tracks.length > 0) this.clips.set(obj.objectId, new THREE.AnimationClip(`object-${obj.objectId}`, clipDuration, tracks));
 
       if (obj.kind === ReplayObjectKind.Spawned) {
         this.spawned.push(obj);
-      } else if (obj.kind === ReplayObjectKind.Scene) {
-        const node = this.sceneNodes.get(obj.objectId);
+      } else if (isScene) {
         const clip = this.clips.get(obj.objectId);
-        if (node && clip) this.mixer.clipAction(clip, node).play();
+        if (node && clip) {
+          this.mixer.clipAction(clip, node).play();
+          if (this.lights.includes(node)) this.drivenLights.push(node);
+        }
+        if (node && (moves || this.parentChanges.has(obj.objectId))) dynamic.add(node);
       }
     }
+    for (const id of this.parentChanges.keys()) {
+      const node = this.sceneNodes.get(id);
+      if (node) dynamic.add(node);
+    }
+
+    gltfScene.traverse((node) => {
+      if (dynamic.has(node)) return;
+      node.updateMatrix();
+      node.matrixAutoUpdate = false;
+    });
 
     this.apply(0);
   }
@@ -118,6 +166,16 @@ export class ReplayPlayer {
       }
     }
     this.apply(this.currentTime);
+  }
+
+  /**
+   * Show or hide the scene's own lights. A light the replay switches on and off is put back by the
+   * mixer on every frame, so those are held off after it has run.
+   */
+  setSceneLights(on: boolean): void {
+    this.showSceneLights = on;
+    for (const light of this.lights) light.visible = on && light.userData?.isHidden !== true;
+    if (this.drivenLights.length > 0) this.apply(this.currentTime);
   }
 
   seek(time: number): void {
@@ -182,6 +240,7 @@ export class ReplayPlayer {
     this.updateSpawns(t);
     this.updateParents(t);
     this.mixer.setTime(t);
+    if (!this.showSceneLights) for (const light of this.drivenLights) light.visible = false;
   }
 
   private updateSpawns(t: number): void {
@@ -262,6 +321,8 @@ export class ReplayPlayer {
     const pairs: [THREE.Object3D, THREE.Object3D][] = [];
     const walk = (src: THREE.Object3D, dst: THREE.Object3D) => {
       pairs.push([src, dst]);
+      // The template may be static (see the class comment), and a copy inherits that; a clone moves.
+      dst.matrixAutoUpdate = true;
       const id = src.userData?.objectId;
       if (typeof id === 'number') byTemplateId.set(id, dst);
       if (dst !== node && dst.userData && 'objectId' in dst.userData) {
@@ -400,6 +461,21 @@ interface LiveClone {
   pooled: PooledClone;
   actions: THREE.AnimationAction[];
   parts: { id: number; node: THREE.Object3D; parent: THREE.Object3D }[];
+}
+
+/** A curve that never leaves its first value: nothing to animate. */
+function isFlat(track: ReplayTrack): boolean {
+  const { dimension, values, inTangents, outTangents } = track;
+  for (let i = 0; i < values.length; i++) {
+    if (i >= dimension && Math.abs(values[i] - values[i % dimension]) > 1e-6) return false;
+    if (values.length > dimension && (Math.abs(inTangents[i]) > 1e-6 || Math.abs(outTangents[i]) > 1e-6)) return false;
+  }
+  return true;
+}
+
+/** Whether a visibility list ever differs from its first entry. */
+function flips(changes: { visible: boolean }[]): boolean {
+  return changes.some((c) => c.visible !== changes[0].visible);
 }
 
 function isDescendant(node: THREE.Object3D, ancestor: THREE.Object3D): boolean {

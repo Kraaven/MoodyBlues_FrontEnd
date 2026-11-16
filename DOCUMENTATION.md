@@ -205,7 +205,7 @@ directly. React re-renders on user actions and, for the current log row, about 8
   gap to that edge, and `toFrame` / `fromFrame` convert to and from pixels. A right-anchored
   window therefore follows the rail when the dock opens. The layout rules are pure functions, with
   tests. The view settings (grid, shadows,
-  wireframe, axes, field of view) are kept under `moodyblues.view.v1`.
+  wireframe, axes, scene lights, camera gizmos, field of view) are kept under `moodyblues.view.v1`.
 
   | Window | Content |
   |---|---|
@@ -215,8 +215,20 @@ directly. React re-renders on user actions and, for the current log row, about 8
   | Hierarchy | The scene's tree, searchable; during a replay the recorded objects as they are now |
   | Inspector | The selected object: name, ObjectID, live local and world transform, Unity path |
   | Materials, Textures, Geometry | Read from the loaded GLB by `inspector/inspection.ts`: materials with every texture channel, de-duplicated textures with estimated GPU memory, geometries and what shares them, vertex statistics |
-  | View settings | How the scene is drawn here; display only |
+  | Viewpoint (`ViewpointWindow.tsx`) | The cameras the Unity scene exported (a node's `extras.camera` = `{ index, tag }`, index 0 the MainCamera) as a radio list plus Free camera, Replay intro (with a recording), and the display settings; display only |
   | Raw data | The selection, the session record from the server, or the file's glTF JSON, as collapsible JSON |
+
+- **Cameras** (`studio/cameras.ts`, `CameraGizmos.tsx`, `intro.ts`): focusing a camera
+  (`focusCameraId`, an ObjectID; `V` cycles, `Shift+V` frees) flies the view to frame it, then each
+  frame the orbit target and the viewer move by the camera's movement, so the user still orbits
+  and zooms around it. It is exclusive with follow-selected (`F`). A camera's look direction is its
+  node's own world -Z: UnityGLTF turns Camera nodes 180 degrees about Y (`invertLook`) so that -Z is
+  Unity's forward, the replay's rotations include the turn, and the `<name>-flipped` child is not
+  used. The gizmos are lines in the Stage scene beside the loaded one (never in the shared graph),
+  copying each camera node's world pose every frame. Opening a recording runs the intro: paused,
+  the whole scene, a 0.7 s hold, a 1.6 s flight to the main camera, then play. Any pointer, wheel or
+  key input, or reduced motion, jumps to the end; a scene without cameras is framed and played.
+  Scenes exported before the camera extras show no cameras (re-export from Unity).
 
 - **Timeline** (`studio/Timeline.tsx`, only with a session): transport, speeds 0.25-4x,
   previous/next log, and the rail with the Info, Warning and Error logs marked. Markers are
@@ -298,8 +310,10 @@ Deploying (Vercel or any static host): set `VITE_API_BASE_URL` before building, 
 it in. Add the deployed origin to the backend's `MOODYBLUES_CORS_ORIGIN`. `vercel.json` rewrites
 all routes to `index.html` and sets the security headers. Its Content-Security-Policy names the
 API origin in `connect-src` (`https://moodyblues.kraaven.net`); **change it there if the API
-moves**, or every request is blocked. The policy allows `'wasm-unsafe-eval'`, `'unsafe-eval'` (the Basis transcoder builds functions with `Function`; without it KTX2 textures never finish decoding) and `blob:` workers
-for the Draco and Basis decoders, and `blob:` fetches for GLB textures. Another static host needs
+moves**, or every request is blocked. The policy allows `'wasm-unsafe-eval'` and `blob:` workers for the Draco and Basis decoders, and
+`blob:` fetches for GLB textures. It also needs `'unsafe-eval'`: the Basis transcoder (an Emscripten
+build) creates functions with `Function(...)`, and without it a KTX2 texture never finishes
+decoding, so the scene download completes but the scene never appears and no error is raised. Another static host needs
 the same headers. After upgrading `three`, re-copy the decoders from
 `node_modules/three/examples/jsm/libs/{draco/gltf,basis}/` into `public/decoders/`.
 
@@ -312,5 +326,6 @@ the same headers. After upgrading `three`, re-copy the decoders from
 - **Skinned meshes** whose bones were stripped in Unity (*Optimize Game Objects*) replay in bind
   pose; the Unity client's *Validate Scenes* warns about them.
 - **Scene thumbnails** live in each browser's IndexedDB, not on the server.
-- **Not measured.** Frame times on a real GPU, KTX2 textures from a real optimized scene, and
-  screen-reader behaviour were not verified.
+- **Not measured.** Frame times on a real GPU and screen-reader behaviour were not verified. A real
+  optimized scene (Draco and KTX2) was parsed in Firefox under this CSP; other browsers were not
+  tried.

@@ -110,6 +110,8 @@ interface StageState {
   status: StageStatus;
   /** Downloads in progress, by name (the scene and the replay can load together). */
   loading: Record<string, LoadingState>;
+  /** Something else (the welcome card) shows the downloads, so the floating preloader stays away. */
+  loadingHidden: boolean;
   scene: SceneState;
   /** Measured contents of scene versions loaded in this tab, by scene URL. */
   summaries: Record<string, SceneSummary>;
@@ -122,6 +124,9 @@ interface StageState {
   framedKey: string | null;
   /** The share of the canvas the scene was framed for (see regionFill). A big change re-frames. */
   framedFill: number;
+  /** Radius of the scene on screen (0 with none): the camera's far plane keeps all of it in view. */
+  sceneRadius: number;
+  setSceneRadius: (radius: number) => void;
   /** The element that takes the pointer for orbit and picking. Null when no view has placed one. */
   surface: HTMLElement | null;
   inset: Inset;
@@ -136,6 +141,7 @@ interface StageState {
   setCameraPose: (camera: CameraPose, durationMs?: number) => void;
   setStatus: (status: StageStatus) => void;
   setLoading: (key: string, loading: LoadingState | null) => void;
+  setLoadingHidden: (hidden: boolean) => void;
   setSceneState: (state: Partial<SceneState>) => void;
   setFramedKey: (key: string | null, fill?: number) => void;
   retryScene: () => void;
@@ -180,11 +186,14 @@ export const useStage = create<StageState>((set, get) => ({
   durationMs: 600,
   status: 'ok',
   loading: {},
+  loadingHidden: false,
   scene: { status: 'idle', error: null, attempt: 0 },
   summaries: {},
   setSummary: (summary) => set({ summaries: { ...get().summaries, [summary.key]: summary } }),
   framedKey: null,
   framedFill: 1,
+  sceneRadius: 0,
+  setSceneRadius: (sceneRadius) => set({ sceneRadius }),
   surface: null,
   inset: NO_INSET,
   insetSmooth: false,
@@ -212,6 +221,7 @@ export const useStage = create<StageState>((set, get) => ({
     set({ pose: toPose(camera, pose.dim, view.drift ?? false), poseVersion: poseVersion + 1, durationMs });
   },
   setStatus: (status) => set({ status }),
+  setLoadingHidden: (loadingHidden) => set({ loadingHidden }),
   setLoading: (key, loading) => {
     const next = { ...get().loading };
     if (loading) next[key] = loading;

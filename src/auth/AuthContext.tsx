@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import { ApiError, apiJson, refreshSession, setUnauthorizedHandler } from '../api/client';
 import { queryClient } from '../api/queries';
 import type { UserResponse } from '../api/types';
+import { prefetcher } from '../prefetch/prefetcher';
+import { sceneCache } from '../prefetch/sceneCache';
 import { AuthContext, type AuthUser } from './context';
 
 /**
@@ -29,6 +31,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setExpired(wasExpired);
     queryClient.clear();
+    // Cached scenes belong to the signed-in user.
+    prefetcher.stop();
+    void sceneCache.clear();
   }, []);
 
   useEffect(() => {

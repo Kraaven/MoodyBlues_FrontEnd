@@ -8,6 +8,7 @@ import {
   Braces,
   Crosshair,
   Expand,
+  Eye,
   Focus,
   Hourglass,
   Image,
@@ -19,7 +20,6 @@ import {
   RotateCw,
   Share,
   Shrink,
-  SlidersHorizontal,
   SquareTerminal,
   TriangleAlert,
   X,
@@ -27,6 +27,7 @@ import {
 import { downloadWithProgress, useProject, useRecompileSession, useScene, useSession, useSessions, useSharedSession } from '../api/queries';
 import { ApiError, errorText } from '../api/client';
 import { useAuth } from '../auth/useAuth';
+import { usePrefetchFocus } from '../prefetch/usePrefetchFocus';
 import type { SceneVersion, SessionDetail } from '../api/types';
 import { parseReplay } from '../viewer/replay/replayFile';
 import { useReplayBinding } from './binding';
@@ -45,6 +46,7 @@ import { formatAgo, formatCaptured, sceneTitle, sessionHandle } from '../lib/for
 import { parseStartTime, viewLink } from '../lib/shareLink';
 import { useMediaQuery } from '../lib/useMediaQuery';
 import { ShareDialog } from '../share/ShareDialog';
+import { WelcomeCard } from '../share/WelcomeCard';
 import { replayPath, sceneRef as sceneRefFor, type StudioSource } from './source';
 import { useWindowTitle } from '../lib/useWindowTitle';
 import { ShortcutsDialog, useStudioShortcuts } from './shortcuts';
@@ -58,7 +60,7 @@ import { InspectorWindow } from './windows/InspectorWindow';
 import { MaterialsWindow } from './windows/MaterialsWindow';
 import { RawWindow } from './windows/RawWindow';
 import { TexturesWindow } from './windows/TexturesWindow';
-import { ViewSettingsWindow } from './windows/ViewSettingsWindow';
+import { ViewpointWindow } from './windows/ViewpointWindow';
 import { RecordingsWindow } from './windows/RecordingsWindow';
 import { FloatingWindows, WindowDock, WindowRail, type RailTool, type WindowDef } from './windows/WindowHost';
 
@@ -82,6 +84,7 @@ export default function StudioPage() {
   const notify = useToast();
   const phone = useMediaQuery('(max-width: 767px)');
   const project = useProject(projectId);
+  usePrefetchFocus(projectId); // undefined on a share link: nothing to prefetch
   const scene = useScene(projectId, sceneId);
   const session = useSession(sessionId);
   const shared = useSharedSession(token);
@@ -95,6 +98,10 @@ export default function StudioPage() {
   const region = useRef<HTMLDivElement>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [sharing, setSharing] = useState<{ time: number | null } | null>(null);
+  // The welcome card of a shared link: Play was pressed, and the card has gone.
+  const [played, setPlayed] = useState(false);
+  const [welcomed, setWelcomed] = useState(false);
+  const player = useStudio((s) => s.player);
 
   const base = `/projects/${projectId}/scenes/${encodeURIComponent(sceneId ?? '')}`;
   const detail = sharedView ? shared.data?.session : session.data;
@@ -148,6 +155,15 @@ export default function StudioPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [replayUrl]);
 
+  // A shared link opens on the welcome card: the intro waits at the overview until Play.
+  useEffect(() => {
+    if (!sharedView) return;
+    setPlayed(false);
+    setWelcomed(false);
+    useStudio.getState().setIntroGate('waiting');
+    return () => useStudio.getState().setIntroGate('open');
+  }, [sharedView, token]);
+
   // ---- The Stage ---------------------------------------------------------------------------------
   const waiting = status === 'WaitingForScene';
   const fallbackRef = useMemo(
@@ -191,6 +207,7 @@ export default function StudioPage() {
             title: 'Recordings',
             icon: ListVideo,
             group: 'recordings',
+            description: 'Other recordings of this scene',
             render: () => <RecordingsWindow sessions={sessions.data} version={version?.version ?? null} currentId={sessionId ?? null} sessionHref={sessionHref} />,
           },
         ];
@@ -201,6 +218,7 @@ export default function StudioPage() {
           title: 'Logs',
           icon: SquareTerminal,
           group: 'recordings',
+          description: "The game's console output, in sync with the playhead",
           render: () =>
             replay.data ? (
               <LogsWindow replay={replay.data} playback={playback} label={sessionLabel} />
@@ -208,17 +226,17 @@ export default function StudioPage() {
               <p className="px-6 py-6 text-[14px] text-fg-2">The logs appear once the replay is built.</p>
             ),
         },
-        { id: 'details', title: 'Session details', icon: Activity, group: 'recordings', render: () => (detail ? <DetailsWindow session={detail} replay={replay.data ?? null} sceneHref={sharedView ? null : base} /> : null) },
+        { id: 'details', title: 'Session details', icon: Activity, group: 'recordings', description: 'Recording health and statistics', render: () => (detail ? <DetailsWindow session={detail} replay={replay.data ?? null} sceneHref={sharedView ? null : base} /> : null) },
       );
     }
     list.push(
-      { id: 'hierarchy', title: 'Hierarchy', icon: Network, group: 'scene', render: () => <HierarchyWindow /> },
-      { id: 'inspector', title: 'Inspector', icon: Info, group: 'scene', render: () => <InspectorWindow /> },
-      { id: 'materials', title: 'Materials', icon: Palette, group: 'scene', render: () => <MaterialsWindow sceneName={name} /> },
-      { id: 'textures', title: 'Textures', icon: Image, group: 'scene', render: () => <TexturesWindow /> },
-      { id: 'geometry', title: 'Geometry', icon: Box, group: 'scene', render: () => <GeometryWindow version={version} /> },
-      { id: 'view', title: 'View settings', icon: SlidersHorizontal, group: 'scene', render: () => <ViewSettingsWindow scope={scope} /> },
-      { id: 'raw', title: 'Raw data', icon: Braces, group: 'scene', render: () => <RawWindow session={detail ?? null} /> },
+      { id: 'hierarchy', title: 'Hierarchy', icon: Network, group: 'scene', description: 'Every object in the scene', render: () => <HierarchyWindow /> },
+      { id: 'inspector', title: 'Inspector', icon: Info, group: 'scene', description: "The selected object's transform and components", render: () => <InspectorWindow /> },
+      { id: 'materials', title: 'Materials', icon: Palette, group: 'scene', description: 'Every material, with its properties', render: () => <MaterialsWindow sceneName={name} /> },
+      { id: 'textures', title: 'Textures', icon: Image, group: 'scene', description: 'The images the scene uses', render: () => <TexturesWindow /> },
+      { id: 'geometry', title: 'Geometry', icon: Box, group: 'scene', description: 'Meshes, triangles and bounds', render: () => <GeometryWindow version={version} /> },
+      { id: 'viewpoint', title: 'Viewpoint', icon: Eye, group: 'scene', description: 'Cameras to follow and display settings', render: () => <ViewpointWindow scope={scope} playback={playback} /> },
+      { id: 'raw', title: 'Raw data', icon: Braces, group: 'scene', description: 'The recording as data', render: () => <RawWindow session={detail ?? null} /> },
     );
     return list.map((w, i) => ({ ...w, shortcut: i < 10 ? `Alt+${(i + 1) % 10}` : undefined }));
   }, [name, version, scope, detail, sharedView, hasSession, sessionId, replay.data, playback, sessionLabel, base, sessions.data, sessionHref]);
@@ -233,12 +251,25 @@ export default function StudioPage() {
 
   useWindowTitle(detail ? `${sessionHandle(detail.id)} · ${name}` : `${name} in 3D`);
 
+  const loaded = Boolean(replay.data) && Boolean(player) && sceneState.status === 'ready';
+  // Play before everything is ready keeps the card up ("Starting…"); it closes when ready, and the opened gate starts the intro.
+  useEffect(() => {
+    if (played && loaded) setWelcomed(true);
+  }, [played, loaded]);
+  const play = useCallback(() => {
+    setPlayed(true);
+    // Whatever ?t= said, Play ends in playing (the intro reads this when it starts ungated).
+    playback.playing = true;
+    // Later than the keydown that pressed it (Esc, Enter): the intro skips on any key, and must not take this one.
+    setTimeout(() => useStudio.getState().setIntroGate('open'), 0);
+  }, [playback]);
+
   const error = sharedView ? shared.error : (project.error ?? scene.error ?? session.error);
   const showTimeline = hasSession;
   const backHref = version && !version.isCurrent ? `${base}?version=${version.version}` : base;
 
   const tools: RailTool[] = [
-    { id: 'frame', label: 'Frame the whole scene', hint: 'A', icon: Focus, onClick: () => useStudio.getState().frameAll() },
+    { id: 'frame', label: 'Frame the whole scene', hint: 'A', icon: Focus, description: 'Fit everything in view', onClick: () => useStudio.getState().frameAll() },
     ...(phone
       ? []
       : [
@@ -246,11 +277,15 @@ export default function StudioPage() {
             id: 'fullscreen',
             label: fullscreen ? 'Leave full screen' : 'Full screen',
             icon: fullscreen ? Shrink : Expand,
+            description: 'Fill the screen with the view',
             onClick: () => (document.fullscreenElement ? void document.exitFullscreen() : void document.documentElement.requestFullscreen?.().catch(() => undefined)),
           },
-          { id: 'keys', label: 'Keyboard shortcuts', hint: '?', icon: Keyboard, onClick: () => useStudio.getState().setShortcutsOpen(true) },
+          { id: 'keys', label: 'Keyboard shortcuts', hint: '?', icon: Keyboard, description: 'Every key and what it does', onClick: () => useStudio.getState().setShortcutsOpen(true) },
         ]),
   ];
+
+  const showWelcome =
+    sharedView && !welcomed && Boolean(shared.data) && shared.data?.session.status === 'Ready' && !error && !replay.isError && sceneState.status !== 'error';
 
   if (sharedView && shared.error instanceof ApiError && shared.error.status === 404) return <LinkUnavailable signedIn={user !== null} />;
 
@@ -357,6 +392,19 @@ export default function StudioPage() {
 
       <WindowDock scope={scope} windows={windows} />
       <ShortcutsDialog playback={hasSession} />
+      {showWelcome && shared.data && (
+        <WelcomeCard
+          shared={shared.data}
+          startTime={parseStartTime(params.get('t'))}
+          ready={loaded}
+          replayLoaded={Boolean(replay.data)}
+          starting={played}
+          onPlay={play}
+          windows={windows}
+          tools={tools}
+          phone={phone}
+        />
+      )}
       {sharing && detail && !sharedView && <ShareDialog target={detail} time={sharing.time} onClose={() => setSharing(null)} />}
     </div>
   );

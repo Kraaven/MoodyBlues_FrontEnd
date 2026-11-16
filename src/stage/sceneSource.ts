@@ -1,11 +1,12 @@
 import type * as THREE from 'three';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { downloadWithProgress } from '../api/queries';
+import { fetchSceneBytes } from '../prefetch/sceneFetch';
 import { parseSceneGltf, type Progress } from '../viewer/core/gltf';
 
 /**
- * Downloads and parses one scene version's GLB (the optimized file once the backend has built
- * it) from `url`, which already selects the version. This is the only
+ * Loads and parses one scene version's GLB (the optimized file once the backend has built
+ * it) from `url`, which already selects the version. Bytes come from the persistent scene cache
+ * or an in-flight prefetch when there is one (see prefetch/sceneFetch.ts). This is the only
  * place that joins the API to the viewer core.
  */
 export async function loadSceneGltf(
@@ -14,6 +15,6 @@ export async function loadSceneGltf(
   onProgress?: Progress,
   signal?: AbortSignal,
 ): Promise<GLTF> {
-  const buffer = await downloadWithProgress(url, onProgress, signal);
+  const buffer = await fetchSceneBytes(url, onProgress, signal);
   return parseSceneGltf(renderer, buffer);
 }

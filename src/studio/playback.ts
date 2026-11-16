@@ -21,6 +21,7 @@ export class Playback {
   speed = 1;
   private readonly listeners = new Set<FrameListener>();
   private readonly stateListeners = new Set<() => void>();
+  private readonly seekListeners = new Set<() => void>();
 
   attach(player: ReplayPlayer | null): void {
     this.player = player;
@@ -50,6 +51,7 @@ export class Playback {
     this.time = Math.min(Math.max(time, 0), this.duration || time);
     this.player?.seek(this.time);
     for (const listener of this.listeners) listener(this.time);
+    for (const listener of this.seekListeners) listener();
   }
 
   setPlaying(playing: boolean): void {
@@ -79,6 +81,12 @@ export class Playback {
   subscribeState(listener: () => void): () => void {
     this.stateListeners.add(listener);
     return () => this.stateListeners.delete(listener);
+  }
+
+  /** The playhead was moved by hand (a paused view must then draw once). */
+  subscribeSeek(listener: () => void): () => void {
+    this.seekListeners.add(listener);
+    return () => this.seekListeners.delete(listener);
   }
 
   private emitState(): void {

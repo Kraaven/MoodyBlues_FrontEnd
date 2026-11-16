@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronDown, Copy, Download, Hourglass, Layers, MoreHorizontal, Pencil, Trash2, TriangleAlert } from 'lucide-react';
 import { sceneFilePath, saveDownload, useDeleteScene, useProject, useRenameScene, useScene, useSessions } from '../../api/queries';
 import { errorText } from '../../api/client';
+import { usePrefetchFocus } from '../../prefetch/usePrefetchFocus';
 import type { ProjectDetail, SceneDetail, SceneVersion, SessionSummary } from '../../api/types';
 import { PageBody, WorkspaceLayout } from '../../shell/WorkspaceLayout';
 import { idleView } from '../../stage/store';
@@ -34,6 +35,7 @@ export function ScenePage() {
   const { projectId, sceneId } = useParams<{ projectId: string; sceneId: string }>();
   const [search, setSearch] = useSearchParams();
   const project = useProject(projectId);
+  usePrefetchFocus(projectId);
   const scene = useScene(projectId, sceneId);
   const base = `/projects/${projectId}/scenes/${encodeURIComponent(sceneId ?? '')}`;
   const title = scene.data ? sceneTitle(scene.data) : 'Scene';

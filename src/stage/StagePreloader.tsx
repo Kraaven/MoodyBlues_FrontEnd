@@ -8,7 +8,8 @@ import { useStage } from './store';
 export function StagePreloader() {
   // The oldest download still running is the one shown.
   const loading = useStage((s) => Object.values(s.loading)[0] ?? null);
-  if (!loading) return null;
+  const hidden = useStage((s) => s.loadingHidden);
+  if (!loading || hidden) return null;
 
   const fraction = loading.total ? Math.min(1, loading.received / loading.total) : null;
   const done = fraction === 1;

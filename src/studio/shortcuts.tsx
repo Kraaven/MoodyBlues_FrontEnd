@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import type { ReplayLog } from '../viewer/replay/replayFile';
 import { nextLogTime, previousLogTime } from './logNav';
 import { SPEEDS, TICK_SECONDS, type Playback } from './playback';
+import { listCameras } from './cameras';
 import { unityPath } from './unityPath';
 import { Dialog } from '../ui/Dialog';
 import { Kbd } from '../ui/States';
@@ -15,6 +16,8 @@ const GENERAL: [string[], string][] = [
   [['Esc'], 'Clear the selection'],
   [['C'], "Copy the selection's Unity path"],
   [['G'], 'Grid on / off'],
+  [['V'], 'Next exported camera'],
+  [['Shift', 'V'], 'Free camera'],
   [['Alt', '1–9, 0'], 'Open the tool windows, in rail order'],
   [['\\'], 'Show / hide the dock'],
   [['?'], 'This list'],
@@ -92,6 +95,16 @@ export function useStudioShortcuts({
         case 'f':
           if (ready && studio.selected) studio.setFollow(!studio.follow);
           else studio.frameSelected();
+          break;
+        case 'v': {
+          const cameras = studio.root ? listCameras(studio.root) : [];
+          if (cameras.length === 0) return;
+          const at = cameras.findIndex((c) => c.id === studio.focusCameraId);
+          studio.setFocusCamera(cameras[(at + 1) % cameras.length].id);
+          break;
+        }
+        case 'V':
+          studio.setFocusCamera(null);
           break;
         case 'g':
         case 'G':

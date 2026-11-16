@@ -16,6 +16,8 @@ export interface WindowDef {
   /** Rail buttons are grouped; a rule separates the groups. */
   group: 'recordings' | 'scene' | 'session';
   shortcut?: string;
+  /** One line on what the window shows, for the welcome card. */
+  description?: string;
   render: () => ReactNode;
 }
 
@@ -26,6 +28,8 @@ export interface RailTool {
   onClick: () => void;
   active?: boolean;
   hint?: string;
+  /** One line on what the tool does, for the welcome card. */
+  description?: string;
 }
 
 /** The tool rail: one icon per window, then a few view controls, floating at the right edge of the view. */

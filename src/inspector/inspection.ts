@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { originalTransmission } from '../viewer/core/transmission';
 
 /**
  * Reading a loaded scene for the inspector.
@@ -276,12 +277,15 @@ const number = (value: unknown, digits = 3): string => (typeof value === 'number
 /** The properties of a material, in the order the panel lists them. */
 export function materialRows(material: THREE.Material): MaterialRow[] {
   const m = material as unknown as Record<string, unknown>;
+  // The viewer displays transmission as plain transparency; the panel shows what the file says.
+  const original = originalTransmission(material);
+  const transparent = original?.transparent ?? material.transparent;
   const rows: MaterialRow[] = [
     { label: 'Name', value: material.name || `(unnamed) ${material.uuid.slice(0, 8)}` },
     { label: 'Type', value: material.type },
-    { label: 'Alpha mode', value: material.transparent ? 'Blend' : material.alphaTest > 0 ? 'Mask' : 'Opaque' },
+    { label: 'Alpha mode', value: transparent ? 'Blend' : material.alphaTest > 0 ? 'Mask' : 'Opaque' },
   ];
-  if (material.transparent) rows.push({ label: 'Opacity', value: number(material.opacity, 2) });
+  if (transparent) rows.push({ label: 'Opacity', value: number(original?.opacity ?? material.opacity, 2) });
   rows.push({ label: 'Side', value: material.side === THREE.DoubleSide ? 'Double sided' : material.side === THREE.BackSide ? 'Back' : 'Front' });
 
   const color = colorHex(material, 'color');
@@ -296,7 +300,8 @@ export function materialRows(material: THREE.Material): MaterialRow[] {
 
   if ((material as THREE.MeshPhysicalMaterial).isMeshPhysicalMaterial) {
     const p = material as THREE.MeshPhysicalMaterial;
-    if (p.transmission > 0) rows.push({ label: 'Transmission', value: number(p.transmission, 2) });
+    const transmission = original?.transmission ?? p.transmission;
+    if (transmission > 0) rows.push({ label: 'Transmission', value: number(transmission, 2) });
     if (p.clearcoat > 0) rows.push({ label: 'Clearcoat', value: number(p.clearcoat, 2) });
     rows.push({ label: 'IOR', value: number(p.ior, 2) });
     rows.push({ label: 'Specular intensity', value: number(p.specularIntensity, 2) });
