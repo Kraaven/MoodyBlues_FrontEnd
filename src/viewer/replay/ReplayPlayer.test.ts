@@ -33,14 +33,9 @@ const replay = () =>
       duration: 10,
       objects: [1, 2, 3, 4, 5, 6].filter((id) => id !== 3).map((id) => ({ id, kind: ReplayObjectKind.Scene })),
       events: [{ time: 5, type: 5, objectId: 4, a: 1 }],
-      blocks: [
-        {
-          start: 0,
-          tracks: [
-            { objectId: 1, channel: 0, times: [0, 10], values: [0, 0, 0, 10, 0, 0] },
-            { objectId: 2, channel: 0, times: [0, 10], values: [1, 2, 3, 1, 2, 3] },
-          ],
-        },
+      tracks: [
+        { objectId: 1, channel: 0, times: [0, 10], values: [0, 0, 0, 10, 0, 0] },
+        { objectId: 2, channel: 0, times: [0, 10], values: [1, 2, 3, 1, 2, 3] },
       ],
     }),
   );

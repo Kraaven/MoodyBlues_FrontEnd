@@ -1,5 +1,5 @@
 /**
- * Parser for the MoodyBlues replay file ("MBRP", format version 2), produced by the backend's
+ * Parser for the MoodyBlues replay file ("MBRP", format version 3), produced by the backend's
  * Compiler/ReplayFileWriter.cs. That file's doc comment is the authoritative layout; this parser
  * follows it field for field. All values are little-endian.
  *
@@ -8,15 +8,15 @@
  * events (spawn, delete, show, hide, reparent) and session markers, and the developer logs
  * written with MoodyBluesLog.
  *
- * Keys are stored in time blocks so a future viewer can fetch only part of a long session. Each
- * block repeats the previous key of every live track as a "lead-in"; this parser loads the whole
- * file, so it drops lead-ins and concatenates the blocks into one track per channel.
+ * The keys are one track section at the end of the file: per (object, channel) a run of
+ * LEB128 varints holding quantized, delta-coded times and values and segment-scaled tangents. The
+ * whole file is decoded in one pass.
  *
  * Every offset and count is checked against the file size, so a damaged file fails with a clear
  * ReplayFormatError instead of reading garbage.
  */
 
-const REPLAY_FORMAT_VERSION = 2;
+const REPLAY_FORMAT_VERSION = 3;
 
 export class ReplayFormatError extends Error {}
 
@@ -158,28 +158,86 @@ export const HEADER_SIZE = 80;
 const OBJECT_ENTRY_SIZE = 20;
 const EVENT_ENTRY_SIZE = 16;
 const LOG_ENTRY_SIZE = 20;
-const BLOCK_INDEX_ENTRY_SIZE = 16;
 
-class TrackBuilder {
-  times: number[] = [];
-  values: number[] = [];
-  inTangents: number[] = [];
-  outTangents: number[] = [];
-  readonly dimension: 3 | 4;
+/** Key times are stored as whole multiples of 1/TIME_SCALE seconds. */
+const TIME_SCALE = 10000;
+/** Quantization per channel: integer steps per value unit (position, rotation, scale). Tangents use the same grid. */
+const VALUE_SCALE = [10000, 32768, 10000] as const;
+/** The longest varint the format allows: 8 bytes = 56 bits, inside a JS safe integer after arithmetic decoding. */
+const MAX_VARINT_BYTES = 8;
 
-  constructor(dimension: 3 | 4) {
-    this.dimension = dimension;
+/** Reads LEB128 varints from the track section. Arithmetic only: values reach 2^48, past 32-bit bitwise ops. */
+class VarintReader {
+  private readonly bytes: Uint8Array;
+  p: number;
+
+  constructor(bytes: Uint8Array, start: number) {
+    this.bytes = bytes;
+    this.p = start;
   }
 
-  build(): ReplayTrack {
-    return {
-      dimension: this.dimension,
-      times: Float64Array.from(this.times),
-      values: Float32Array.from(this.values),
-      inTangents: Float32Array.from(this.inTangents),
-      outTangents: Float32Array.from(this.outTangents),
-    };
+  get atEnd(): boolean {
+    return this.p >= this.bytes.length;
   }
+
+  byte(): number {
+    if (this.p >= this.bytes.length) throw new ReplayFormatError('The replay file is damaged: the track data ends mid-value.');
+    return this.bytes[this.p++];
+  }
+
+  /** Unsigned LEB128: 7 bits per byte, low group first, high bit = more bytes follow. */
+  varint(): number {
+    let value = 0;
+    let scale = 1;
+    for (let i = 0; i < MAX_VARINT_BYTES; i++) {
+      const byte = this.byte();
+      value += (byte & 0x7f) * scale;
+      if (byte < 0x80) return value;
+      scale *= 128;
+    }
+    throw new ReplayFormatError('The replay file is damaged: a track value is longer than 8 bytes.');
+  }
+
+  /** Zigzag-decoded varint: 0, -1, 1, -2, 2 ... are stored as 0, 1, 2, 3, 4 ... */
+  zigzag(): number {
+    const u = this.varint();
+    return u % 2 === 0 ? u / 2 : -(u + 1) / 2;
+  }
+}
+
+function readTrack(reader: VarintReader, channel: ReplayChannel, keyCount: number): ReplayTrack {
+  const dim: 3 | 4 = channel === ReplayChannel.Rotation ? 4 : 3;
+  const times = new Float64Array(keyCount);
+  const values = new Float32Array(keyCount * dim);
+  const inTangents = new Float32Array(keyCount * dim);
+  const outTangents = new Float32Array(keyCount * dim);
+
+  let q = 0;
+  for (let k = 0; k < keyCount; k++) {
+    q += reader.zigzag();
+    times[k] = q / TIME_SCALE;
+    if (k > 0 && times[k] <= times[k - 1]) throw new ReplayFormatError('The replay file is damaged: a track\'s key times do not increase.');
+  }
+
+  const valueScale = VALUE_SCALE[channel];
+  for (let c = 0; c < dim; c++) {
+    q = 0;
+    for (let k = 0; k < keyCount; k++) {
+      q += reader.zigzag();
+      values[k * dim + c] = q / valueScale;
+    }
+  }
+
+  // A tangent is stored as the value change it contributes over its own segment (slope * dt).
+  // The first key's in-tangent and the last key's out-tangent bound no segment and stay 0.
+  for (let c = 0; c < dim; c++) {
+    for (let k = 0; k < keyCount; k++) {
+      if (k > 0) inTangents[k * dim + c] = reader.zigzag() / valueScale / (times[k] - times[k - 1]);
+      if (k < keyCount - 1) outTangents[k * dim + c] = reader.zigzag() / valueScale / (times[k + 1] - times[k]);
+    }
+  }
+
+  return { dimension: dim, times, values, inTangents, outTangents };
 }
 
 export function parseReplay(buffer: ArrayBuffer): Replay {
@@ -209,10 +267,10 @@ export function parseReplay(buffer: ArrayBuffer): Replay {
   const durationSeconds = view.getFloat64(8, true);
   const objectCount = view.getUint32(20, true);
   const eventCount = view.getUint32(24, true);
-  const blockCount = view.getUint32(28, true);
+  const trackCount = view.getUint32(28, true);
   const objectTableOffset = view.getUint32(32, true);
   const eventTableOffset = view.getUint32(36, true);
-  const blockIndexOffset = view.getUint32(40, true);
+  const trackDataOffset = view.getUint32(40, true);
   const endReasonByte = view.getUint8(60);
   const logCount = view.getUint32(64, true);
   const logTableOffset = view.getUint32(68, true);
@@ -224,7 +282,7 @@ export function parseReplay(buffer: ArrayBuffer): Replay {
   need(eventTableOffset, eventCount * EVENT_ENTRY_SIZE, 'the event table');
   need(logTableOffset, logCount * LOG_ENTRY_SIZE, 'the log table');
   need(stringDataOffset, stringDataLength, 'the log text');
-  need(blockIndexOffset, blockCount * BLOCK_INDEX_ENTRY_SIZE, 'the block index');
+  need(trackDataOffset, 0, 'the track data');
 
   const objects: ReplayObject[] = [];
   const objectsById = new Map<number, ReplayObject>();
@@ -274,72 +332,29 @@ export function parseReplay(buffer: ArrayBuffer): Replay {
     });
   }
 
-  const builders = new Map<number, TrackBuilder>(); // key = objectId * 4 + channel
-  for (let b = 0; b < blockCount; b++) {
-    const idx = blockIndexOffset + b * BLOCK_INDEX_ENTRY_SIZE;
-    const blockStart = view.getFloat64(idx, true);
-    const blockOffset = view.getUint32(idx + 8, true);
-    const blockLength = view.getUint32(idx + 12, true);
-    need(blockOffset, Math.max(blockLength, 8), `block ${b}`);
-    const blockEnd = blockOffset + blockLength;
-    const trackCount = view.getUint32(blockOffset, true);
-    let p = blockOffset + 8;
+  const reader = new VarintReader(new Uint8Array(buffer), trackDataOffset);
+  let lastTrackKey = -1;
+  for (let t = 0; t < trackCount; t++) {
+    const objectId = reader.varint();
+    const channel = reader.byte();
+    if (channel > ReplayChannel.Scale) throw new ReplayFormatError(`The replay file is damaged: unknown channel ${channel}.`);
+    const trackKey = objectId * 4 + channel;
+    if (trackKey <= lastTrackKey) throw new ReplayFormatError('The replay file is damaged: tracks are duplicated or out of order.');
+    lastTrackKey = trackKey;
+    const keyCount = reader.varint();
+    if (keyCount === 0) throw new ReplayFormatError('The replay file is damaged: a track has no keys.');
+    // Every key costs at least one byte per time, value and tangent, so a count past that is a lie (and would allocate garbage).
+    const dim = channel === ReplayChannel.Rotation ? 4 : 3;
+    if (keyCount * (1 + 3 * dim) - 2 * dim > size - reader.p) throw new ReplayFormatError('The replay file is damaged: a track has more keys than the file holds.');
 
-    for (let t = 0; t < trackCount; t++) {
-      if (p + 8 > blockEnd) throw new ReplayFormatError(`The replay file is damaged: block ${b} is shorter than its tracks.`);
-      const objectId = view.getUint16(p, true);
-      const channel = view.getUint8(p + 2);
-      const leadIn = (view.getUint8(p + 3) & 1) !== 0;
-      const keyCount = view.getUint32(p + 4, true);
-      p += 8;
-      if (channel > 2) throw new ReplayFormatError(`The replay file is damaged: unknown channel ${channel}.`);
-
-      const dim: 3 | 4 = channel === ReplayChannel.Rotation ? 4 : 3;
-      const timesAt = p;
-      const valuesAt = timesAt + keyCount * 4;
-      const inAt = valuesAt + keyCount * dim * 4;
-      const outAt = inAt + keyCount * dim * 4;
-      p = outAt + keyCount * dim * 4;
-      if (p > blockEnd || (timesAt & 3) !== 0) throw new ReplayFormatError(`The replay file is damaged: a track in block ${b} overruns it.`);
-
-      const key = objectId * 4 + channel;
-      let builder = builders.get(key);
-      if (!builder) {
-        builder = new TrackBuilder(dim);
-        builders.set(key, builder);
-      }
-
-      // Views straight into the buffer: every section is 4-byte aligned by the writer.
-      const times = new Float32Array(buffer, timesAt, keyCount);
-      const values = new Float32Array(buffer, valuesAt, keyCount * dim);
-      const ins = new Float32Array(buffer, inAt, keyCount * dim);
-      const outs = new Float32Array(buffer, outAt, keyCount * dim);
-      for (let k = leadIn ? 1 : 0; k < keyCount; k++) {
-        builder.times.push(blockStart + times[k]);
-        for (let c = 0; c < dim; c++) {
-          builder.values.push(values[k * dim + c]);
-          builder.inTangents.push(ins[k * dim + c]);
-          builder.outTangents.push(outs[k * dim + c]);
-        }
-      }
-    }
+    const track = readTrack(reader, channel as ReplayChannel, keyCount);
+    const obj = objectsById.get(objectId);
+    if (!obj) continue;
+    if (channel === ReplayChannel.Position) obj.position = track;
+    else if (channel === ReplayChannel.Rotation) obj.rotation = track;
+    else obj.scale = track;
   }
-
-  for (const [key, builder] of builders) {
-    const obj = objectsById.get(Math.floor(key / 4));
-    if (!obj || builder.times.length === 0) continue;
-    const track = builder.build();
-    switch (key % 4) {
-      case ReplayChannel.Position:
-        obj.position = track;
-        break;
-      case ReplayChannel.Rotation:
-        obj.rotation = track;
-        break;
-      default:
-        obj.scale = track;
-    }
-  }
+  if (!reader.atEnd) throw new ReplayFormatError('The replay file is damaged: unexpected bytes after the last track.');
 
   return {
     durationSeconds,

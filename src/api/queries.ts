@@ -275,7 +275,7 @@ export async function downloadResource(
 ): Promise<Download> {
   const res = await apiFetch(path, { signal, priority });
   const immutable = (res.headers.get('Cache-Control') ?? '').includes('immutable');
-  // The scene is served compressed: Content-Length is then the wire size, while the stream we read
+  // The scene and the replay are served compressed: Content-Length is then the wire size, while the stream we read
   // is already decoded, so the backend states the decoded size separately.
   const decoded = res.headers.get('X-MoodyBlues-Decoded-Length');
   const lengthHeader = res.headers.get('Content-Length');

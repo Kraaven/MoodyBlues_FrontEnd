@@ -27,9 +27,9 @@ sees three things the backend derives from it:
    textures once the backend has optimized it; the decoders are self-hosted under
    `public/decoders/`. Each tracked node carries `extras.objectId` (three.js puts it in
    `userData.objectId`), and `extras.isHidden` for objects that were inactive at startup.
-2. **The replay file**: `GET /api/sessions/{sessionId}/replay`, gzip-encoded on the wire. Its
+2. **The replay file**: `GET /api/sessions/{sessionId}/replay`, brotli-encoded on the wire. Its
    layout is defined in the backend's `Compiler/ReplayFileWriter.cs` and parsed by
-   `src/viewer/replay/replayFile.ts` (format 2 only).
+   `src/viewer/replay/replayFile.ts` (format 3 only).
 3. **Session records**, as JSON (`src/api/types.ts` mirrors them). Each carries `activity`, the
    session's glyph, computed by the backend when it compiles the replay (Section 2, "Session
    glyphs").
@@ -150,10 +150,14 @@ backend's counts (`{ deletedVersions, deletedSessions, freedBytes }`).
 
 ### `replayFile.ts`: parsing
 
-Reads the header, object table, event table, log table and time blocks. Every offset and count is
-checked against the file size, so a damaged file fails with a `ReplayFormatError` that says so.
-Blocks repeat the previous key of each live track as a "lead-in"; this parser loads the whole
-file, drops lead-ins and joins the blocks into one continuous track per object and property.
+Reads the header, object table, event table, log table and the track section. Every offset and
+count is checked against the file size, so a damaged file fails with a `ReplayFormatError` that
+says so. The track section holds one run per object and property: LEB128 varints of quantized,
+delta-coded times and values (1e-4 s; 1e-4 position/scale, 1/32768 rotation) and tangents stored as
+slope times segment length on the same grid (the reader divides by the segment length, and a
+segment of zero length is an error). Tracks must be strictly ascending by (object, property).
+Varints are decoded with arithmetic, not bitwise operators, because values reach 2^48.
+The whole file is decoded in a single pass into typed arrays.
 
 ### `replayTracks.ts`: curves to three.js tracks
 
@@ -322,8 +326,7 @@ the same headers. After upgrading `three`, re-copy the decoders from
 
 ## 6. Known limits
 
-- **Whole-file loading.** The replay is downloaded and parsed in full before playback. The block
-  layout allows streaming later without a format change.
+- **Whole-file loading.** The replay is downloaded and parsed in full before playback.
 - **No instancing.** Spawned objects are full clones, so very spawn-heavy sessions cost what they
   would cost in the game.
 - **Skinned meshes** whose bones were stripped in Unity (*Optimize Game Objects*) replay in bind
