@@ -15,6 +15,7 @@ import { regionFill, useStage } from '../stage/store';
 import { CameraGizmos } from './CameraGizmos';
 import { gizmoDepth, listCameras } from './cameras';
 import { Intro } from './intro';
+import { resolveCameraTarget } from '../share/shareSettings';
 import { useStudio } from './studioStore';
 import { useViewRig } from './viewRig/useViewRig';
 
@@ -147,7 +148,7 @@ export default function StudioContent() {
     redraw();
   }, [focusCameraId, cameraMode, settings.cameraGizmos, redraw]);
 
-  // Opening a recording (a shared link waits at the overview for the welcome card's Play): the whole scene, a beat, then a flight to where following the main camera's player starts, and play. Any
+  // Opening a recording (a shared link waits at the overview for the welcome card's Play): the whole scene, a beat, then a flight to where the opening camera's view starts, and play. Any
   // input, or asking for less motion, goes straight to the end. Runs for every recording opened, even
   // when the scene page already framed this scene, and again from the Viewpoint window.
   useEffect(() => {
@@ -157,14 +158,17 @@ export default function StudioContent() {
     const startTime = introFromStart ? 0 : playback.time;
     // Pressing Play on the welcome card always ends in playing, whatever ?t= said.
     const play = introFromStart || gated ? true : playback.playing;
-    const main = cameras[0];
+    // The camera the recording opens on: a shared link's owner chose it (and how it is viewed), else the main camera.
+    const { share, cameraMode } = useStudio.getState();
+    const opening = share ? resolveCameraTarget(cameras, share.camera.target.value) : (cameras[0] ?? null);
+    const mode = share ? share.camera.mode.value : cameraMode;
     const fov = () => useStudio.getState().settings.fov;
     const intro = new Intro(
       {
         pause: () => {
           playback.seek(startTime);
           playback.setPlaying(false);
-          if (main) useStudio.getState().setFocusCamera(main.id);
+          useStudio.getState().startOnCamera(opening?.id ?? null, mode);
         },
         showScene: () => {
           const fill = regionFill(window.innerWidth, window.innerHeight, useStage.getState().inset);
@@ -172,7 +176,7 @@ export default function StudioContent() {
           if (pose) useStage.getState().setCameraPose({ position: pose.position, target: pose.target, fov: fov() }, 0);
         },
         flyToCamera: (durationMs) => {
-          const pose = main ? introPose(main.id) : null;
+          const pose = opening ? introPose(opening.id, mode) : null;
           if (pose) useStage.getState().setCameraPose({ ...pose, fov: fov() }, durationMs);
         },
         play: () => playback.setPlaying(play),
@@ -183,7 +187,7 @@ export default function StudioContent() {
     surface?.addEventListener('pointerdown', skip);
     surface?.addEventListener('wheel', skip, { passive: true });
     window.addEventListener('keydown', skip);
-    intro.start({ hasCameras: cameras.length > 0, reduced: reducedMotion(), waitForGo: gated });
+    intro.start({ hasCameras: opening !== null, reduced: reducedMotion(), waitForGo: gated });
     const unsubscribe = useStudio.subscribe((state, previous) => {
       if (previous.introGate === 'waiting' && state.introGate === 'open') intro.go();
     });

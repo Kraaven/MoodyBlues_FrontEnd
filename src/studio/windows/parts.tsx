@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type * as THREE from 'three';
-import { Box, Camera, Lightbulb, Bone, Search, Sparkles } from 'lucide-react';
+import { Box, Camera, Lightbulb, Bone, Lock, Search, Sparkles } from 'lucide-react';
 import { cn } from '../../ui/cn';
+import { Tooltip } from '../../ui/Tooltip';
 import { textureThumbnail } from '../../inspector/thumbnails';
 import { useStudio } from '../studioStore';
 
@@ -27,6 +28,17 @@ export function WindowContext({ left, right }: { left: ReactNode; right?: ReactN
 
 export function SectionTitle({ children, className }: { children: ReactNode; className?: string }) {
   return <p className={cn('eyebrow mb-3', className)}>{children}</p>;
+}
+
+/** The small lock beside a value the owner of a shared link set and a visitor cannot change. */
+export function LockBadge({ className }: { className?: string }) {
+  return (
+    <Tooltip content="Set by the owner">
+      <span className={cn('inline-flex shrink-0 items-center text-fg-3', className)}>
+        <Lock role="img" aria-label="Set by the owner" className="h-3.5 w-3.5" strokeWidth={1.7} />
+      </span>
+    </Tooltip>
+  );
 }
 
 export function Rule() {

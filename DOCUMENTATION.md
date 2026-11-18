@@ -77,7 +77,7 @@ redirects to `/projects`.
 | `/projects` | The lobby: projects, with anything recording or broken above them (`LobbyPage`) |
 | `/projects/new` | Create a project (`NewProjectPage`) |
 | `/projects/:projectId` | A project's scenes; **Unity connection** opens the connection string dialog, and an empty project shows the setup steps. `?connect=1` opens the dialog on arrival (`ProjectPage`) |
-| `/projects/:projectId/scenes/:sceneId` | Scene: title, a version picker (`?version=N`, default the current one), its recordings with their glyphs, recordings waiting for a scene version, and a menu for rename, download, copy GUID, **Manage versions** and delete (`pages/scene/ScenePage.tsx`) |
+| `/projects/:projectId/scenes/:sceneId` | Scene: title (the name given here, else the Unity name, else the GUID; long titles truncate), a version picker (`?version=N`, default the current one), its recordings with their glyphs (the row menu offers Share, Delete, and **Rebuild replay** for failed builds only), recordings waiting for a scene version, and a menu for rename (with **Reset to Unity name**), download, copy GUID, **Manage versions** and delete (`pages/scene/ScenePage.tsx`) |
 | `/projects/:projectId/scenes/:sceneId/view` | The 3D studio on a scene version, for inspecting it; `?version=N` picks an older one (`studio/StudioPage.tsx`) |
 | `/projects/:projectId/scenes/:sceneId/sessions/:sessionId` | The same studio with a session playing; `?t=42.5` starts at a time |
 
@@ -107,6 +107,12 @@ it) and is never unmounted. A view directs it with `useStageView(view)`, where a
   reference-counted, keeping the two most recent idle scenes. The replay animates a clone; the
   inspector shows the cached master read-only. Moving from the scene page to a session therefore
   costs no second download and keeps the camera (`framedKey`).
+- `useStagedScene` (`SceneContent.tsx`) has two effects with separate lifetimes. The first holds the
+  master's lease and is keyed by the scene URL and the retry attempt only. The second picks,
+  prepares, warms up and adds the scene, and re-runs when the replay (`variant`) changes. A replay
+  that finishes before the scene therefore never cancels the download. An abort the hook did not
+  cause is retried once, then shown as the scene's error. `prefetch/sceneFetch.ts` never joins a
+  flight that has been aborted.
 - Without WebGL, or after a lost context, the app shows a gradient and `StageNotice` in the
   studio; lists and panels keep working. `?stage=off` forces this, `?motion=reduce` forces reduced
   motion.
@@ -205,20 +211,22 @@ directly. React re-renders on user actions and, for the current log row, about 8
   all / frame selected, follow camera.
 - **Windows** (`src/studio/windows/`): each tool is a window that is closed, floating over the 3D
   view, or a tab in the dock at the right edge; the rail of icons opens them (Alt+1 to Alt+9, and
-  Alt+0 for the tenth). On a phone each opens as a sheet from the bottom. Where each floating
-  window sits is remembered per kind of view (`scene`, `session` or `share`) in `localStorage`
-  (`moodyblues.windows.v3`). A remembered place is a `WindowRect { anchor, offset, y, w, h }`
+  Alt+0 for the tenth). A phone has none of this (see Phone mode below). Where each floating
+  window sits is remembered per kind of view (`scene` or `session`) in `localStorage`
+  (`moodyblues.windows.v3`); a shared link's layout is not remembered, it comes from its owner's
+  settings every time. A remembered place is a `WindowRect { anchor, offset, y, w, h }`
   (`windowLayout.ts`): horizontally the window is anchored to the nearer edge, `offset` being the
   gap to that edge, and `toFrame` / `fromFrame` convert to and from pixels. A right-anchored
   window therefore follows the rail when the dock opens. The layout rules are pure functions, with
-  tests. The view settings (grid, shadows,
-  scene lights, camera lines, field of view) are kept under `moodyblues.view.v1`.
+  tests. The owner's view settings (grid, shadows,
+  scene lights, camera lines, field of view, follow style, near clip) are kept under
+  `moodyblues.view.v1`; a share page neither reads nor writes them.
 
   | Window | Content |
   |---|---|
   | Recordings | The sessions of the version on screen; choosing one plays it on this scene |
   | Logs (`LogsWindow.tsx`) | The session's logs only, in time order, each in its own Unity colour; All / Info / Warnings / Errors filters, search, virtualized, follows the playhead; every row is a seek. Only with a session |
-  | Session details | Recording health (the client's counters, including rotation widenings), session facts, rebuild, download, delete. Only with a session |
+  | Session details | Recording health (the client's counters, including rotation widenings), session facts. Read only, for owners and shared views alike. Only with a session |
   | Hierarchy | The scene's tree, searchable; during a replay the recorded objects as they are now |
   | Inspector | The selected object: name, ObjectID, live local and world transform, Unity path |
   | Materials, Textures, Geometry | Read from the loaded GLB by `inspector/inspection.ts`: materials with every texture channel, de-duplicated textures with estimated GPU memory, geometries and what shares them, vertex statistics |
@@ -245,6 +253,39 @@ directly. React re-renders on user actions and, for the current log row, about 8
 - **Keyboard**: `studio/shortcuts.tsx` holds the table; `?` shows it. Alt+1...9 and Alt+0 match
   `e.code` (the physical key, so Option+digit works on a Mac), and shortcuts are ignored while a
   menu or dialog is open.
+- **Phone mode** (`lib/usePhoneLayout.ts`, `studio/PhoneSettings.tsx`). `usePhoneLayout()` is
+  `(pointer: coarse) and (max-width: 767px), (pointer: coarse) and (max-height: 500px)`: a touch
+  screen that is narrow (portrait) or short (landscape). It is the one phone test in the studio and
+  share code, for owners and share links alike. A touch tablet is not a phone, and neither is a
+  narrow desktop window: they keep the studio. A phone gets a deliberately simple viewer: the 3D
+  view, a top bar (the title, truncated, and one Settings icon button), the timeline and nothing
+  else. There is no tool rail, no floating window and no dock. Settings opens a bottom sheet (not
+  modal, so the view stays usable behind it; at most 70% of the height; closed by its button, Esc
+  or by dragging its header down) with the camera (targets, 1st person / follow, follow style),
+  playback speed, the display switches and, when the logs panel is available and there is a
+  session, a read-only log list (a tap seeks). The controls are the ones the Viewpoint and Logs
+  windows use (`windows/viewpointControls.tsx`, `LogList` in `LogsWindow.tsx`) and go through the
+  same guarded store actions, so a share link's locks hold: a locked value shows the lock badge
+  and is disabled. Panel availability hides only Logs; the Viewpoint panel being unavailable does
+  not hide the camera settings, because the camera is the core of viewing (its locks still apply).
+  The sheet's footer points to a laptop for the full studio, and carries Share (owners) or Sign in
+  (visitors) since the bar has room for one button. Held sideways the timeline is one row (the
+  rail beside play, time and speed). `index.html` has `viewport-fit=cover`, and the phone's top,
+  bottom and side margins are `max(env(safe-area-inset-*), n)`. On a share link the welcome card
+  stays a bottom sheet; on a phone its navigation help lists the touch gestures and the Settings
+  button instead of the rail, and sideways it drops the wordmark and some padding so Play stays
+  in view.
+- **Layout rules** (all sizes). The studio's chrome is built so it cannot overlap: the top bar is
+  one flex row (title card, which shrinks and truncates, then the buttons); the timeline sits beside
+  the tool rail, never under it, and is a container query (the skip buttons and total length appear
+  by the bar's own width, not the screen's, so it never wraps even beside a docked window); the rail
+  runs the full height beside the view and its buttons are 36 px (not 40) on screens under 720 px
+  tall, and it scrolls only if that is still not enough. The dock takes at most 30% of the
+  window width (`dockWidthFor`, never under 280 px, the narrowest a window gets), so the 3D keeps about two thirds on a tablet or
+  a half-screen window. The 3D is centred in the room the chrome leaves (the stage region follows
+  the measured timeline height). The render resolution cap is unchanged. These are checked by
+  a Playwright sweep over phones, tablets and desktops (no overlap, no clipping, no horizontal
+  scroll, no wrapped timeline).
 - **Share** (top right). With a session open it opens the ShareDialog (next section); on a bare
   scene it copies the owner-only link to that version, `<scene>/view?version=N`, which reopens the
   same version.
@@ -253,9 +294,8 @@ directly. React re-renders on user actions and, for the current log row, about 8
 
 Each recording is **Private** (the default) or **Public**. The ShareDialog
 (`share/ShareDialog.tsx`, opened from the studio's share button and the recordings table) has a
-Public toggle, the link in a copy field, an optional "Start at mm:ss" that appends `?t=<seconds>`
-to the link, and **Reset link**, which replaces the token so the old link stops working at once.
-A Public badge marks public recordings in the recordings table and the Recordings window.
+Public toggle, the link in a copy field, **Reset link**, which replaces the token so the old link
+stops working at once, and, while the link is public, the **Viewer settings** (below). A Public badge marks public recordings in the recordings table and the Recordings window.
 
 - `PUT /api/sessions/{id}/sharing` (`{ isPublic }`) and `POST /api/sessions/{id}/sharing/reset`
   both answer `{ isPublic, shareToken }`, which is written into the cached session detail.
@@ -264,10 +304,66 @@ A Public badge marks public recordings in the recordings table and the Recording
   names, scene version), then `/api/share/{token}/replay` and `/api/share/{token}/scene`. A
   visitor sees the logs, details, hierarchy and inspection windows, but no Recordings window, and
   can change nothing. A 401 or 404 on `/api/share/` paths is an answer, never a session expiry; an
-  unknown or revoked token shows "link unavailable". `?t=` starts the replay at that time.
+  unknown or revoked token shows "link unavailable". `?t=` starts the replay at that time and
+  wins over the start time in the link's settings. The response has no project id, sharing flag or
+  token (`SharedSessionDetail`), and carries the settings already resolved by the server.
 - `StudioSource` (`studio/source.ts`) is where the studio's data comes from: `owner` (project,
   scene and session ids, with the signed-in paths) or `share` (a token). It builds the replay path
   and the scene file reference for either. Link builders are in `lib/shareLink.ts`.
+
+#### Share settings (`src/share/shareSettings.ts`)
+
+The owner of a recording decides how visitors of its link see it, for example a game with a
+first-person camera that visitors should start in, and perhaps never leave. Every value a visitor
+can touch has a starting value and a **lock**: a locked value is shown, disabled, with a lock icon
+and the tooltip "Set by the owner". The owner's own studio is never restricted; everything below
+applies only on `/share/:token`.
+
+- **Schema** (`ShareSettings`, `version: 1`): `camera` (target, mode, follow style, first-person
+  near clip, field of view), `display` (grid, shadows, scene lights, camera lines), `playback`
+  (start time, speed, `seeking.locked`), `panels` (per panel: `available` and `openAtStart`) and
+  `interaction.selectObjects`. A camera target is `main` (the camera tagged MainCamera, else the
+  free camera), `free`, `named` (the first exported camera with that node name) or `id` (one
+  camera by ObjectID, then by name). A target that is not found falls back to `main`.
+- **The backend stores it as opaque JSON** (an object, at most 16 KB); the frontend owns the
+  meaning. `parseShareSettings` reads whatever is stored defensively: missing keys take
+  `DEFAULT_SHARE_SETTINGS`, unknown keys are ignored, numbers are clamped (field of view 20 to 90,
+  speed to the nearest Timeline step, near clip above zero or null, start time at zero or later),
+  and a panel that is not available is never open at the start. It never throws.
+- **Project defaults ("share defaults") and links.** Each project has a template, edited from the
+  project page ("Share defaults"; camera by name, no start time) through
+  `PUT /api/projects/{id}/share-defaults`. When a recording is first made public the server copies
+  the template into the link; after that the link is edited on its own through
+  `PUT /api/sessions/{id}/share-settings`, and later template edits do not touch it. After
+  toggling Public the session detail is refetched to pick up the copy. The share dialog can
+  **Save as project default** (`toTemplate`: a camera by id becomes a camera by name, and the start
+  time is dropped, being a moment in one recording) and **Reset to project default** (the project's
+  current template becomes this link's settings, after a confirmation).
+- **The editor** (`ShareSettingsEditor`) is one controlled component with the sections Camera,
+  Display, Playback, Panels and Interaction, each value with a lock toggle. The share dialog saves
+  edits after about 500 ms (`useAutosave`, with a "Saving…" and "Saved" state, a toast on error, and
+  a flush when the dialog closes). Opened from the studio it lists the scene's cameras and offers
+  "Start at current time"; from the recordings table (no scene loaded) it offers Main, Free and the
+  camera already chosen.
+- **Enforcement** is in the studio store, not in the buttons. `useStudio().share` holds the
+  settings on a share page (null for an owner), `isLocked(share, key)` is the one test, and the
+  store's actions (`setFocusCamera`, `setCameraMode`, `setFollow`, `setSetting`, `select`,
+  `selectId`, `frameAll`, `frameSelected`, `replayIntro`) do nothing for a locked value, so
+  shortcuts and windows cannot bypass them. The clock's user-facing moves (`studio/userActions.ts`:
+  `seekByUser`, `setSpeedByUser`) check the speed and seeking locks; the page's own moves (the
+  intro, the start time) do not. With the camera target locked a visitor cannot pick another camera
+  or the free one, nor follow the selection; with seeking locked scrubbing, skipping, clicking a
+  log, the seek keys and Replay intro are off, and play and pause still work. Locked rows are
+  also left out of the shortcut table, and unavailable panels are absent from the rail, the
+  welcome card, the shortcut table and Alt+N. With `selectObjects` off clicks and hierarchy rows
+  select nothing, and the hierarchy only opens and closes.
+- **Initial state** is applied once per link. When the response arrives the page calls
+  `enterShare` (the view settings, replacing the owner's remembered ones, and nothing written back
+  to `localStorage`) and lays the window dock out from the panels open at the start. The start
+  time (a `?t=` wins) and the speed are set on the clock before the replay attaches. When the
+  scene and the replay are ready the intro (`StudioContent`) resolves the camera target and flies
+  to it in the resolved mode (first person flies to the lens, follow to the chase pose); a free
+  target, or a scene with no cameras, frames the scene and stays on the free camera.
 
 Texture previews are drawn from the decoded image; textures the browser cannot draw (KTX2) are
 rendered through the Stage's renderer (`inspector/thumbnails.ts`; `?thumbnails=gpu` forces that
@@ -281,11 +377,11 @@ src/
   api/          client.ts (fetch with cookies, CSRF header, refresh and retry on 401), types.ts (contracts),
                 queries.ts (TanStack Query hooks, polling, mutations, scene file download)
   auth/         AuthProvider, ProtectedRoute, useAuth, redirect.ts (safeRedirect)
-  share/        ShareDialog
+  share/        ShareDialog, ShareDefaultsDialog, ShareSettingsEditor, shareSettings (schema, parse, lock tests), shareLayout, useAutosave
   ui/           the component kit on Radix (Button, Dialog, Menu, Tabs, Toast, Chip, ...), ActivityGlyph, SnapshotImage
   stage/        the root canvas: store (views, content types, camera), StageHost, CameraRig, DemoScene,
                 scene cache (sceneAssets, sceneSource), snapshots, StageSurface, StagePreloader
-  studio/       the 3D studio: page, Stage content, playback clock, replay binding, timeline, logMarkers, source (StudioSource), shortcuts,
+  studio/       the 3D studio: page, PhoneSettings (the phone's sheet), Stage content, playback clock, replay binding, timeline, logMarkers, source (StudioSource), shortcuts,
                 logNav, unityPath, studioStore, windows/ (the tool windows and their layout)
   inspector/    inspection.ts (reads a loaded scene), thumbnails.ts
   shell/        WorkspaceLayout and TopBar (page frame), ConnectionDialog, SetupGuide
@@ -293,7 +389,7 @@ src/
   debug/        the studio's Debug window and its scene effects (lazy)
   viewer/       core/ (gltf, palette, atmosphere, outline; imports nothing from the app, which
                 boundary.test.ts checks), replay/ (parser, tracks, player)
-  lib/          formatting and small hooks
+  lib/          formatting and small hooks (usePhoneLayout, useMediaQuery, useElementHeight, useWindowWidth)
   styles/       tokens.css (the design tokens)
 public/decoders/  self-hosted Draco and Basis decoders, copied from three's examples/jsm/libs
 design/brand/     the logo options; "Night play" was chosen

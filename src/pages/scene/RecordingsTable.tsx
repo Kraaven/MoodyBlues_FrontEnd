@@ -115,7 +115,8 @@ export function RecordingsTable({ sessions, sessionHref, nested = false }: { ses
                 }
                 items={[
                   { label: 'Share…', icon: Share2, onSelect: () => setToShare(s) },
-                  { label: 'Rebuild replay', icon: RotateCw, onSelect: () => void onRecompile(s.id), disabled: s.status !== 'Ready' && s.status !== 'Failed' },
+                  // Only a build that failed can be rebuilt; a good replay is never rebuilt from here.
+                  ...(s.status === 'Failed' ? [{ label: 'Rebuild replay', icon: RotateCw, onSelect: () => void onRecompile(s.id) }] : []),
                   { label: 'Delete session', icon: Trash2, danger: true, separated: true, onSelect: () => setToDelete(s) },
                 ]}
               />

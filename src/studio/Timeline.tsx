@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronsLeft, ChevronsRight, Pause, Play } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, Lock, Pause, Play } from 'lucide-react';
 import { LogLevel, logColorHex, type Replay, type ReplayLog } from '../viewer/replay/replayFile';
 import { binLogs, type LogBin } from './logMarkers';
 import { nextLogTime, previousLogTime } from './logNav';
 import { SPEEDS, usePlaybackState, type Playback } from './playback';
 import { IconButton } from '../ui/Button';
+import { Tooltip } from '../ui/Tooltip';
+import { useLocked } from './studioStore';
+import { seekByUser, setSpeedByUser } from './userActions';
 import { Menu } from '../ui/Menu';
 import { cn } from '../ui/cn';
 import { formatPlayhead } from '../lib/format';
@@ -22,55 +25,76 @@ export function Timeline({
   playback,
   replay,
   disabled,
+  row,
 }: {
   playback: Playback;
   replay: Replay | null;
   disabled?: boolean;
+  /** One row, for a phone held sideways: the rail sits beside the transport and the skip buttons and total length are left out. */
+  row?: boolean;
 }) {
   const { playing, speed, duration } = usePlaybackState(playback);
   const total = replay?.durationSeconds ?? duration;
   const logs = replay?.logs ?? [];
   const on = playing && !disabled;
+  const speedLocked = useLocked('speed');
+  const seekLocked = useLocked('seeking');
+
+  const rail = <Rail playback={playback} replay={replay} total={total} disabled={disabled} seekLocked={seekLocked} className={row ? 'min-w-0 flex-1' : 'mt-1.5'} />;
 
   return (
-    <div className="glass elevated rounded-[12px] border border-rule-strong/60 px-4 pb-4 pt-3 sm:px-5">
-      <div className="flex h-11 items-center gap-2 sm:gap-4">
-        <button
-          type="button"
-          aria-label={on ? 'Pause (Space)' : 'Play (Space)'}
-          title={on ? 'Pause (Space)' : 'Play (Space)'}
-          onClick={() => playback.toggle()}
-          disabled={disabled}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-accent/16 text-accent transition-colors hover:bg-accent/25 disabled:opacity-40"
-        >
-          {on ? <Pause className="h-[18px] w-[18px] fill-current" strokeWidth={0} /> : <Play className="h-[18px] w-[18px] fill-current" strokeWidth={0} />}
-        </button>
-        <TimeReadout playback={playback} total={total} />
-        <Menu
-          align="start"
-          trigger={
-            <button type="button" disabled={disabled} aria-label={`Speed ${speed}×`} className="tabular h-9 rounded-[6px] px-2.5 font-mono text-[14px] text-fg transition-colors hover:bg-ink-4 disabled:opacity-40">
-              {speed}×
-            </button>
-          }
-          items={SPEEDS.map((s, i) => ({ label: `${s}×`, hint: String(i + 1), onSelect: () => playback.setSpeed(s) }))}
-        />
-        <div className="hidden items-center sm:flex">
-          <IconButton label="Previous log" shortcut="[" size="sm" disabled={disabled || logs.length === 0} onClick={() => playback.seek(previousLogTime(logs, playback.time))}>
-            <ChevronsLeft className="h-4 w-4" />
-          </IconButton>
-          <IconButton label="Next log" shortcut="]" size="sm" disabled={disabled || logs.length === 0} onClick={() => playback.seek(nextLogTime(logs, playback.time))}>
-            <ChevronsRight className="h-4 w-4" />
-          </IconButton>
+    // A container query, not the viewport: beside a docked window the bar is narrower than the screen it is on.
+    <div className="@container">
+      <div className={cn('glass elevated rounded-[12px] border border-rule-strong/60', row ? 'px-3 py-1.5' : 'px-3 pb-2.5 pt-2 @md:px-4')}>
+        <div className="flex h-10 items-center gap-2 @md:gap-4">
+          <button
+            type="button"
+            aria-label={on ? 'Pause (Space)' : 'Play (Space)'}
+            title={on ? 'Pause (Space)' : 'Play (Space)'}
+            onClick={() => playback.toggle()}
+            disabled={disabled}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-accent/16 text-accent transition-colors hover:bg-accent/25 disabled:opacity-40"
+          >
+            {on ? <Pause className="h-[18px] w-[18px] fill-current" strokeWidth={0} /> : <Play className="h-[18px] w-[18px] fill-current" strokeWidth={0} />}
+          </button>
+          <TimeReadout playback={playback} total={total} showTotal={!row} />
+          {speedLocked ? (
+            <Tooltip content="Set by the owner">
+              <span className="tabular inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[6px] px-2.5 font-mono text-[14px] text-fg-2" role="img" aria-label={`Speed ${speed}×, set by the owner`}>
+                {speed}×
+                <Lock aria-hidden="true" className="h-3 w-3" />
+              </span>
+            </Tooltip>
+          ) : (
+            <Menu
+              align="start"
+              trigger={
+                <button type="button" disabled={disabled} aria-label={`Speed ${speed}×`} className="tabular h-9 shrink-0 rounded-[6px] px-2.5 font-mono text-[14px] text-fg transition-colors hover:bg-ink-4 disabled:opacity-40">
+                  {speed}×
+                </button>
+              }
+              items={SPEEDS.map((s, i) => ({ label: `${s}×`, hint: String(i + 1), onSelect: () => setSpeedByUser(playback, s) }))}
+            />
+          )}
+          {!row && (
+            <div className="hidden shrink-0 items-center @md:flex">
+              <IconButton label="Previous log" shortcut="[" size="sm" disabled={disabled || seekLocked || logs.length === 0} onClick={() => seekByUser(playback, previousLogTime(logs, playback.time))}>
+                <ChevronsLeft className="h-4 w-4" />
+              </IconButton>
+              <IconButton label="Next log" shortcut="]" size="sm" disabled={disabled || seekLocked || logs.length === 0} onClick={() => seekByUser(playback, nextLogTime(logs, playback.time))}>
+                <ChevronsRight className="h-4 w-4" />
+              </IconButton>
+            </div>
+          )}
+          {row && rail}
         </div>
-        <div className="flex-1" />
+        {!row && rail}
       </div>
-      <Rail playback={playback} replay={replay} total={total} disabled={disabled} />
     </div>
   );
 }
 
-function TimeReadout({ playback, total }: { playback: Playback; total: number }) {
+function TimeReadout({ playback, total, showTotal }: { playback: Playback; total: number; showTotal: boolean }) {
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(
     () =>
@@ -80,16 +104,18 @@ function TimeReadout({ playback, total }: { playback: Playback; total: number })
     [playback],
   );
   return (
-    <span className="tabular flex items-baseline gap-3 whitespace-nowrap font-mono sm:gap-5">
-      <span ref={ref} className="text-[18px] text-accent sm:text-[19px]">
+    <span className="tabular flex shrink-0 items-baseline gap-3 whitespace-nowrap font-mono @md:gap-5">
+      <span ref={ref} className="text-[18px] text-accent">
         {formatPlayhead(playback.time, 3)}
       </span>
-      <span className="hidden text-[13px] text-fg-3 sm:inline">/ {formatPlayhead(total, 3)}</span>
+      {showTotal && <span className="hidden text-[13px] text-fg-3 @lg:inline">/ {formatPlayhead(total, 3)}</span>}
     </span>
   );
 }
 
-function Rail({ playback, replay, total, disabled }: { playback: Playback; replay: Replay | null; total: number; disabled?: boolean }) {
+/** The rail is also the scrub bar: with seeking locked it only shows where the playhead is. */
+function Rail({ playback, replay, total, disabled, seekLocked, className }: { playback: Playback; replay: Replay | null; total: number; disabled?: boolean; seekLocked: boolean; className?: string }) {
+  const inert = disabled || seekLocked;
   const railRef = useRef<HTMLDivElement>(null);
   const playedRef = useRef<HTMLDivElement>(null);
   const headRef = useRef<HTMLDivElement>(null);
@@ -124,17 +150,17 @@ function Rail({ playback, replay, total, disabled }: { playback: Playback; repla
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (disabled || total <= 0) return;
+    if (inert || total <= 0) return;
     railRef.current?.setPointerCapture(e.pointerId);
     scrubbing.current = { wasPlaying: playback.playing };
     playback.setPlaying(false);
-    playback.seek(timeAt(e.clientX));
+    seekByUser(playback, timeAt(e.clientX));
   };
   const onPointerMove = (e: React.PointerEvent) => {
-    if (total <= 0) return;
+    if (total <= 0 || inert) return;
     const rect = railRef.current!.getBoundingClientRect();
     setHover({ x: e.clientX - rect.left, time: timeAt(e.clientX) });
-    if (scrubbing.current) playback.seek(timeAt(e.clientX));
+    if (scrubbing.current) seekByUser(playback, timeAt(e.clientX));
   };
   const endScrub = () => {
     if (scrubbing.current?.wasPlaying) playback.setPlaying(true);
@@ -143,10 +169,10 @@ function Rail({ playback, replay, total, disabled }: { playback: Playback; repla
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     const step = e.shiftKey ? 5 : 1;
-    if (e.key === 'ArrowLeft') playback.seek(playback.time - step);
-    else if (e.key === 'ArrowRight') playback.seek(playback.time + step);
-    else if (e.key === 'Home') playback.seek(0);
-    else if (e.key === 'End') playback.seek(total);
+    if (e.key === 'ArrowLeft') seekByUser(playback, playback.time - step);
+    else if (e.key === 'ArrowRight') seekByUser(playback, playback.time + step);
+    else if (e.key === 'Home') seekByUser(playback, 0);
+    else if (e.key === 'End') seekByUser(playback, total);
     else return;
     e.preventDefault();
     e.stopPropagation();
@@ -156,15 +182,15 @@ function Rail({ playback, replay, total, disabled }: { playback: Playback; repla
   const bins = useMemo(() => (logs ? binLogs(logs, total, width, BIN_PX) : []), [logs, total, width]);
 
   return (
-    <div className="relative mt-2">
+    <div className={cn('relative', className)}>
       <div
         ref={railRef}
         role="slider"
-        tabIndex={disabled ? -1 : 0}
+        tabIndex={inert ? -1 : 0}
         aria-label="Timeline"
         aria-valuemin={0}
         aria-valuemax={Number(total.toFixed(2))}
-        aria-disabled={disabled || undefined}
+        aria-disabled={inert || undefined}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endScrub}
@@ -175,7 +201,7 @@ function Rail({ playback, replay, total, disabled }: { playback: Playback; repla
           setHoverBin(null);
         }}
         onKeyDown={onKeyDown}
-        className={cn('group relative h-7 touch-none select-none', disabled ? 'cursor-default opacity-50' : 'cursor-pointer')}
+        className={cn('group relative h-7 touch-none select-none', disabled ? 'cursor-default opacity-50' : seekLocked ? 'cursor-default' : 'cursor-pointer')}
       >
         <div className="absolute inset-x-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-fg-3/30">
           <div ref={playedRef} className="absolute inset-y-0 left-0 rounded-full bg-accent" style={{ width: 0 }} />
@@ -189,7 +215,7 @@ function Rail({ playback, replay, total, disabled }: { playback: Playback; repla
               log={logs[bin.worst]}
               onHover={setHoverBin}
               onSeek={(t) => {
-                if (!disabled) playback.seek(t);
+                if (!disabled) seekByUser(playback, t);
               }}
             />
           ))}
@@ -200,7 +226,7 @@ function Rail({ playback, replay, total, disabled }: { playback: Playback; repla
 
         {hoverBin && logs && !disabled && <MarkerTip bin={hoverBin} logs={logs} />}
 
-        {hover && !hoverBin && !disabled && (
+        {hover && !hoverBin && !inert && (
           <div className="elevated pointer-events-none absolute -top-8 -translate-x-1/2 rounded-[5px] border border-rule-strong bg-ink-3 px-1.5 py-0.5 font-mono text-[11px] text-fg" style={{ left: hover.x }}>
             {formatPlayhead(hover.time)}
           </div>

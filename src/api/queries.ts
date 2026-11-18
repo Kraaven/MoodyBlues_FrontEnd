@@ -9,6 +9,7 @@ import {
   type SceneDetail,
   type SessionDetail,
   type SessionSummary,
+  type ShareSettingsResponse,
   type SharedSessionResponse,
   type SharingResponse,
 } from './types';
@@ -86,6 +87,19 @@ export function useRotateIngestKey(projectId: string) {
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: keys.project(projectId) });
       void client.invalidateQueries({ queryKey: keys.projects });
+    },
+  });
+}
+
+/** Saves a project's share defaults (null: back to the built-in default). New links copy them when first made public. */
+export function useSetShareDefaults(projectId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (settings: unknown) =>
+      apiJson<ShareSettingsResponse>(`/api/projects/${enc(projectId)}/share-defaults`, { method: 'PUT', body: { settings } }),
+    onSuccess: ({ settings }) => {
+      client.setQueryData<ProjectDetail>(keys.project(projectId), (old) => (old ? { ...old, shareDefaults: settings } : old));
+      void client.invalidateQueries({ queryKey: keys.project(projectId) });
     },
   });
 }
@@ -228,6 +242,19 @@ export function useResetShare(sessionId: string) {
   return useMutation({
     mutationFn: () => apiJson<SharingResponse>(`/api/sessions/${enc(sessionId)}/sharing/reset`, { method: 'POST' }),
     onSuccess: (sharing) => applySharing(client, sessionId, sharing),
+  });
+}
+
+/** Saves what visitors of one link get (null: the project's defaults apply, as if never edited). */
+export function useSetShareSettings(sessionId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (settings: unknown) =>
+      apiJson<ShareSettingsResponse>(`/api/sessions/${enc(sessionId)}/share-settings`, { method: 'PUT', body: { settings } }),
+    onSuccess: ({ settings }) => {
+      client.setQueryData<SessionDetail>(keys.session(sessionId), (old) => (old ? { ...old, shareSettings: settings } : old));
+      void client.invalidateQueries({ queryKey: keys.session(sessionId) });
+    },
   });
 }
 

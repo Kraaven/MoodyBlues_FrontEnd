@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import type * as THREE from 'three';
 import type { ReplayPlayer } from '../viewer/replay/ReplayPlayer';
+import { canSelect, isLocked, viewSettingsOf, type LockKey, type ShareSettings } from '../share/shareSettings';
+import { DEFAULT_VIEW_SETTINGS, type CameraMode, type ViewSettings } from './viewSettings';
 
 /**
  * What the 3D studio shares between the Stage (which holds the scene, takes the clicks and runs the
@@ -10,46 +12,22 @@ import type { ReplayPlayer } from '../viewer/replay/ReplayPlayer';
  * or the replay's own copy of it when a session plays. Selection is by node; during a replay it is
  * also kept by ObjectID, because the node behind an ID can change (a spawn appearing, a pooled clone
  * being reused).
+ *
+ * On a share link `share` holds the owner's settings for the visitor, and every action that would
+ * change a locked value (or select when selecting is off) does nothing, whichever control or key
+ * asked. In the owner's studio `share` is null and nothing is restricted.
  */
-export interface ViewSettings {
-  grid: boolean;
-  shadows: boolean;
-  fov: number;
-  /** The lights the Unity scene exported. Off by default: the viewer's own lighting reads better and costs less. */
-  sceneLights: boolean;
-  /** A small frustum drawn at each camera the Unity scene exported. */
-  cameraGizmos: boolean;
-  /** How Follow frames the player: a chase camera behind and above, or side-on leading where they move. */
-  followStyle: FollowStyle;
-  /** First person's near clip plane in metres, for a camera that sits inside the player's body. Null: automatic, scaled to the player's height. */
-  firstPersonNear: number | null;
-}
-
-/** How the view stays on a focused camera: through its lens, or chasing the player it belongs to. */
-export type CameraMode = 'firstPerson' | 'follow';
-export type FollowStyle = 'behind' | 'front';
-
 const SETTINGS_KEY = 'moodyblues.view.v1';
-const DEFAULT_SETTINGS: ViewSettings = {
-  grid: true,
-  shadows: true,
-  fov: 45,
-  sceneLights: false,
-  cameraGizmos: true,
-  followStyle: 'behind',
-  firstPersonNear: null,
-};
-
 function readSettings(): ViewSettings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
-    if (!raw) return DEFAULT_SETTINGS;
+    if (!raw) return DEFAULT_VIEW_SETTINGS;
     // Only the keys that still exist: a stored `wireframe` or `axes` from an older version is dropped.
     const stored = JSON.parse(raw) as Record<string, unknown>;
-    const known = Object.fromEntries(Object.entries(stored).filter(([k]) => k in DEFAULT_SETTINGS));
-    return { ...DEFAULT_SETTINGS, ...known };
+    const known = Object.fromEntries(Object.entries(stored).filter(([k]) => k in DEFAULT_VIEW_SETTINGS));
+    return { ...DEFAULT_VIEW_SETTINGS, ...known };
   } catch {
-    return DEFAULT_SETTINGS;
+    return DEFAULT_VIEW_SETTINGS;
   }
 }
 
@@ -89,6 +67,8 @@ interface StudioState {
    */
   introGate: 'open' | 'waiting';
   settings: ViewSettings;
+  /** What the owner of a shared link allows its visitor; null in the owner's own studio. */
+  share: ShareSettings | null;
   /** A material picked in the Materials window, shown in its details. */
   materialId: string | null;
   frameAllRequest: number;
@@ -106,6 +86,11 @@ interface StudioState {
   setFocusCamera: (id: number | null) => void;
   /** Focus `id` and view it in `mode` (the two buttons on a camera row). */
   setCameraMode: (id: number, mode: CameraMode) => void;
+  /** The intro's own move to a camera, which no lock applies to. */
+  startOnCamera: (id: number | null, mode: CameraMode) => void;
+  /** A share link was opened: its settings apply, and the owner's remembered view settings are left alone. */
+  enterShare: (share: ShareSettings) => void;
+  leaveShare: () => void;
   setIntroRunning: (running: boolean) => void;
   setIntroGate: (gate: 'open' | 'waiting') => void;
   replayIntro: () => void;
@@ -114,6 +99,15 @@ interface StudioState {
   frameAll: () => void;
   frameSelected: () => void;
   setShortcutsOpen: (open: boolean) => void;
+}
+
+function framingBlocked(s: Pick<StudioState, 'share' | 'focusCameraId'>): boolean {
+  return s.focusCameraId !== null && isLocked(s.share, 'cameraTarget');
+}
+
+/** Whether the owner locked a value; false in the owner's studio. */
+export function useLocked(key: LockKey): boolean {
+  return useStudio((s) => isLocked(s.share, key));
 }
 
 function idOf(node: THREE.Object3D | null, player: ReplayPlayer | null): number | null {
@@ -138,6 +132,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   introFromStart: false,
   introGate: 'open',
   settings: readSettings(),
+  share: null,
   materialId: null,
   frameAllRequest: 0,
   frameSelectedRequest: 0,
@@ -154,10 +149,12 @@ export const useStudio = create<StudioState>((set, get) => ({
     set({ ...scene, selected: node ?? null, selectedId: node ? previousId : null, follow: node ? get().follow : false, focusCameraId: null, cameraMode: 'follow', introRunning: false });
   },
   select: (selected) => {
+    if (selected && !canSelect(get().share)) return;
     const selectedId = idOf(selected, get().player);
     set({ selected, selectedId, follow: selected ? get().follow : false });
   },
   selectId: (selectedId) => {
+    if (selectedId !== null && !canSelect(get().share)) return;
     const { player, root } = get();
     const selected = selectedId === null ? null : (player?.getObject(selectedId) ?? (root ? findById(root, selectedId) : null) ?? null);
     set({ selectedId, selected, follow: selectedId === null ? false : get().follow });
@@ -165,22 +162,52 @@ export const useStudio = create<StudioState>((set, get) => ({
   resolveSelected: (node) => {
     if (node !== get().selected) set({ selected: node });
   },
-  setFollow: (follow) => set(follow ? { follow, focusCameraId: null } : { follow }),
-  setFocusCamera: (id) =>
-    set((s) => ({ focusCameraId: id, follow: id === null ? s.follow : false })),
-  setCameraMode: (id, cameraMode) =>
-    set({ focusCameraId: id, cameraMode, follow: false }),
+  setFollow: (follow) => {
+    // Following the selection leaves the focused camera, which a locked target forbids.
+    if (follow && isLocked(get().share, 'cameraTarget')) return;
+    set(follow ? { follow, focusCameraId: null } : { follow });
+  },
+  setFocusCamera: (id) => {
+    if (isLocked(get().share, 'cameraTarget')) return;
+    set((s) => ({ focusCameraId: id, follow: id === null ? s.follow : false }));
+  },
+  setCameraMode: (id, mode) => {
+    const { share, focusCameraId, cameraMode } = get();
+    // A locked target keeps the camera that is focused (and the free camera has no mode to set); a locked mode keeps how it is viewed.
+    const focus = isLocked(share, 'cameraTarget') ? focusCameraId : id;
+    if (focus === null) return;
+    const next = isLocked(share, 'cameraMode') ? cameraMode : mode;
+    if (focus === focusCameraId && next === cameraMode) return;
+    set({ focusCameraId: focus, cameraMode: next, follow: false });
+  },
+  startOnCamera: (focusCameraId, cameraMode) => set({ focusCameraId, cameraMode, follow: false }),
+  enterShare: (share) => set({ share, settings: viewSettingsOf(share) }),
+  leaveShare: () => set({ share: null, settings: readSettings() }),
   setIntroRunning: (introRunning) => set({ introRunning }),
   setIntroGate: (introGate) => set({ introGate }),
-  replayIntro: () => set((s) => ({ introRequest: s.introRequest + 1, introFromStart: true })),
+  replayIntro: () => {
+    // The intro restarts the recording from its beginning.
+    if (isLocked(get().share, 'seeking')) return;
+    set((s) => ({ introRequest: s.introRequest + 1, introFromStart: true }));
+  },
   setSetting: (key, value) => {
+    // Every view setting is locked under its own name.
+    if (isLocked(get().share, key)) return;
     const settings = { ...get().settings, [key]: value };
-    storeSettings(settings);
+    // A visitor's tweaks stay in the page: the owner's remembered settings are theirs alone.
+    if (!get().share) storeSettings(settings);
     set({ settings });
   },
   setMaterial: (materialId) => set({ materialId }),
-  frameAll: () => set((s) => ({ frameAllRequest: s.frameAllRequest + 1 })),
-  frameSelected: () => set((s) => ({ frameSelectedRequest: s.frameSelectedRequest + 1 })),
+  // Framing leaves a focused camera for the free one, which a locked target forbids.
+  frameAll: () => {
+    if (framingBlocked(get())) return;
+    set((s) => ({ frameAllRequest: s.frameAllRequest + 1 }));
+  },
+  frameSelected: () => {
+    if (framingBlocked(get())) return;
+    set((s) => ({ frameSelectedRequest: s.frameSelectedRequest + 1 }));
+  },
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
 }));
 

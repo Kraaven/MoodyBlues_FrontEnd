@@ -63,12 +63,18 @@ export const useWindows = create<WindowsState>()(
         }),
       setBounds: (bounds) => set({ bounds }),
     }),
-    { name: 'moodyblues.windows.v3', version: 3, storage: createJSONStorage(() => safeStorage), partialize: (s) => ({ scopes: s.scopes }) },
+    {
+      name: 'moodyblues.windows.v3',
+      version: 3,
+      storage: createJSONStorage(() => safeStorage),
+      // A shared link's layout comes from its owner's settings every time, so a visitor's own arrangement is not kept.
+      partialize: (s) => ({ scopes: Object.fromEntries(Object.entries(s.scopes).filter(([scope]) => scope !== 'share')) }),
+    },
   ),
 );
 
-/** What is docked the first time a kind of view is opened: a session starts with its logs beside it. */
-const DEFAULT_DOCKED: Record<string, string[]> = { session: ['logs'], share: ['logs'] };
+/** What is docked the first time a kind of view is opened: a session starts with its logs beside it. A shared link has no default: its owner's settings say. */
+const DEFAULT_DOCKED: Record<string, string[]> = { session: ['logs'] };
 
 /** The layout for a scope, cleaned against the windows this view actually has. */
 export function useWindowLayout(scope: string, available: string[]): ScopeLayout {
@@ -93,5 +99,7 @@ export function windowActions(scope: string) {
     setDockActive: (id: string) => update(scope, (l) => ({ ...l, dockActive: id, dockOpen: true })),
     setDockWidth: (width: number) => update(scope, (l) => setDockWidth(l, width)),
     reset: () => update(scope, () => defaultLayout(DEFAULT_DOCKED[scope])),
+    /** Lay the scope out as given, whatever it was. */
+    replace: (layout: ScopeLayout) => update(scope, () => layout),
   };
 }

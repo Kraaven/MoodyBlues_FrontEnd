@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import type { ReplayLog } from '../viewer/replay/replayFile';
 import { nextLogTime, previousLogTime } from './logNav';
 import { SPEEDS, TICK_SECONDS, type Playback } from './playback';
+import { isLocked, type LockKey, type ShareSettings } from '../share/shareSettings';
+import { seekByUser, setSpeedByUser } from './userActions';
 import { listCameras } from './cameras';
 import { unityPath } from './unityPath';
 import { Dialog } from '../ui/Dialog';
@@ -10,30 +12,33 @@ import { useToast } from '../ui/Toast';
 import { useStudio } from './studioStore';
 import { windowActions } from './windows/windowStore';
 
-const GENERAL: [string[], string][] = [
-  [['A'], 'Frame the whole scene'],
-  [['Shift', 'F'], 'Frame the selection'],
+/** A row of the shortcut table; `lock` names the value it changes, and the row is left out where the owner locked it. */
+type Row = [keys: string[], label: string, lock?: LockKey];
+
+const GENERAL: Row[] = [
+  [['A'], 'Frame the whole scene', 'cameraTarget'],
+  [['Shift', 'F'], 'Frame the selection', 'cameraTarget'],
   [['Esc'], 'Clear the selection'],
   [['C'], "Copy the selection's Unity path"],
-  [['G'], 'Grid on / off'],
-  [['V'], 'Next exported camera'],
-  [['Shift', 'V'], 'Free camera'],
-  [['P'], 'First person / follow, on the focused camera'],
+  [['G'], 'Grid on / off', 'grid'],
+  [['V'], 'Next exported camera', 'cameraTarget'],
+  [['Shift', 'V'], 'Free camera', 'cameraTarget'],
+  [['P'], 'First person / follow, on the focused camera', 'cameraMode'],
   [['Alt', '1–9, 0'], 'Open the tool windows, in rail order'],
   [['\\'], 'Show / hide the dock'],
   [['?'], 'This list'],
 ];
 
-const PLAYBACK: [string[], string][] = [
+const PLAYBACK: Row[] = [
   [['Space', 'K'], 'Play / pause'],
-  [['J', 'L'], 'Back / forward 5 s'],
-  [['←', '→'], 'Back / forward 1 s'],
-  [[',', '.'], 'One capture tick back / forward'],
-  [['[', ']'], 'Previous / next log'],
-  [['{', '}'], 'Previous / next error'],
-  [['Home', 'End'], 'Start / end'],
-  [['1', '5'], 'Speed 0.25× to 4×'],
-  [['F'], 'Follow the selected object'],
+  [['J', 'L'], 'Back / forward 5 s', 'seeking'],
+  [['←', '→'], 'Back / forward 1 s', 'seeking'],
+  [[',', '.'], 'One capture tick back / forward', 'seeking'],
+  [['[', ']'], 'Previous / next log', 'seeking'],
+  [['{', '}'], 'Previous / next error', 'seeking'],
+  [['Home', 'End'], 'Start / end', 'seeking'],
+  [['1', '5'], 'Speed 0.25× to 4×', 'speed'],
+  [['F'], 'Follow the selected object', 'cameraTarget'],
 ];
 
 function isTyping(target: EventTarget | null): boolean {
@@ -147,50 +152,52 @@ export function useStudioShortcuts({
               break;
             case 'j':
             case 'J':
-              playback.seek(t - 5);
+              seekByUser(playback, t - 5);
               break;
             case 'l':
             case 'L':
-              playback.seek(t + 5);
+              seekByUser(playback, t + 5);
               break;
             case 'ArrowLeft':
-              playback.seek(t - 1);
+              seekByUser(playback, t - 1);
               break;
             case 'ArrowRight':
-              playback.seek(t + 1);
+              seekByUser(playback, t + 1);
               break;
             case ',':
+              if (isLocked(studio.share, 'seeking')) return;
               playback.setPlaying(false);
-              playback.seek(t - TICK_SECONDS);
+              seekByUser(playback, t - TICK_SECONDS);
               break;
             case '.':
+              if (isLocked(studio.share, 'seeking')) return;
               playback.setPlaying(false);
-              playback.seek(t + TICK_SECONDS);
+              seekByUser(playback, t + TICK_SECONDS);
               break;
             case '[':
-              playback.seek(previousLogTime(logs, t));
+              seekByUser(playback, previousLogTime(logs, t));
               break;
             case ']':
-              playback.seek(nextLogTime(logs, t));
+              seekByUser(playback, nextLogTime(logs, t));
               break;
             case '{':
-              playback.seek(previousLogTime(logs, t, true));
+              seekByUser(playback, previousLogTime(logs, t, true));
               break;
             case '}':
-              playback.seek(nextLogTime(logs, t, true));
+              seekByUser(playback, nextLogTime(logs, t, true));
               break;
             case 'Home':
-              playback.seek(0);
+              seekByUser(playback, 0);
               break;
             case 'End':
-              playback.seek(playback.duration);
+              seekByUser(playback, playback.duration);
               break;
             case '1':
             case '2':
             case '3':
             case '4':
             case '5':
-              playback.setSpeed(SPEEDS[Number(e.key) - 1]);
+              setSpeedByUser(playback, SPEEDS[Number(e.key) - 1]);
               break;
             default:
               return;
@@ -204,7 +211,8 @@ export function useStudioShortcuts({
   }, [scope, windowKey, playback, logs, notify]);
 }
 
-function Table({ title, rows }: { title: string; rows: [string[], string][] }) {
+function Table({ title, rows }: { title: string; rows: Row[] }) {
+  if (rows.length === 0) return null;
   return (
     <div>
       <p className="eyebrow mb-3">{title}</p>
@@ -224,14 +232,20 @@ function Table({ title, rows }: { title: string; rows: [string[], string][] }) {
   );
 }
 
-export function ShortcutsDialog({ playback }: { playback: boolean }) {
+/** The rows that apply: not those that change a value the owner locked, nor the window keys when there are no windows. */
+function visibleRows(rows: Row[], share: ShareSettings | null, windowCount: number): Row[] {
+  return rows.filter(([keys, , lock]) => !(lock && isLocked(share, lock)) && !(keys[0] === 'Alt' && windowCount === 0));
+}
+
+export function ShortcutsDialog({ playback, windowCount }: { playback: boolean; windowCount: number }) {
   const open = useStudio((s) => s.shortcutsOpen);
   const setOpen = useStudio((s) => s.setShortcutsOpen);
+  const share = useStudio((s) => s.share);
   return (
     <Dialog open={open} onOpenChange={setOpen} title="Keyboard shortcuts" width="lg">
       <div className="grid gap-10 sm:grid-cols-2">
-        <Table title="View" rows={GENERAL} />
-        <Table title={playback ? 'Playback' : 'Playback (in a session)'} rows={PLAYBACK} />
+        <Table title="View" rows={visibleRows(GENERAL, share, windowCount)} />
+        <Table title={playback ? 'Playback' : 'Playback (in a session)'} rows={visibleRows(PLAYBACK, share, windowCount)} />
       </div>
     </Dialog>
   );

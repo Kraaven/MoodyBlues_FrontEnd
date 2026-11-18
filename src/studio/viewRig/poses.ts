@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { FollowStyle } from '../studioStore';
+import type { FollowStyle } from '../viewSettings';
 import { wrapAngle } from './springs';
 
 /** Where the viewer stands and what it looks at. */

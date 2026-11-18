@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -20,6 +20,7 @@ import {
   RotateCw,
   Share,
   Shrink,
+  SlidersHorizontal,
   SquareTerminal,
   TriangleAlert,
   X,
@@ -28,7 +29,7 @@ import { downloadWithProgress, useProject, useRecompileSession, useScene, useSes
 import { ApiError, errorText } from '../api/client';
 import { useAuth } from '../auth/useAuth';
 import { usePrefetchFocus } from '../prefetch/usePrefetchFocus';
-import type { SceneVersion, SessionDetail } from '../api/types';
+import type { SceneVersion, SharedSessionDetail } from '../api/types';
 import { parseReplay } from '../viewer/replay/replayFile';
 import { useReplayBinding } from './binding';
 import { Playback } from './playback';
@@ -44,13 +45,18 @@ import { useToast } from '../ui/Toast';
 import { cn } from '../ui/cn';
 import { formatAgo, formatCaptured, sceneTitle, sessionHandle } from '../lib/format';
 import { parseStartTime, viewLink } from '../lib/shareLink';
+import { useElementHeight } from '../lib/useElementHeight';
 import { useMediaQuery } from '../lib/useMediaQuery';
+import { usePhoneLayout } from '../lib/usePhoneLayout';
 import { ShareDialog } from '../share/ShareDialog';
 import { WelcomeCard } from '../share/WelcomeCard';
+import { shareLayout } from '../share/shareLayout';
+import { panelAvailable, parseShareSettings } from '../share/shareSettings';
 import { replayPath, sceneRef as sceneRefFor, type StudioSource } from './source';
 import { useWindowTitle } from '../lib/useWindowTitle';
 import { ShortcutsDialog, useStudioShortcuts } from './shortcuts';
-import { useStudio } from './studioStore';
+import { useLocked, useStudio } from './studioStore';
+import { PhoneSettings } from './PhoneSettings';
 import { Timeline } from './Timeline';
 import { DetailsWindow } from './windows/DetailsWindow';
 import { LogsWindow } from './windows/LogsWindow';
@@ -62,6 +68,7 @@ import { RawWindow } from './windows/RawWindow';
 import { TexturesWindow } from './windows/TexturesWindow';
 import { ViewpointWindow } from './windows/ViewpointWindow';
 import { RecordingsWindow } from './windows/RecordingsWindow';
+import { windowActions } from './windows/windowStore';
 import { FloatingWindows, WindowDock, WindowRail, type RailTool, type WindowDef } from './windows/WindowHost';
 
 /**
@@ -85,7 +92,9 @@ export default function StudioPage() {
   const location = useLocation();
   const { user } = useAuth();
   const notify = useToast();
-  const phone = useMediaQuery('(max-width: 767px)');
+  const phone = usePhoneLayout();
+  // A phone held sideways has no height to spare: its timeline is one row.
+  const landscape = useMediaQuery('(orientation: landscape)');
   const project = useProject(projectId);
   usePrefetchFocus(projectId); // undefined on a share link: nothing to prefetch
   const scene = useScene(projectId, sceneId);
@@ -100,15 +109,20 @@ export default function StudioPage() {
   const sceneState = useStage((s) => s.scene);
   const region = useRef<HTMLDivElement>(null);
   const [fullscreen, setFullscreen] = useState(false);
-  const [sharing, setSharing] = useState<{ time: number | null } | null>(null);
+  const [sharing, setSharing] = useState<{ time: number } | null>(null);
   // The welcome card of a shared link: Play was pressed, and the card has gone.
   const [played, setPlayed] = useState(false);
   const [welcomed, setWelcomed] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const timelineRef = useRef<HTMLDivElement>(null);
   const player = useStudio((s) => s.player);
   const debugOpen = useStage((s) => s.debugOpen);
 
   const base = `/projects/${projectId}/scenes/${encodeURIComponent(sceneId ?? '')}`;
-  const detail = sharedView ? shared.data?.session : session.data;
+  const detail: SharedSessionDetail | undefined = sharedView ? shared.data?.session : session.data;
+  // What the link's owner decided for its visitors (already resolved by the server); null in the owner's studio.
+  const rawShareSettings = shared.data?.settings;
+  const shareSettings = useMemo(() => (sharedView && shared.data ? parseShareSettings(rawShareSettings) : null), [sharedView, shared.data, rawShareSettings]);
   const hasSession = sharedView || Boolean(sessionId);
   const scope = sharedView ? 'share' : sessionId ? 'session' : 'scene';
 
@@ -151,13 +165,29 @@ export default function StudioPage() {
     return () => useReplayBinding.getState().bind(null, null);
   }, [replay.data, playback, hasSession]);
 
-  // Start at ?t= (a shared link), once per session.
-  useEffect(() => {
-    const t = parseStartTime(params.get('t'));
-    playback.time = t;
-    playback.playing = t === 0;
+  // A shared link applies its owner's settings once, when they arrive: the view settings, and the panels open at the start. They
+  // replace whatever this browser remembers, and what the visitor then changes is not remembered.
+  const hasShareSettings = shareSettings !== null;
+  useLayoutEffect(() => {
+    if (!shareSettings) return;
+    useStudio.getState().enterShare(shareSettings);
+    windowActions('share').replace(shareLayout(shareSettings.panels));
+    return () => useStudio.getState().leaveShare();
+    // Once per link: the owner editing the settings later does not move a visitor who is already watching.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [replayUrl]);
+  }, [token, hasShareSettings]);
+
+  // Start at the link's ?t= (which wins) or its owner's start time, once per session, at the owner's speed.
+  const urlStart = parseStartTime(params.get('t'));
+  const startTime = urlStart > 0 ? urlStart : (shareSettings?.playback.startTime ?? 0);
+  const startKnown = !sharedView || hasShareSettings;
+  useEffect(() => {
+    if (!startKnown) return;
+    playback.time = startTime;
+    playback.playing = startTime === 0;
+    if (shareSettings) playback.setSpeed(shareSettings.playback.speed.value);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [replayUrl, startKnown]);
 
   // A shared link opens on the welcome card: the intro waits at the overview until Play.
   useEffect(() => {
@@ -230,7 +260,7 @@ export default function StudioPage() {
               <p className="px-6 py-6 text-[14px] text-fg-2">The logs appear once the replay is built.</p>
             ),
         },
-        { id: 'details', title: 'Session details', icon: Activity, group: 'recordings', description: 'Recording health and statistics', render: () => (detail ? <DetailsWindow session={detail} replay={replay.data ?? null} sceneHref={sharedView ? null : base} /> : null) },
+        { id: 'details', title: 'Session details', icon: Activity, group: 'recordings', description: 'Recording health and statistics', render: () => (detail ? <DetailsWindow session={detail} replay={replay.data ?? null} /> : null) },
       );
     }
     list.push(
@@ -242,10 +272,11 @@ export default function StudioPage() {
       { id: 'viewpoint', title: 'Viewpoint', icon: Eye, group: 'view', description: 'Cameras to follow and display settings', render: () => <ViewpointWindow scope={scope} playback={playback} /> },
       { id: 'raw', title: 'Raw data', icon: Braces, group: 'view', description: 'The recording as data', render: () => <RawWindow session={detail ?? null} /> },
     );
-    return list.map((w, i) => ({ ...w, shortcut: i < 10 ? `Alt+${(i + 1) % 10}` : undefined }));
-  }, [name, version, scope, detail, sharedView, hasSession, sessionId, replay.data, playback, sessionLabel, base, sessions.data, sessionHref]);
+    // A visitor has only the panels the owner made available; the shortcuts count the ones that are left.
+    return list.filter((w) => panelAvailable(shareSettings, w.id)).map((w, i) => ({ ...w, shortcut: i < 10 ? `Alt+${(i + 1) % 10}` : undefined }));
+  }, [name, version, scope, detail, sharedView, shareSettings, hasSession, sessionId, replay.data, playback, sessionLabel, sessions.data, sessionHref]);
 
-  useStudioShortcuts({ scope, windows: windows.map((w) => w.id), playback: replay.data ? playback : null, logs: replay.data?.logs ?? [] });
+  useStudioShortcuts({ scope, windows: phone ? [] : windows.map((w) => w.id), playback: replay.data ? playback : null, logs: replay.data?.logs ?? [] });
 
   useEffect(() => {
     const onChange = () => setFullscreen(Boolean(document.fullscreenElement));
@@ -270,20 +301,48 @@ export default function StudioPage() {
 
   const error = sharedView ? shared.error : (project.error ?? scene.error ?? session.error);
   const showTimeline = hasSession;
+  const timelineHeight = useElementHeight(timelineRef, showTimeline);
   const backHref = version && !version.isCurrent ? `${base}?version=${version.version}` : base;
 
   const toggleFullscreen = () => (document.fullscreenElement ? void document.exitFullscreen() : void document.documentElement.requestFullscreen?.().catch(() => undefined));
-  const tools: RailTool[] = phone
-    ? []
-    : [
-        { id: 'debug', label: 'Debug', icon: Bug, description: 'Frame times, memory and caches, with a wireframe switch', active: debugOpen, onClick: () => useStage.getState().setDebugOpen(!debugOpen) },
-        { id: 'keys', label: 'Keyboard shortcuts', hint: '?', icon: Keyboard, description: 'Every key and what it does', onClick: () => useStudio.getState().setShortcutsOpen(true) },
-      ];
+  const tools: RailTool[] = [
+    { id: 'debug', label: 'Debug', icon: Bug, description: 'Frame times, memory and caches, with a wireframe switch', active: debugOpen, onClick: () => useStage.getState().setDebugOpen(!debugOpen) },
+    { id: 'keys', label: 'Keyboard shortcuts', hint: '?', icon: Keyboard, description: 'Every key and what it does', onClick: () => useStudio.getState().setShortcutsOpen(true) },
+  ];
 
   const showWelcome =
     sharedView && !welcomed && Boolean(shared.data) && shared.data?.session.status === 'Ready' && !error && !replay.isError && sceneState.status !== 'error';
 
   if (sharedView && shared.error instanceof ApiError && shared.error.status === 404) return <LinkUnavailable signedIn={user !== null} />;
+
+  // The room the chrome takes, so the 3D is centred in what is left and nothing sits on the timeline.
+  const edge = phone
+    ? { top: 'max(env(safe-area-inset-top), 8px)', right: 'max(env(safe-area-inset-right), 12px)', bottom: 'max(env(safe-area-inset-bottom), 8px)', left: 'max(env(safe-area-inset-left), 12px)' }
+    : { top: '16px', right: '16px', bottom: '16px', left: '16px' };
+  const barHeight = phone ? 44 : 48;
+  const timelineRoom = showTimeline ? timelineHeight + 12 : 0;
+  // On a phone the Settings sheet is the one control that is not the view, and the way to share or sign in rides in it.
+  const account = sharedView ? (
+    !user && (
+      <LinkButton to="/login" state={{ from: location.pathname + location.search }} variant="secondary" size="sm">
+        Sign in
+      </LinkButton>
+    )
+  ) : (
+    (hasSession || version) && (
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={() => {
+          setSettingsOpen(false);
+          void share();
+        }}
+      >
+        <Share className="h-4 w-4" />
+        {hasSession ? 'Share this recording' : 'Copy a link'}
+      </Button>
+    )
+  );
 
   return (
     <div className="fixed inset-0 flex overflow-hidden">
@@ -294,114 +353,132 @@ export default function StudioPage() {
           ref={region}
           aria-hidden="true"
           className="pointer-events-none absolute transition-[left,bottom,right,top] duration-[420ms] ease-[var(--ease-out-soft)]"
-          style={{ left: 0, right: phone ? 0 : 88, top: 72, bottom: showTimeline ? (phone ? 168 : 136) : phone ? 96 : 24 }}
+          style={{
+            left: 0,
+            right: phone ? 0 : 84,
+            top: `calc(${edge.top} + ${barHeight + 8}px)`,
+            bottom: `calc(${edge.bottom} + ${showTimeline ? timelineRoom : 8}px)`,
+          }}
         />
         <StageNotice />
 
-        <div className="pointer-events-none absolute inset-0 z-10 p-4 sm:p-6">
-          {/* Top left: where you are, and the way back. */}
-          {(() => {
-            const cardClass = 'glass group pointer-events-auto absolute left-4 top-4 flex h-14 w-[min(320px,calc(100%-88px))] items-center gap-3.5 rounded-[10px] border border-rule-strong/60 px-4 sm:left-6 sm:top-6';
-            const label = (
-              <span className="min-w-0">
-                <span className="block truncate text-[15px] font-medium leading-5 text-fg">{name}</span>
-                <span className="block truncate text-[12px] text-fg-3">
-                  {detail ? (
-                    <>
-                      {sharedView && <>{shared.data?.projectName} · </>}
-                      <span className="font-mono text-accent">{sessionHandle(detail.id)}</span> · {formatCaptured(detail.createdAtUtc)}
-                    </>
-                  ) : (
-                    <>
-                      {project.data?.name ?? '…'} · {version ? versionLabel(version.version) : '…'}
-                      {version && !version.isCurrent && ' · archived'}
-                    </>
-                  )}
-                </span>
-              </span>
-            );
-            return sharedView ? (
-              <div className={cardClass}>{label}</div>
-            ) : (
-              <Link to={backHref} className={cn(cardClass, 'transition-colors hover:border-fg-3/60')}>
-                <ArrowLeft className="h-5 w-5 shrink-0 text-fg transition-transform group-hover:-translate-x-0.5" />
-                {label}
-              </Link>
-            );
-          })()}
+        <div className="pointer-events-none absolute inset-0 z-10" style={{ padding: `${edge.top} ${edge.right} ${edge.bottom} ${edge.left}` }}>
+          <div className="relative h-full">
+            {/* The top bar: where you are, then the view's buttons. Laid out in one row so the two can never overlap. */}
+            <div className="absolute inset-x-0 top-0 flex items-start gap-3">
+              {(() => {
+                const cardClass = cn('glass group pointer-events-auto flex min-w-0 max-w-[320px] flex-1 items-center gap-3 rounded-[10px] border border-rule-strong/60 px-3.5', phone ? 'h-11' : 'h-12');
+                const label = (
+                  <span className="min-w-0">
+                    <span className="block truncate text-[15px] font-medium leading-5 text-fg" title={name}>
+                      {name}
+                    </span>
+                    <span className="block truncate text-[12px] leading-4 text-fg-3">
+                      {detail ? (
+                        <>
+                          {sharedView && <>{shared.data?.projectName} · </>}
+                          <span className="font-mono text-accent">{sessionHandle(detail.id)}</span> · {formatCaptured(detail.createdAtUtc)}
+                        </>
+                      ) : (
+                        <>
+                          {project.data?.name ?? '…'} · {version ? versionLabel(version.version) : '…'}
+                          {version && !version.isCurrent && ' · archived'}
+                        </>
+                      )}
+                    </span>
+                  </span>
+                );
+                return sharedView ? (
+                  <div className={cardClass}>{label}</div>
+                ) : (
+                  <Link to={backHref} className={cn(cardClass, 'transition-colors hover:border-fg-3/60')}>
+                    <ArrowLeft className="h-5 w-5 shrink-0 text-fg transition-transform group-hover:-translate-x-0.5" />
+                    {label}
+                  </Link>
+                );
+              })()}
 
-          {/* Top right: full screen, and share, or for a visitor, the way to sign in. */}
-          <div className="pointer-events-auto absolute right-4 top-4 flex items-center gap-2 sm:right-6 sm:top-6">
-            {!phone && (
-              <IconButton label={fullscreen ? 'Leave full screen' : 'Full screen'} className="glass h-11 w-11 border border-rule-strong/60" onClick={toggleFullscreen}>
-                {fullscreen ? <Shrink className="h-5 w-5" strokeWidth={1.6} /> : <Expand className="h-5 w-5" strokeWidth={1.6} />}
-              </IconButton>
-            )}
-            {sharedView ? (
-              !user && (
-                <LinkButton to="/login" state={{ from: location.pathname + location.search }} variant="secondary" className="glass h-11 border-rule-strong/60">
-                  Sign in
-                </LinkButton>
-              )
-            ) : (
-              (hasSession || version) && (
-                <IconButton label={hasSession ? 'Share this recording' : 'Copy a link'} className="glass h-11 w-11 border border-rule-strong/60" onClick={() => void share()}>
-                  <Share className="h-5 w-5" strokeWidth={1.6} />
-                </IconButton>
-              )
-            )}
-          </div>
-
-          {/* Right: the tools, centred between the top buttons and the timeline; too many for the space, they fill it and scroll. */}
-          <div
-            className={cn('pointer-events-none absolute z-20', phone ? 'inset-x-4 flex justify-center' : 'right-6 flex items-center justify-end')}
-            style={phone ? { bottom: showTimeline ? 176 : 24 } : { top: 80, bottom: showTimeline ? 148 : 24 }}
-          >
-            <WindowRail scope={scope} windows={windows} tools={tools} />
-          </div>
-
-          {/* States the scene or session can be in. */}
-          <CentreState
-            error={error ?? replay.error ?? null}
-            sceneError={sceneState.status === 'error' && view.content !== 'none' ? sceneState.error : null}
-            session={detail ?? null}
-            readOnly={sharedView}
-            noVersion={Boolean(scene.data && !version && !hasSession)}
-            onRetry={() => {
-              void session.refetch();
-              void shared.refetch();
-              void replay.refetch();
-              useStage.getState().retryScene();
-            }}
-          />
-
-          <SelectionCard timelineShown={showTimeline} />
-
-          {hasSession && (
-            <div className="pointer-events-auto absolute inset-x-4 bottom-4 sm:inset-x-6">
-              <Timeline playback={playback} replay={replay.data ?? null} disabled={!replay.data || sceneState.status !== 'ready'} />
+              <div className="pointer-events-auto ml-auto flex shrink-0 items-center gap-2">
+                {phone ? (
+                  <IconButton label="Settings" aria-expanded={settingsOpen} active={settingsOpen} className="glass h-11 w-11 border border-rule-strong/60" onClick={() => setSettingsOpen((o) => !o)}>
+                    <SlidersHorizontal className="h-5 w-5" strokeWidth={1.6} />
+                  </IconButton>
+                ) : (
+                  <>
+                    <IconButton label={fullscreen ? 'Leave full screen' : 'Full screen'} className="glass h-10 w-10 border border-rule-strong/60" onClick={toggleFullscreen}>
+                      {fullscreen ? <Shrink className="h-5 w-5" strokeWidth={1.6} /> : <Expand className="h-5 w-5" strokeWidth={1.6} />}
+                    </IconButton>
+                    {sharedView ? (
+                      !user && (
+                        <LinkButton to="/login" state={{ from: location.pathname + location.search }} variant="secondary" className="glass h-10 border-rule-strong/60">
+                          Sign in
+                        </LinkButton>
+                      )
+                    ) : (
+                      (hasSession || version) && (
+                        <IconButton label={hasSession ? 'Share this recording' : 'Copy a link'} className="glass h-10 w-10 border border-rule-strong/60" onClick={() => void share()}>
+                          <Share className="h-5 w-5" strokeWidth={1.6} />
+                        </IconButton>
+                      )
+                    )}
+                  </>
+                )}
+              </div>
             </div>
-          )}
-        </div>
 
-        <div className="pointer-events-none absolute inset-0 z-20">
-          <div className="absolute inset-0" style={{ bottom: showTimeline ? 136 : 16, top: 0 }}>
-            <FloatingWindows scope={scope} windows={windows} />
+            {/* Right: the tools, centred beside the view, down to the bottom edge; too many for a short screen, they scroll. A phone has none. */}
+            {!phone && (
+              <div className="pointer-events-none absolute bottom-0 right-0 top-14 z-20 flex items-center justify-end">
+                <WindowRail scope={scope} windows={windows} tools={tools} />
+              </div>
+            )}
+
+            {/* States the scene or session can be in. */}
+            <CentreState
+              error={error ?? replay.error ?? null}
+              sceneError={sceneState.status === 'error' && view.content !== 'none' ? sceneState.error : null}
+              session={detail ?? null}
+              readOnly={sharedView}
+              noVersion={Boolean(scene.data && !version && !hasSession)}
+              onRetry={() => {
+                void session.refetch();
+                void shared.refetch();
+                void replay.refetch();
+                useStage.getState().retryScene();
+              }}
+            />
+
+            <SelectionCard bottom={timelineRoom} />
+
+            {hasSession && (
+              // Beside the rail, never under it.
+              <div ref={timelineRef} className={cn('pointer-events-auto absolute bottom-0 left-0', phone ? 'right-0' : 'right-[68px]')}>
+                <Timeline playback={playback} replay={replay.data ?? null} disabled={!replay.data || sceneState.status !== 'ready'} row={phone && landscape} />
+              </div>
+            )}
           </div>
         </div>
+
+        {!phone && (
+          <div className="pointer-events-none absolute inset-0 z-20">
+            <div className="absolute inset-0" style={{ bottom: showTimeline ? timelineHeight + 24 : 16, top: 0 }}>
+              <FloatingWindows scope={scope} windows={windows} />
+            </div>
+          </div>
+        )}
       </div>
 
-      <WindowDock scope={scope} windows={windows} />
+      {!phone && <WindowDock scope={scope} windows={windows} />}
       {debugOpen && (
         <Suspense fallback={null}>
           <DebugWindow />
         </Suspense>
       )}
-      <ShortcutsDialog playback={hasSession} />
+      <ShortcutsDialog playback={hasSession} windowCount={phone ? 0 : windows.length} />
       {showWelcome && shared.data && (
         <WelcomeCard
           shared={shared.data}
-          startTime={parseStartTime(params.get('t'))}
+          startTime={startTime}
           ready={loaded}
           replayLoaded={Boolean(replay.data)}
           starting={played}
@@ -411,27 +488,38 @@ export default function StudioPage() {
           phone={phone}
         />
       )}
-      {sharing && detail && !sharedView && <ShareDialog target={detail} time={sharing.time} onClose={() => setSharing(null)} />}
+      {phone && (
+        <PhoneSettings
+          open={settingsOpen && !showWelcome}
+          onOpenChange={setSettingsOpen}
+          playback={playback}
+          replay={replay.data ?? null}
+          logsAvailable={hasSession && windows.some((w) => w.id === 'logs')}
+          actions={account || undefined}
+        />
+      )}
+      {sharing && session.data && !sharedView && <ShareDialog target={session.data} time={sharing.time} onClose={() => setSharing(null)} />}
     </div>
   );
 }
-/** Bottom left: the selected object, while there is one. */
-function SelectionCard({ timelineShown }: { timelineShown: boolean }) {
+/** Bottom left, above the timeline: the selected object, while there is one. */
+function SelectionCard({ bottom }: { bottom: number }) {
   const selected = useStudio((s) => s.selected);
   const selectedId = useStudio((s) => s.selectedId);
   const follow = useStudio((s) => s.follow);
   const player = useStudio((s) => s.player);
-  const bottom = timelineShown ? 148 : 24;
+  // Following the selection leaves the focused camera, which a locked target keeps.
+  const targetLocked = useLocked('cameraTarget');
 
   if (!selected) return null;
   return (
-    <div className="glass pointer-events-auto absolute left-4 flex max-w-[min(440px,calc(100%-160px))] animate-rise items-center gap-3 rounded-[10px] border border-accent/30 py-2 pl-4 pr-1.5 sm:left-6" style={{ bottom }}>
+    <div className="glass pointer-events-auto absolute left-0 flex max-w-[min(440px,calc(100%-84px))] animate-rise items-center gap-3 rounded-[10px] border border-accent/30 py-2 pl-4 pr-1.5" style={{ bottom }}>
       <span className="h-2 w-2 shrink-0 rounded-full bg-accent" />
       <button type="button" className="min-w-0 text-left" onClick={() => useStudio.getState().frameSelected()} title="Frame it (Shift+F)">
         <span className="block truncate text-[14px] text-fg">{selected.name || (selectedId !== null && player ? player.nameOf(selectedId) : 'Selection')}</span>
         <span className="block truncate font-mono text-[11px] text-fg-3">{selectedId !== null ? `#${selectedId}` : 'not tracked'}</span>
       </button>
-      {player && (
+      {player && !targetLocked && (
         <IconButton label={follow ? 'Stop following' : 'Follow'} shortcut="F" size="sm" active={follow} onClick={() => useStudio.getState().setFollow(!follow)}>
           <Crosshair className="h-4 w-4" />
         </IconButton>
@@ -452,7 +540,7 @@ function CentreState({
 }: {
   error: unknown;
   sceneError: unknown;
-  session: SessionDetail | null;
+  session: SharedSessionDetail | null;
   /** A shared view: nothing to fix or rebuild from here. */
   readOnly: boolean;
   noVersion: boolean;

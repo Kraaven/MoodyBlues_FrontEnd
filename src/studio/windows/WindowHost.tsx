@@ -5,8 +5,8 @@ import { ExternalLink, GripHorizontal, PanelRight, X } from 'lucide-react';
 import { IconButton } from '../../ui/Button';
 import { Tooltip } from '../../ui/Tooltip';
 import { cn } from '../../ui/cn';
-import { useMediaQuery } from '../../lib/useMediaQuery';
-import { clampRect, fromFrame, isShown, toFrame, type FrameRect } from './windowLayout';
+import { useWindowWidth } from '../../lib/useWindowWidth';
+import { clampRect, dockWidthFor, fromFrame, isShown, toFrame, type FrameRect } from './windowLayout';
 import { useWindowLayout, useWindows, windowActions } from './windowStore';
 
 export interface WindowDef {
@@ -32,69 +32,58 @@ export interface RailTool {
   description?: string;
 }
 
+/** A rail button: 40 px, and 36 on a short screen so every tool still fits the height. */
+const RAIL_BUTTON = 'flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] transition-colors duration-[140ms] [@media(max-height:720px)]:h-9 [@media(max-height:720px)]:w-9';
+
 /** The tool rail: one icon per window, then a few view controls, floating at the right edge of the view. */
 export function WindowRail({ scope, windows, tools = [], className }: { scope: string; windows: WindowDef[]; tools?: RailTool[]; className?: string }) {
   const layout = useWindowLayout(scope, windows.map((w) => w.id));
   const actions = windowActions(scope);
-  const phone = useMediaQuery('(max-width: 767px)');
   const groups = (['recordings', 'scene', 'view'] as const).map((g) => windows.filter((w) => w.group === g)).filter((g) => g.length > 0);
 
   return (
-    <nav
-      aria-label="Tools"
-      className={cn(
-        'glass elevated pointer-events-auto flex max-h-full gap-1 rounded-[12px] border border-rule-strong/60 p-1.5',
-        phone ? 'flex-row overflow-x-auto' : 'flex-col overflow-y-auto',
-        className,
-      )}
-    >
+    <nav aria-label="Tools" className={cn('glass elevated pointer-events-auto flex max-h-full flex-col gap-1 overflow-y-auto rounded-[12px] border border-rule-strong/60 p-1', className)}>
       {groups.map((group, gi) => (
         <Fragment key={gi}>
-        {gi > 0 && <RailDivider phone={phone} />}
-        <div className={cn('flex gap-1', phone ? 'flex-row' : 'flex-col')}>
-          {group.map((w) => {
-            const shown = isShown(layout, w.id);
-            return (
-              <Tooltip key={w.id} side={phone ? 'top' : 'left'} content={w.shortcut ? `${w.title} (${w.shortcut})` : w.title}>
-                <button
-                  type="button"
-                  aria-label={w.title}
-                  aria-pressed={shown}
-                  onClick={() => actions.toggle(w.id)}
-                  className={cn(
-                    'flex h-11 w-11 shrink-0 items-center justify-center rounded-[8px] transition-colors duration-[140ms]',
-                    shown ? 'bg-accent/18 text-accent' : 'text-fg-2 hover:bg-ink-4 hover:text-fg',
-                  )}
-                >
-                  <w.icon className="h-[19px] w-[19px]" strokeWidth={1.6} />
-                </button>
-              </Tooltip>
-            );
-          })}
-        </div>
+          {gi > 0 && <RailDivider />}
+          <div className="flex flex-col gap-1">
+            {group.map((w) => {
+              const shown = isShown(layout, w.id);
+              return (
+                <Tooltip key={w.id} side="left" content={w.shortcut ? `${w.title} (${w.shortcut})` : w.title}>
+                  <button
+                    type="button"
+                    aria-label={w.title}
+                    aria-pressed={shown}
+                    onClick={() => actions.toggle(w.id)}
+                    className={cn(RAIL_BUTTON, shown ? 'bg-accent/18 text-accent' : 'text-fg-2 hover:bg-ink-4 hover:text-fg')}
+                  >
+                    <w.icon className="h-[19px] w-[19px]" strokeWidth={1.6} />
+                  </button>
+                </Tooltip>
+              );
+            })}
+          </div>
         </Fragment>
       ))}
       {tools.length > 0 && (
         <>
-        {groups.length > 0 && <RailDivider phone={phone} />}
-        <div className={cn('flex gap-1', phone ? 'flex-row' : 'flex-col')}>
-          {tools.map((tool) => (
-            <Tooltip key={tool.id} side={phone ? 'top' : 'left'} content={tool.hint ? `${tool.label} (${tool.hint})` : tool.label}>
-              <button
-                type="button"
-                aria-label={tool.label}
-                aria-pressed={tool.active}
-                onClick={tool.onClick}
-                className={cn(
-                  'flex h-11 w-11 shrink-0 items-center justify-center rounded-[8px] transition-colors duration-[140ms]',
-                  tool.active ? 'bg-accent/18 text-accent' : 'text-fg-2 hover:bg-ink-4 hover:text-fg',
-                )}
-              >
-                <tool.icon className="h-[19px] w-[19px]" strokeWidth={1.6} />
-              </button>
-            </Tooltip>
-          ))}
-        </div>
+          {groups.length > 0 && <RailDivider />}
+          <div className="flex flex-col gap-1">
+            {tools.map((tool) => (
+              <Tooltip key={tool.id} side="left" content={tool.hint ? `${tool.label} (${tool.hint})` : tool.label}>
+                <button
+                  type="button"
+                  aria-label={tool.label}
+                  aria-pressed={tool.active}
+                  onClick={tool.onClick}
+                  className={cn(RAIL_BUTTON, tool.active ? 'bg-accent/18 text-accent' : 'text-fg-2 hover:bg-ink-4 hover:text-fg')}
+                >
+                  <tool.icon className="h-[19px] w-[19px]" strokeWidth={1.6} />
+                </button>
+              </Tooltip>
+            ))}
+          </div>
         </>
       )}
     </nav>
@@ -102,8 +91,8 @@ export function WindowRail({ scope, windows, tools = [], className }: { scope: s
 }
 
 /** A quiet rule between rail groups, inset so it does not touch the rail's edges. */
-function RailDivider({ phone }: { phone: boolean }) {
-  return <div role="separator" aria-orientation={phone ? 'vertical' : 'horizontal'} className={cn('shrink-0 bg-rule/60', phone ? 'mx-0.5 my-2.5 w-px' : 'mx-2.5 my-0.5 h-px')} />;
+function RailDivider() {
+  return <div role="separator" aria-orientation="horizontal" className="mx-2.5 my-0.5 h-px shrink-0 bg-rule/60" />;
 }
 
 /** The window chrome shared by floating windows and the dock: a title, a grip, and its controls. */
@@ -144,12 +133,11 @@ function WindowHeader({
   );
 }
 
-/** Floating windows, over the 3D view. On a phone each is a sheet from the bottom instead. */
+/** Floating windows, over the 3D view. */
 export function FloatingWindows({ scope, windows }: { scope: string; windows: WindowDef[] }) {
   const layout = useWindowLayout(scope, windows.map((w) => w.id));
   const ref = useRef<HTMLDivElement>(null);
   const bounds = useWindows((s) => s.bounds);
-  const phone = useMediaQuery('(max-width: 767px)');
 
   useEffect(() => {
     const el = ref.current;
@@ -163,9 +151,9 @@ export function FloatingWindows({ scope, windows }: { scope: string; windows: Wi
 
   return (
     <div ref={ref} className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
-      {phone
-        ? open.slice(-1).map((w) => <PhoneSheet key={w.id} scope={scope} window={w} />)
-        : open.map((w, z) => <FloatingWindow key={w.id} scope={scope} window={w} rect={layout.rects[w.id] ? toFrame(layout.rects[w.id], bounds) : { x: 24, y: 120, w: 380, h: 520 }} bounds={bounds} z={z} />)}
+      {open.map((w, z) => (
+        <FloatingWindow key={w.id} scope={scope} window={w} rect={layout.rects[w.id] ? toFrame(layout.rects[w.id], bounds) : { x: 24, y: 120, w: 380, h: 520 }} bounds={bounds} z={z} />
+      ))}
     </div>
   );
 }
@@ -240,16 +228,6 @@ function FloatingWindow({ scope, window: w, rect, bounds, z }: { scope: string; 
   );
 }
 
-function PhoneSheet({ scope, window: w }: { scope: string; window: WindowDef }) {
-  const actions = windowActions(scope);
-  return (
-    <section aria-label={`${w.title} window`} className="pointer-events-auto absolute inset-x-0 bottom-0 flex h-[62%] animate-rise flex-col overflow-hidden rounded-t-[16px] border-t border-rule-strong bg-ink-1">
-      <WindowHeader title={w.title} grip={false} docked={false} onClose={() => actions.close(w.id)} />
-      <div className="flex min-h-0 flex-1 flex-col">{w.render()}</div>
-    </section>
-  );
-}
-
 /** The dock: a column at the right edge holding windows as tabs. */
 export function WindowDock({ scope, windows }: { scope: string; windows: WindowDef[] }) {
   const layout = useWindowLayout(scope, windows.map((w) => w.id));
@@ -258,15 +236,16 @@ export function WindowDock({ scope, windows }: { scope: string; windows: WindowD
   const docked = layout.docked.map((id) => windows.find((w) => w.id === id)).filter((w): w is WindowDef => Boolean(w));
   const active = docked.find((w) => w.id === layout.dockActive) ?? docked[0];
   const open = layout.dockOpen && Boolean(active);
+  const width = dockWidthFor(layout.dockWidth, useWindowWidth());
 
   return (
     <aside
       aria-label="Docked windows"
       aria-hidden={!open}
-      style={{ width: open ? layout.dockWidth : 0 }}
-      className={cn('relative h-full shrink-0 overflow-hidden transition-[width] duration-[320ms] ease-[var(--ease-out-soft)] max-md:hidden', !open && 'pointer-events-none')}
+      style={{ width: open ? width : 0 }}
+      className={cn('relative h-full shrink-0 overflow-hidden transition-[width] duration-[320ms] ease-[var(--ease-out-soft)]', !open && 'pointer-events-none')}
     >
-      <div className="absolute inset-y-0 left-0 flex flex-col border-l border-rule-strong/60 bg-ink-1 backdrop-blur-md" style={{ width: layout.dockWidth }}>
+      <div className="absolute inset-y-0 left-0 flex flex-col border-l border-rule-strong/60 bg-ink-1 backdrop-blur-md" style={{ width }}>
         <div
           role="separator"
           aria-orientation="vertical"
@@ -275,13 +254,13 @@ export function WindowDock({ scope, windows }: { scope: string; windows: WindowD
           className="absolute inset-y-0 -left-1 z-10 w-2 cursor-col-resize hover:bg-accent/30 focus-visible:bg-accent/30"
           onPointerDown={(e) => {
             (e.target as HTMLElement).setPointerCapture(e.pointerId);
-            drag.current = { x: e.clientX, width: layout.dockWidth };
+            drag.current = { x: e.clientX, width };
           }}
           onPointerMove={(e) => drag.current && actions.setDockWidth(drag.current.width + (drag.current.x - e.clientX))}
           onPointerUp={() => (drag.current = null)}
           onKeyDown={(e) => {
-            if (e.key === 'ArrowLeft') actions.setDockWidth(layout.dockWidth + 16);
-            else if (e.key === 'ArrowRight') actions.setDockWidth(layout.dockWidth - 16);
+            if (e.key === 'ArrowLeft') actions.setDockWidth(width + 16);
+            else if (e.key === 'ArrowRight') actions.setDockWidth(width - 16);
             else return;
             e.preventDefault();
           }}

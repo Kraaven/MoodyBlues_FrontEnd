@@ -85,8 +85,9 @@ export function maskConnection(connectionString: string): string {
   return match ? `${match[1]}${match[2]}…@${match[3]}` : connectionString;
 }
 
-export function sceneTitle(scene: { displayName: string | null; sceneId: string }): string {
-  return scene.displayName?.trim() || scene.sceneId;
+/** What a scene is called: the name it was given here, else its Unity name, else its GUID. */
+export function sceneTitle(scene: { displayName: string | null; unityName: string | null; sceneId: string }): string {
+  return scene.displayName?.trim() || scene.unityName?.trim() || scene.sceneId;
 }
 
 export function safeFilename(name: string, extension: string): string {

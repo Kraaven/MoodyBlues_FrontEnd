@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { FollowStyle } from '../studioStore';
+import type { FollowStyle } from '../viewSettings';
 import { FreeLook } from './freeLook';
 import { armShare, armSqueezed, SideChooser, stepArm } from './occlusion';
 import { chasePose, chooseSide, followDistance, headingOf, restPose, sidePose, travelDirection, type PlayerSize, type PoseGoal } from './poses';

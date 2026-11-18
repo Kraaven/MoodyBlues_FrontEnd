@@ -37,7 +37,8 @@ function start(url: string, priority: 'low' | undefined): Flight {
       if (immutable && isCacheableSceneUrl(url)) await sceneCache.put(url, buffer);
       return buffer;
     } finally {
-      flights.delete(url);
+      // A newer flight may already have replaced this one under the same URL; leave that one alone.
+      if (flights.get(url) === flight) flights.delete(url);
     }
   })();
   flights.set(url, flight);
@@ -64,7 +65,9 @@ export async function fetchSceneBytes(
   }
   signal?.throwIfAborted();
 
-  const flight = flights.get(url) ?? start(url, background ? 'low' : undefined);
+  // A flight that was aborted is dying: joining it would only inherit its AbortError.
+  const existing = flights.get(url);
+  const flight = existing && !existing.controller.signal.aborted ? existing : start(url, background ? 'low' : undefined);
   flight.participants++;
   if (onProgress) {
     flight.listeners.add(onProgress);

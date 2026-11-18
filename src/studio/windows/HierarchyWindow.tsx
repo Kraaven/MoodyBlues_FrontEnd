@@ -7,6 +7,7 @@ import type { ReplayPlayer } from '../../viewer/replay/ReplayPlayer';
 import { useReplayBinding } from '../binding';
 import { cn } from '../../ui/cn';
 import { formatCount } from '../../lib/format';
+import { canSelect } from '../../share/shareSettings';
 import { useStudio } from '../studioStore';
 import { EmptyNote, kindOf, NodeIcon, SearchField, WindowFooter, type NodeKind } from './parts';
 
@@ -67,6 +68,7 @@ export function HierarchyWindow() {
   const root = useStudio((s) => s.root);
   const player = useStudio((s) => s.player);
   const selected = useStudio((s) => s.selected);
+  const selectable = useStudio((s) => canSelect(s.share));
   const playback = useReplayBinding((s) => s.playback);
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
@@ -113,8 +115,21 @@ export function HierarchyWindow() {
 
   if (!root) return <EmptyNote>The scene is still loading.</EmptyNote>;
 
+  const toggleCollapsed = (key: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
   const choose = (row: TreeRow) => {
     const studio = useStudio.getState();
+    // Where the owner turned selecting off the tree is only browsed: a row opens or closes.
+    if (!selectable) {
+      if (row.hasChildren) toggleCollapsed(row.key);
+      return;
+    }
     if (row.node === selected) studio.select(null);
     else if (player && row.id !== null) studio.selectId(row.id);
     else studio.select(row.node);
@@ -159,12 +174,7 @@ export function HierarchyWindow() {
                   aria-label={isCollapsed ? 'Expand' : 'Collapse'}
                   onClick={(e) => {
                     e.stopPropagation();
-                    setCollapsed((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(row.key)) next.delete(row.key);
-                      else next.add(row.key);
-                      return next;
-                    });
+                    toggleCollapsed(row.key);
                   }}
                   className={cn('flex h-5 w-5 shrink-0 items-center justify-center text-fg-3 hover:text-fg', !row.hasChildren && 'invisible')}
                 >
@@ -180,7 +190,7 @@ export function HierarchyWindow() {
       </div>
       <WindowFooter>
         <span>
-          {formatCount(total)} {player ? 'recorded objects' : 'objects'} · {selected ? 'Selected' : 'Select to inspect'}
+          {formatCount(total)} {player ? 'recorded objects' : 'objects'} · {!selectable ? 'Browse only' : selected ? 'Selected' : 'Select to inspect'}
         </span>
       </WindowFooter>
     </div>

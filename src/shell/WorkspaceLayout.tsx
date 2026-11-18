@@ -38,7 +38,7 @@ export function PageHeader({ title, meta, actions }: { title: ReactNode; meta?: 
         <h1 className="display truncate text-[30px] leading-9 text-fg sm:text-[34px] sm:leading-10">{title}</h1>
         {meta && <p className="mt-1.5 text-[14px] text-fg-2">{meta}</p>}
       </div>
-      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+      {actions && <div className="flex max-w-full flex-wrap items-center gap-2">{actions}</div>}
     </header>
   );
 }

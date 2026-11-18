@@ -9,6 +9,7 @@ import { useStage } from '../../stage/store';
 import { cameraForward } from '../cameras';
 import type { Playback } from '../playback';
 import { useStudio } from '../studioStore';
+import type { CameraMode } from '../viewSettings';
 import { measurePlayer, objectMoves, resolveFollowTarget } from './followTarget';
 import { OccluderFade, MAX_FADED } from './occluderFade';
 import { hideOwnMeshes } from './ownBody';
@@ -103,7 +104,7 @@ interface Options {
  * wherever the camera then is, so nothing cuts. Asks for the next frame while anything moves.
  */
 export function useViewRig({ root, replay, playback, cameraNode }: Options): {
-  introPose: (id: number) => { position: [number, number, number]; target: [number, number, number] } | null;
+  introPose: (id: number, mode: CameraMode) => { position: [number, number, number]; target: [number, number, number] } | null;
   followDistanceOf: (id: number) => number | null;
 } {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
@@ -218,9 +219,15 @@ export function useViewRig({ root, replay, playback, cameraNode }: Options): {
   );
 
   const introPose = useCallback(
-    (id: number) => {
+    (id: number, mode: CameraMode) => {
       const eye = cameraNode(id);
       if (!eye) return null;
+      if (mode === 'firstPerson') {
+        // Through the lens: at the camera, looking where it looks. The rig takes it from there.
+        eye.updateWorldMatrix(true, false);
+        const at = eye.getWorldPosition(eyePosition);
+        return { position: at.toArray(), target: at.clone().addScaledVector(cameraForward(eye, eyeForward), LEAVE_DISTANCE).toArray() };
+      }
       const { node, size } = followOf(eye);
       node.updateWorldMatrix(true, false);
       eye.updateWorldMatrix(true, false);

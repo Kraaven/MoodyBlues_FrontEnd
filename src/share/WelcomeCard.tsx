@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Collapsible, Dialog as D } from 'radix-ui';
-import { ChevronDown, Play } from 'lucide-react';
+import { ChevronDown, Play, SlidersHorizontal } from 'lucide-react';
 import type { SharedSessionResponse } from '../api/types';
 import { formatBytes, formatCaptured, formatDuration } from '../lib/format';
 import { useMediaQuery } from '../lib/useMediaQuery';
@@ -53,10 +53,14 @@ interface WelcomeCardProps {
 /**
  * What a visitor sees first on a shared link: whose recording this is, how to move around, and a
  * Play button that is also the download progress. The scene loads behind it (see the intro gate in
- * the studio store). It has no close button: leaving it is playing.
+ * the studio store). It has no close button: leaving it is playing. On a phone it is a bottom sheet
+ * and points at the Settings button where a laptop's card points at the tool rail.
  */
 export function WelcomeCard({ shared, startTime, ready, replayLoaded, starting, onPlay, windows, tools, phone }: WelcomeCardProps) {
   const touch = useMediaQuery('(pointer: coarse)');
+  // A phone held sideways is about 340 px tall: the card gives up its wordmark and some padding so it all fits.
+  const landscape = useMediaQuery('(orientation: landscape)');
+  const compact = phone && landscape;
   const [guideOpen, setGuideOpen] = useState(readOpen);
   const playRef = useRef<HTMLButtonElement>(null);
   const sceneReady = useStage((s) => s.scene.status === 'ready');
@@ -90,6 +94,7 @@ export function WelcomeCard({ shared, startTime, ready, replayLoaded, starting, 
 
   const hints = navigationHints(touch);
   const groups = railGroups(windows, tools);
+  const logsAvailable = windows.some((w) => w.id === 'logs');
   const pending = !ready;
 
   const press = () => {
@@ -109,21 +114,25 @@ export function WelcomeCard({ shared, startTime, ready, replayLoaded, starting, 
           className={cn(
             'elevated fixed z-[61] flex flex-col border border-rule-strong/70 bg-ink-2 focus:outline-none',
             phone
-              ? 'inset-x-0 bottom-0 max-h-[calc(100dvh-16px)] animate-rise rounded-t-[var(--radius-dialog)] border-b-0'
+              ? 'inset-x-0 bottom-0 mx-auto max-h-[calc(100dvh-16px)] max-w-[560px] animate-rise rounded-t-[var(--radius-dialog)] border-b-0'
               : 'left-1/2 top-1/2 max-h-[calc(100dvh-32px)] w-[min(440px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-[var(--radius-dialog)] data-[state=open]:animate-[dialog-in_260ms_var(--ease-out-soft)]',
           )}
         >
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6 pb-4">
-            <span className="inline-flex items-center gap-2">
-              <Mark className="text-[18px]" />
-              <Wordmark className="text-[13px]" />
-            </span>
+          <div className={cn('flex min-h-0 flex-1 flex-col overflow-y-auto', compact ? 'p-4 pb-2' : 'p-6 pb-4')}>
+            {!compact && (
+              <span className="inline-flex items-center gap-2">
+                <Mark className="text-[18px]" />
+                <Wordmark className="text-[13px]" />
+              </span>
+            )}
 
-            <D.Title className="display mt-5 text-[30px] leading-[36px] text-fg">{shared.sceneName}</D.Title>
+            <D.Title className={cn('display truncate text-fg', compact ? 'text-[24px] leading-[30px]' : 'mt-5 text-[30px] leading-[36px]')} title={shared.sceneName}>
+              {shared.sceneName}
+            </D.Title>
             <p className="mt-1.5 font-mono text-[13px] text-fg-3">{context.join(' · ')}</p>
             <D.Description className="sr-only">A shared recording. Play it to watch from {startTime > 0 ? formatDuration(startTime) : 'the start'}.</D.Description>
 
-            <div className="my-5 h-px bg-rule" />
+            <div className={cn('h-px bg-rule', compact ? 'my-3' : 'my-5')} />
 
             <Collapsible.Root open={guideOpen} onOpenChange={(open) => { setGuideOpen(open); storeOpen(open); }}>
               <Collapsible.Trigger className="group flex w-full items-center justify-between rounded-[var(--radius-control)] py-1 text-left text-[14px] font-medium text-fg-2 transition-colors hover:text-fg">
@@ -150,33 +159,46 @@ export function WelcomeCard({ shared, startTime, ready, replayLoaded, starting, 
                       ))}
                     </dl>
                   </section>
-                  <section>
-                    <p className="eyebrow mb-3">{phone ? 'The toolbar' : 'The side toolbar'}</p>
-                    <div className="space-y-3">
-                      {groups.map((rows, gi) => (
-                        <ul key={gi} className={cn('space-y-3', gi > 0 && 'border-t border-rule pt-3')}>
-                          {rows.map((row) => (
-                            <li key={row.id} className="flex items-start gap-3">
-                              <row.icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-fg-2" strokeWidth={1.6} />
-                              <span className="min-w-0">
-                                <span className="block text-[14px] leading-5 text-fg">{row.title}</span>
-                                <span className="block text-[13px] leading-[18px] text-fg-3">{row.description}</span>
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      ))}
-                    </div>
-                  </section>
+                  {phone ? (
+                    <section>
+                      <p className="eyebrow mb-3">The Settings button</p>
+                      <div className="flex items-start gap-3">
+                        <SlidersHorizontal aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-fg-2" strokeWidth={1.6} />
+                        <span className="min-w-0">
+                          <span className="block text-[14px] leading-5 text-fg">Settings, top right</span>
+                          <span className="block text-[13px] leading-[18px] text-fg-3">Pick a camera, change the playback speed and what is drawn{logsAvailable ? ', and read the logs' : ''}.</span>
+                        </span>
+                      </div>
+                    </section>
+                  ) : (
+                    <section>
+                      <p className="eyebrow mb-3">The side toolbar</p>
+                      <div className="space-y-3">
+                        {groups.map((rows, gi) => (
+                          <ul key={gi} className={cn('space-y-3', gi > 0 && 'border-t border-rule pt-3')}>
+                            {rows.map((row) => (
+                              <li key={row.id} className="flex items-start gap-3">
+                                <row.icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-fg-2" strokeWidth={1.6} />
+                                <span className="min-w-0">
+                                  <span className="block text-[14px] leading-5 text-fg">{row.title}</span>
+                                  <span className="block text-[13px] leading-[18px] text-fg-3">{row.description}</span>
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        ))}
+                      </div>
+                    </section>
+                  )}
                 </div>
               </Collapsible.Content>
             </Collapsible.Root>
           </div>
 
-          <div className="space-y-2.5 px-6 pb-6 pt-2">
+          <div className={cn('space-y-2.5', compact ? 'px-4 pb-3 pt-1' : 'px-6 pb-6 pt-2')} style={phone ? { paddingBottom: 'max(env(safe-area-inset-bottom), 12px)' } : undefined}>
             <Button
               ref={playRef}
-              size="lg"
+              size={compact ? 'md' : 'lg'}
               className={cn('w-full overflow-hidden', pending && 'bg-ink-4! text-fg! shadow-none! hover:bg-ink-4!')}
               aria-disabled={starting}
               onClick={press}

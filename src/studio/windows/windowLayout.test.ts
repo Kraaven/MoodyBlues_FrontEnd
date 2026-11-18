@@ -4,6 +4,7 @@ import {
   clampRect,
   closeWindow,
   defaultLayout,
+  dockWidthFor,
   dockWindow,
   floatWindow,
   fromFrame,
@@ -98,5 +99,13 @@ describe('window layout', () => {
   it('clamps the dock width', () => {
     expect(clampDockWidth(100)).toBe(320);
     expect(clampDockWidth(9000)).toBe(520);
+  });
+
+  it('keeps the dock to about a third of a narrow viewport, but readable', () => {
+    expect(dockWidthFor(380, 1920)).toBe(380);
+    expect(dockWidthFor(380, 1280)).toBe(380);
+    expect(dockWidthFor(380, 1024)).toBe(307);
+    expect(dockWidthFor(380, 768)).toBe(280);
+    expect(dockWidthFor(320, 2560)).toBe(320);
   });
 });

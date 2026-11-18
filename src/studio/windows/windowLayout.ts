@@ -48,6 +48,8 @@ export interface ScopeLayout {
 
 const DOCK_MIN = 320;
 const DOCK_MAX = 520;
+const DOCK_FLOOR = 280;
+const DOCK_SHARE = 0.3;
 const WINDOW_MIN: Bounds = { w: 280, h: 200 };
 const WINDOW_DEFAULT: Bounds = { w: 380, h: 600 };
 /** How much of a window's header must stay inside the view so it can always be grabbed. */
@@ -57,6 +59,15 @@ const RAIL_ROOM = 88;
 
 export function defaultLayout(docked: string[] = []): ScopeLayout {
   return { open: [], rects: {}, docked, dockActive: docked[0] ?? null, dockOpen: docked.length > 0, dockWidth: 380 };
+}
+
+/**
+ * The width the dock really takes: the remembered one, but never more than about a third of the
+ * viewport (so the 3D keeps two thirds on a tablet or a half-screen window), and never narrower than
+ * a window can be read in.
+ */
+export function dockWidthFor(dockWidth: number, viewportWidth: number): number {
+  return Math.min(dockWidth, Math.max(DOCK_FLOOR, Math.round(viewportWidth * DOCK_SHARE)));
 }
 
 export function clampDockWidth(width: number): number {

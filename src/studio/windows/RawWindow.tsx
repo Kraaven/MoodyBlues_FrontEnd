@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import * as THREE from 'three';
-import type { SessionDetail } from '../../api/types';
+import type { SharedSessionDetail } from '../../api/types';
 import { ReplayObjectKind } from '../../viewer/replay/replayFile';
 import { materialRows, nodeType } from '../../inspector/inspection';
 import { originalMaterials } from '../viewRig/occluderFade';
@@ -41,7 +41,7 @@ function nodeRaw(node: THREE.Object3D, root: THREE.Object3D, id: number | null) 
 }
 
 /** Raw data: the selection as it is now, the session record from the server, or the file's own glTF JSON. */
-export function RawWindow({ session }: { session: SessionDetail | null }) {
+export function RawWindow({ session }: { session: SharedSessionDetail | null }) {
   const [mode, setMode] = useState<'selection' | 'session' | 'file'>('selection');
   const selected = useStudio((s) => s.selected);
   const selectedId = useStudio((s) => s.selectedId);

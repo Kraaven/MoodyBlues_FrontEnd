@@ -91,7 +91,7 @@ export function FormNotice({ children }: { children: ReactNode }) {
 }
 
 /** An amber switch, for display settings. */
-export function Toggle({ checked, onChange, label, id }: { checked: boolean; onChange: (checked: boolean) => void; label: string; id?: string }) {
+export function Toggle({ checked, onChange, label, id, disabled }: { checked: boolean; onChange: (checked: boolean) => void; label: string; id?: string; disabled?: boolean }) {
   return (
     <button
       id={id}
@@ -99,9 +99,10 @@ export function Toggle({ checked, onChange, label, id }: { checked: boolean; onC
       role="switch"
       aria-checked={checked}
       aria-label={label}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
-        'relative inline-flex h-[22px] w-[40px] shrink-0 items-center rounded-full transition-colors duration-[180ms]',
+        'relative inline-flex h-[22px] w-[40px] shrink-0 items-center rounded-full transition-colors duration-[180ms] disabled:cursor-not-allowed',
         checked ? 'bg-accent' : 'bg-ink-4',
       )}
     >

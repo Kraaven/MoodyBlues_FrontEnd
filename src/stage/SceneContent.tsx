@@ -163,17 +163,25 @@ interface StagedSceneOptions {
   /** Settles the display settings on what was picked, before its shaders are built. */
   prepare?: (root: THREE.Object3D) => void;
   onReady?: (root: THREE.Object3D, master: THREE.Object3D) => (() => void) | void;
-  /** Changing this rebuilds what was picked (the replay a copy is made for). */
+  /** Changing this rebuilds what was picked (the replay a copy is made for) without downloading the scene again. */
   variant?: unknown;
 }
 
 const identity = (master: THREE.Object3D) => master;
+
+/** An abort the hook did not cause (its own cleanup is the only thing that should abort a load) is retried this many times. */
+const UNEXPECTED_ABORT_RETRIES = 1;
+const DOWNLOADING = 'Downloading the scene';
 
 /**
  * Loads a scene version through the shared cache, builds its shaders and uploads its textures while
  * it is still out of view, then adds `pick(master)` to the Stage and frames the camera on it when it
  * is new here (or the part of the window it is shown in changed a lot). Returns the root that was
  * added and its bounds, or null while loading.
+ *
+ * Two effects with separate lifetimes: the first holds the shared master (keyed by the scene's URL
+ * and the retry attempt only), the second shows what is picked from it and re-runs when `variant`
+ * changes. The replay arriving mid-download therefore never releases the download's lease.
  */
 export function useStagedScene(
   ref: SceneRef | null,
@@ -184,79 +192,114 @@ export function useStagedScene(
   const camera = useThree((s) => s.camera);
   const invalidate = useThree((s) => s.invalidate);
   const attempt = useStage((s) => s.scene.attempt);
+  // Tagged with what it was loaded for: after the URL changes, one render still holds the previous master.
+  const [loaded, setLoaded] = useState<{ url: string; attempt: number; root: THREE.Object3D } | null>(null);
   const [state, setState] = useState<{ root: THREE.Object3D | null; bounds: SceneBounds | null }>({ root: null, bounds: null });
   const url = ref?.url;
 
+  // The shared master: downloaded (or taken from the cache) once per URL and attempt.
   useEffect(() => {
     if (!url) return;
-    const label = 'Downloading the scene';
     const stage = useStage.getState();
     stage.setSceneState({ status: 'loading', error: null });
-    stage.setLoading('scene', { label, received: 0, total: null });
+    stage.setLoading('scene', { label: DOWNLOADING, received: 0, total: null });
 
-    const lease = acquireScene(gl, url, (received, total) => useStage.getState().setLoading('scene', { label, received, total }));
+    let alive = true;
+    let lease: ReturnType<typeof acquireScene> | null = null;
+    const load = (retriesLeft: number) => {
+      const current = acquireScene(gl, url, (received, total) => useStage.getState().setLoading('scene', { label: DOWNLOADING, received, total }));
+      lease = current;
+      current.promise.then(
+        (root) => {
+          if (alive) setLoaded({ url, attempt, root });
+        },
+        (err: unknown) => {
+          if (!alive) return;
+          if (isAbortError(err) && retriesLeft > 0) {
+            // Nothing in this effect aborted the load, so another view's cleanup did: start over.
+            current.release();
+            load(retriesLeft - 1);
+            return;
+          }
+          useStage.getState().setSceneState({ status: 'error', error: err });
+          useStage.getState().setLoading('scene', null);
+        },
+      );
+    };
+    load(UNEXPECTED_ABORT_RETRIES);
+
+    return () => {
+      alive = false;
+      lease?.release();
+      setLoaded(null);
+      useStage.getState().setLoading('scene', null);
+    };
+  }, [url, attempt, gl]);
+
+  const master = loaded && loaded.url === url && loaded.attempt === attempt ? loaded : null;
+
+  // What is shown of the master: picked, prepared, warmed up, then added. Re-runs for a new variant.
+  useEffect(() => {
+    if (!url || !master) return;
+    const masterRoot = master.root;
     let alive = true;
     let mounted: THREE.Object3D | null = null;
     let teardown: (() => void) | void;
     const perspective = camera as THREE.PerspectiveCamera;
 
-    lease.promise
-      .then(async (master) => {
-        if (!alive) return;
-        const root = pick(master);
-        prepare?.(root);
-        useStage.getState().setLoading('scene', { label: 'Preparing the scene', received: 0, total: null });
-        await warmUp(gl, root, perspective, scene, () => alive);
-        if (!alive) return;
+    const show = async () => {
+      const root = pick(masterRoot);
+      prepare?.(root);
+      useStage.getState().setLoading('scene', { label: 'Preparing the scene', received: 0, total: null });
+      await warmUp(gl, root, perspective, scene, () => alive);
+      if (!alive) return;
 
-        scene.add(root);
-        mounted = root;
-        const bounds = measureScene(root);
-        useStage.getState().setSceneRadius(bounds.radius);
-        const fill = regionFill(window.innerWidth, window.innerHeight, useStage.getState().inset);
-        const pose = framePose(root, perspective.fov, { direction: FRAME_DIRECTION, fill });
-        if (pose && needsFraming(url, fill)) {
-          useStage.getState().setCameraPose({ position: pose.position, target: pose.target }, 1000);
-          useStage.getState().setFramedKey(url, fill);
-        }
-        teardown = onReady?.(root, master);
-        if (!useStage.getState().summaries[url]) {
-          const found = inspectScene(master);
-          useStage.getState().setSummary({
-            key: url,
-            nodes: found.nodeCount,
-            meshes: found.meshCount,
-            materials: found.materials.length,
-            textures: found.textures.length,
-            triangles: found.triangleCount,
-            vertices: found.vertexCount,
-          });
-        }
-        setState({ root, bounds });
-        useStage.getState().setSceneState({ status: 'ready' });
-        useStage.getState().setLoading('scene', null);
-        gl.shadowMap.needsUpdate = true;
-        invalidate();
-      })
-      .catch((err: unknown) => {
-        if (!alive || isAbortError(err)) return;
-        useStage.getState().setSceneState({ status: 'error', error: err });
-        useStage.getState().setLoading('scene', null);
-      });
+      scene.add(root);
+      mounted = root;
+      const bounds = measureScene(root);
+      useStage.getState().setSceneRadius(bounds.radius);
+      const fill = regionFill(window.innerWidth, window.innerHeight, useStage.getState().inset);
+      const pose = framePose(root, perspective.fov, { direction: FRAME_DIRECTION, fill });
+      if (pose && needsFraming(url, fill)) {
+        useStage.getState().setCameraPose({ position: pose.position, target: pose.target }, 1000);
+        useStage.getState().setFramedKey(url, fill);
+      }
+      teardown = onReady?.(root, masterRoot);
+      if (!useStage.getState().summaries[url]) {
+        const found = inspectScene(masterRoot);
+        useStage.getState().setSummary({
+          key: url,
+          nodes: found.nodeCount,
+          meshes: found.meshCount,
+          materials: found.materials.length,
+          textures: found.textures.length,
+          triangles: found.triangleCount,
+          vertices: found.vertexCount,
+        });
+      }
+      setState({ root, bounds });
+      useStage.getState().setSceneState({ status: 'ready' });
+      useStage.getState().setLoading('scene', null);
+      gl.shadowMap.needsUpdate = true;
+      invalidate();
+    };
+    show().catch((err: unknown) => {
+      if (!alive) return;
+      useStage.getState().setSceneState({ status: 'error', error: err });
+      useStage.getState().setLoading('scene', null);
+    });
 
     return () => {
       alive = false;
       teardown?.();
       if (mounted) scene.remove(mounted);
-      lease.release();
-      useStage.getState().setLoading('scene', null);
       useStage.getState().setSceneRadius(0);
       setState({ root: null, bounds: null });
       invalidate();
     };
-    // `pick`, `prepare` and `onReady` are expected to be stable for one scene; the scene identity drives this.
+    // `pick`, `prepare` and `onReady` are expected to be stable for one scene; the master and variant drive this.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url, attempt, gl, scene, camera, variant]);
+  }, [url, master, gl, scene, camera, variant]);
 
   return state;
 }

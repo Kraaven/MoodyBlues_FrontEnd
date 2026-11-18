@@ -27,19 +27,19 @@ export function Dialog({ open, onOpenChange, title, context, description, childr
         <D.Overlay className="fixed inset-0 z-[60] animate-fade bg-[#0d0d0c]/70 backdrop-blur-[3px]" />
         <D.Content
           className={cn(
-            'elevated fixed left-1/2 top-1/2 z-[61] max-h-[calc(100dvh-32px)] w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto',
+            'elevated fixed left-1/2 top-1/2 z-[61] flex max-h-[calc(100dvh-32px)] w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden',
             'rounded-[var(--radius-dialog)] border border-rule-strong/70 bg-ink-2 focus:outline-none',
             'data-[state=open]:animate-[dialog-in_260ms_var(--ease-out-soft)]',
-            display ? 'p-8 sm:p-10' : 'p-6',
             width === 'sm' ? 'max-w-[460px]' : width === 'md' ? 'max-w-[580px]' : 'max-w-[760px]',
           )}
         >
-          <div className={cn('flex items-start justify-between gap-4', display ? 'mb-7' : 'mb-5')}>
+          {/* The header and the footer stay in view; only the body scrolls, so a long dialog is usable on a small screen. */}
+          <div className={cn('flex shrink-0 items-start justify-between gap-4', display ? 'px-8 pb-7 pt-8 sm:px-10 sm:pt-10' : 'px-6 pb-5 pt-6')}>
             <div className="min-w-0 space-y-1.5">
-              <D.Title className={cn('text-fg', display ? 'display text-[34px] leading-[40px] sm:text-[40px] sm:leading-[46px]' : 'text-[17px] font-semibold leading-6')}>
+              <D.Title className={cn('text-fg [overflow-wrap:anywhere]', display ? 'display text-[34px] leading-[40px] sm:text-[40px] sm:leading-[46px]' : 'text-[17px] font-semibold leading-6')}>
                 {title}
               </D.Title>
-              {context && <p className="font-mono text-[13px] text-fg-3">{context}</p>}
+              {context && <p className="font-mono text-[13px] text-fg-3 [overflow-wrap:anywhere]">{context}</p>}
               {description ? (
                 <D.Description className="pt-1 text-[14px] text-fg-2">{description}</D.Description>
               ) : (
@@ -53,8 +53,10 @@ export function Dialog({ open, onOpenChange, title, context, description, childr
               <X className={display ? 'h-6 w-6' : 'h-[18px] w-[18px]'} />
             </D.Close>
           </div>
-          {children}
-          {footer && <div className="mt-7 flex flex-wrap justify-end gap-2">{footer}</div>}
+          <div className={cn('min-h-0 flex-1 overflow-y-auto', display ? 'px-8 sm:px-10' : 'px-6', footer ? 'pb-1' : display ? 'pb-8 sm:pb-10' : 'pb-6')}>{children}</div>
+          {footer && (
+            <div className={cn('flex shrink-0 flex-wrap justify-end gap-2 border-t border-rule/70 pt-4', display ? 'px-8 pb-8 sm:px-10 sm:pb-10' : 'px-6 pb-6')}>{footer}</div>
+          )}
         </D.Content>
       </D.Portal>
     </D.Root>

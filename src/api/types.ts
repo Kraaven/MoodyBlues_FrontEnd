@@ -29,6 +29,8 @@ export type SceneProcessingStatus = 'Pending' | 'Processing' | 'Ready' | 'Failed
 export interface ProjectScene {
   sceneId: string;
   displayName: string | null;
+  /** The scene's name in Unity, read from the export; null until one has been read. */
+  unityName: string | null;
   updatedAtUtc: string;
   latestHash: string;
   sizeBytes: number;
@@ -48,6 +50,8 @@ export interface ProjectDetail {
    * decrypt the stored key (its secret changed); rotating gives a new one.
    */
   connectionString: string | null;
+  /** The template a recording's share settings start from when it is first made public. Null: the built-in default. */
+  shareDefaults: unknown;
 }
 
 export interface SceneVersion {
@@ -68,6 +72,8 @@ export interface SceneDetail {
   projectId: string;
   sceneId: string;
   displayName: string | null;
+  /** The scene's name in Unity, read from the export; null until one has been read. */
+  unityName: string | null;
   createdAtUtc: string;
   updatedAtUtc: string;
   current: SceneVersion | null;
@@ -123,9 +129,9 @@ export interface SessionSummary {
   shareToken: string | null;
 }
 
-export interface SessionDetail {
+/** What a session's detail holds for anyone who may see it: an owner, or a visitor of its share link. */
+export interface SharedSessionDetail {
   id: string;
-  projectId: string;
   sceneId: string;
   sceneHash: string;
   createdAtUtc: string;
@@ -151,8 +157,15 @@ export interface SessionDetail {
   errorLogCount: number;
   /** Null until the replay is built. */
   activity: SessionActivity | null;
+}
+
+/** An owner's view of a session: the shared fields, and its project and sharing state. */
+export interface SessionDetail extends SharedSessionDetail {
+  projectId: string;
   isPublic: boolean;
   shareToken: string | null;
+  /** What visitors of the link get (see src/share/shareSettings.ts); null: the project's defaults apply. */
+  shareSettings: unknown;
 }
 
 /** A session's public link state. The token is stable while public and replaced by a reset. */
@@ -161,12 +174,18 @@ export interface SharingResponse {
   shareToken: string | null;
 }
 
-/** What an anonymous visitor gets for a share link. The session's own share fields are not meaningful there. */
+/** A share-settings object as the server stores it, or null for none. */
+export interface ShareSettingsResponse {
+  settings: unknown;
+}
+
+/** What an anonymous visitor gets for a share link: no ids of the owner's, and the settings already resolved (link, else project, else null). */
 export interface SharedSessionResponse {
-  session: SessionDetail;
+  session: SharedSessionDetail;
   projectName: string;
   sceneName: string;
   sceneVersion: number | null;
+  settings: unknown;
 }
 
 /** Statuses that can still change on their own, so lists showing them keep refreshing. */

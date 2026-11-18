@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronRight, KeyRound } from 'lucide-react';
+import { ChevronRight, KeyRound, Share2 } from 'lucide-react';
 import { useProject } from '../api/queries';
 import { usePrefetchFocus } from '../prefetch/usePrefetchFocus';
 import type { ProjectDetail, ProjectScene } from '../api/types';
+import { ShareDefaultsDialog } from '../share/ShareDefaultsDialog';
 import { ConnectionDialog } from '../shell/ConnectionDialog';
 import { SetupSteps } from '../shell/SetupGuide';
 import { PageBody, PageHeader, WorkspaceLayout } from '../shell/WorkspaceLayout';
@@ -22,6 +23,7 @@ export function ProjectPage() {
   const project = useProject(projectId);
   usePrefetchFocus(projectId);
   const [connecting, setConnecting] = useState(false);
+  const [editingDefaults, setEditingDefaults] = useState(false);
   const data = project.data;
   useWindowTitle(data?.name ?? 'Project');
   useStageView(idleView('project'));
@@ -52,10 +54,16 @@ export function ProjectPage() {
               title={data.name}
               meta={plural(scenes.length, 'scene')}
               actions={
-                <Button variant="secondary" onClick={() => setConnecting(true)}>
-                  <KeyRound className="h-4 w-4" />
-                  Unity connection
-                </Button>
+                <>
+                  <Button variant="secondary" onClick={() => setEditingDefaults(true)}>
+                    <Share2 className="h-4 w-4" />
+                    Share defaults
+                  </Button>
+                  <Button variant="secondary" onClick={() => setConnecting(true)}>
+                    <KeyRound className="h-4 w-4" />
+                    Unity connection
+                  </Button>
+                </>
               }
             />
 
@@ -76,6 +84,7 @@ export function ProjectPage() {
             )}
 
             <ConnectionDialog project={data} open={connecting} onOpenChange={setConnecting} />
+            {editingDefaults && <ShareDefaultsDialog project={data} onClose={() => setEditingDefaults(false)} />}
           </>
         )}
       </PageBody>
@@ -89,7 +98,9 @@ function SceneRow({ project, scene }: { project: ProjectDetail; scene: ProjectSc
       <Link to={`/projects/${project.id}/scenes/${encodeURIComponent(scene.sceneId)}`} className="group flex items-center gap-4 p-3 pr-4 transition-colors duration-[140ms] hover:bg-ink-3/60">
         <SnapshotImage hash={scene.latestHash} seed={scene.sceneId} className="h-[56px] w-[96px] shrink-0" />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] text-fg transition-colors group-hover:text-accent">{sceneTitle(scene)}</p>
+          <p className="truncate text-[15px] text-fg transition-colors group-hover:text-accent" title={sceneTitle(scene)}>
+            {sceneTitle(scene)}
+          </p>
           <p className="mt-0.5 truncate text-[13px] text-fg-3">
             {versionLabel(scene.currentVersion)} · {formatCaptured(scene.updatedAtUtc)} · {formatBytes(scene.sizeBytes)}
           </p>

@@ -128,7 +128,7 @@ function SceneBody({
           {renaming ? (
             <RenameField project={project} scene={scene} onDone={() => setRenaming(false)} />
           ) : (
-            <h1 className="display truncate text-[30px] leading-9 text-fg sm:text-[34px] sm:leading-10">{name}</h1>
+            <h1 className="display truncate text-[30px] leading-9 text-fg sm:text-[34px] sm:leading-10" title={name}>{name}</h1>
           )}
           {selected && (
             <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] text-fg-2">
@@ -232,9 +232,10 @@ function RenameField({ project, scene, onDone }: { project: ProjectDetail; scene
   const rename = useRenameScene(project.id, scene.sceneId);
   const notify = useToast();
 
-  const save = async () => {
+  // An empty name clears the one given here, so the scene is called by its Unity name again.
+  const save = async (name = value.trim()) => {
     try {
-      await rename.mutateAsync(value.trim());
+      await rename.mutateAsync(name);
       onDone();
     } catch (err) {
       notify(errorText(err), 'error');
@@ -243,7 +244,7 @@ function RenameField({ project, scene, onDone }: { project: ProjectDetail; scene
 
   return (
     <form
-      className="flex max-w-xl items-center gap-2"
+      className="flex max-w-xl flex-wrap items-center gap-2"
       onSubmit={(e) => {
         e.preventDefault();
         void save();
@@ -253,11 +254,11 @@ function RenameField({ project, scene, onDone }: { project: ProjectDetail; scene
         autoFocus
         value={value}
         maxLength={200}
-        placeholder={scene.sceneId}
+        placeholder={scene.unityName ?? scene.sceneId}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => e.key === 'Escape' && onDone()}
         aria-label="Scene display name"
-        className="h-11 text-[18px]"
+        className="h-11 min-w-[14rem] flex-1 text-[18px]"
       />
       <Button type="submit" loading={rename.isPending}>
         Save
@@ -265,6 +266,11 @@ function RenameField({ project, scene, onDone }: { project: ProjectDetail; scene
       <Button variant="ghost" onClick={onDone}>
         Cancel
       </Button>
+      {scene.displayName && scene.unityName && (
+        <Button variant="ghost" disabled={rename.isPending} onClick={() => void save('')}>
+          Reset to Unity name
+        </Button>
+      )}
     </form>
   );
 }
