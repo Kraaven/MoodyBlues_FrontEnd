@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
+import { Collapsible } from 'radix-ui';
+import { ChevronDown } from 'lucide-react';
 import { useProject, useResetShare, useSession, useSetShareDefaults, useSetShareSettings, useSetSharing } from '../api/queries';
 import { errorText } from '../api/client';
 import type { SharingResponse } from '../api/types';
@@ -11,7 +13,7 @@ import { ConfirmDialog, Dialog } from '../ui/Dialog';
 import { CopyField } from '../ui/CopyField';
 import { Toggle } from '../ui/Field';
 import { useToast } from '../ui/Toast';
-import { parseShareSettings, toTemplate, type ShareSettings } from './shareSettings';
+import { parseShareSettings, shareSummary, toTemplate, type ShareSettings } from './shareSettings';
 import { ShareSettingsEditor } from './ShareSettingsEditor';
 import { SaveStatus } from './SaveStatus';
 import { useAutosave } from './useAutosave';
@@ -110,19 +112,39 @@ function ViewerSettings({ sessionId, time }: { sessionId: string; time?: number 
   const ready = session.data !== undefined && (project.data !== undefined || project.isError);
 
   return (
-    <section aria-label="Viewer settings" className="space-y-4 border-t border-rule pt-5">
-      <div>
-        <h3 className="text-[15px] font-medium text-fg">Viewer settings</h3>
-        <p className="mt-1 text-[13px] leading-5 text-fg-3">What visitors of this link start with, and what they cannot change. Your own studio is never restricted.</p>
-      </div>
+    <>
       {ready && session.data ? (
         <ViewerSettingsEditor sessionId={sessionId} initial={parseShareSettings(session.data.shareSettings ?? project.data?.shareDefaults ?? null)} projectId={session.data.projectId} defaults={project.data?.shareDefaults ?? null} time={time} />
       ) : session.isError ? (
-        <p className="text-[13px] text-danger-soft">{errorText(session.error)}</p>
+        <ViewerSettingsSection summary={null}>
+          <p className="text-[13px] text-danger-soft">{errorText(session.error)}</p>
+        </ViewerSettingsSection>
       ) : (
-        <p className="text-[13px] text-fg-3">Loading…</p>
+        <ViewerSettingsSection summary={null}>
+          <p className="text-[13px] text-fg-3">Loading…</p>
+        </ViewerSettingsSection>
       )}
-    </section>
+    </>
+  );
+}
+
+/** The collapsible frame of the section. It starts collapsed each time the dialog opens, and the state is not remembered. */
+function ViewerSettingsSection({ summary, children }: { summary: string | null; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Collapsible.Root open={open} onOpenChange={setOpen} className="border-t border-rule pt-4">
+      <Collapsible.Trigger className="group flex w-full items-center gap-3 rounded-[var(--radius-control)] py-1 text-left transition-colors hover:text-fg">
+        <span className="shrink-0 text-[15px] font-medium text-fg">Viewer settings</span>
+        {!open && summary && <span className="min-w-0 flex-1 truncate text-right text-[13px] text-fg-3">{summary}</span>}
+        <ChevronDown aria-hidden="true" className="ml-auto h-4 w-4 shrink-0 text-fg-2 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+      </Collapsible.Trigger>
+      <Collapsible.Content className="overflow-hidden">
+        <div className="space-y-4 pt-3">
+          <p className="text-[13px] leading-5 text-fg-3">What visitors of this link start with, and what they cannot change. Your own studio is never restricted.</p>
+          {children}
+        </div>
+      </Collapsible.Content>
+    </Collapsible.Root>
   );
 }
 
@@ -156,7 +178,7 @@ function ViewerSettingsEditor({ sessionId, projectId, initial, defaults, time }:
   };
 
   return (
-    <>
+    <ViewerSettingsSection summary={shareSummary(settings)}>
       <ShareSettingsEditor value={settings} onChange={change} cameras={cameras} currentTime={time ?? null} />
       <div className="flex flex-wrap items-center gap-2 pt-1">
         <Button variant="secondary" size="sm" loading={saveDefaults.isPending} onClick={() => void saveAsDefault()}>
@@ -181,6 +203,6 @@ function ViewerSettingsEditor({ sessionId, projectId, initial, defaults, time }:
           notify('Viewer settings reset to the project default.');
         }}
       />
-    </>
+    </ViewerSettingsSection>
   );
 }

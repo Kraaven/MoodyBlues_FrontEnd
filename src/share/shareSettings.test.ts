@@ -11,6 +11,7 @@ import {
   panelAvailable,
   parseShareSettings,
   resolveCameraTarget,
+  shareSummary,
   toTemplate,
   viewSettingsOf,
   type ShareSettings,
@@ -263,5 +264,15 @@ describe('shareLayout', () => {
     const layout = shareLayout(DEFAULT_SHARE_SETTINGS.panels);
     expect(layout.docked).toEqual([]);
     expect(layout.dockOpen).toBe(false);
+  });
+});
+
+describe('shareSummary', () => {
+  it('names the opening camera and counts the locks', () => {
+    expect(shareSummary(DEFAULT_SHARE_SETTINGS)).toBe('Main camera · nothing locked');
+    const locked = structuredClone(DEFAULT_SHARE_SETTINGS);
+    locked.camera.target = { value: { kind: 'named', name: 'Drone' }, locked: true };
+    locked.playback.seeking.locked = true;
+    expect(shareSummary(locked)).toBe('Drone · 2 locked');
   });
 });

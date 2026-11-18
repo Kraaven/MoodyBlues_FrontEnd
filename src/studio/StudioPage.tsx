@@ -184,7 +184,7 @@ export default function StudioPage() {
   useEffect(() => {
     if (!startKnown) return;
     playback.time = startTime;
-    playback.playing = startTime === 0;
+    playback.opening = { urlStart, shareStart: shareSettings?.playback.startTime ?? 0 };
     if (shareSettings) playback.setSpeed(shareSettings.playback.speed.value);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [replayUrl, startKnown]);
@@ -293,11 +293,9 @@ export default function StudioPage() {
   }, [played, loaded]);
   const play = useCallback(() => {
     setPlayed(true);
-    // Whatever ?t= said, Play ends in playing (the intro reads this when it starts ungated).
-    playback.playing = true;
     // Later than the keydown that pressed it (Esc, Enter): the intro skips on any key, and must not take this one.
     setTimeout(() => useStudio.getState().setIntroGate('open'), 0);
-  }, [playback]);
+  }, []);
 
   const error = sharedView ? shared.error : (project.error ?? scene.error ?? session.error);
   const showTimeline = hasSession;

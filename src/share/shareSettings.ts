@@ -258,6 +258,15 @@ export function viewSettingsOf(share: ShareSettings): ViewSettings {
 
 // ---- What a visitor may do ---------------------------------------------------------------------
 
+/** One line for a collapsed editor: which camera visitors open on, and how many values they cannot change. */
+export function shareSummary(share: ShareSettings): string {
+  const target = share.camera.target.value;
+  const camera = target.kind === 'main' ? 'Main camera' : target.kind === 'free' ? 'Free camera' : target.name;
+  const { camera: c, display: d, playback: p } = share;
+  const locks = [c.target, c.mode, c.followStyle, c.firstPersonNear, c.fov, d.grid, d.shadows, d.sceneLights, d.cameraGizmos, p.speed, p.seeking].filter((l) => l.locked).length;
+  return locks === 0 ? `${camera} · nothing locked` : `${camera} · ${locks} locked`;
+}
+
 /** Whether the owner locked this value. The owner's own studio has no settings, and nothing is locked in it. */
 export function isLocked(share: ShareSettings | null, key: LockKey): boolean {
   if (!share) return false;

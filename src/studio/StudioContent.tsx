@@ -14,7 +14,7 @@ import { captureSnapshot } from '../stage/snapshotCapture';
 import { regionFill, useStage } from '../stage/store';
 import { CameraGizmos } from './CameraGizmos';
 import { gizmoDepth, listCameras } from './cameras';
-import { Intro } from './intro';
+import { Intro, introPlan } from './intro';
 import { resolveCameraTarget } from '../share/shareSettings';
 import { useStudio } from './studioStore';
 import { useViewRig } from './viewRig/useViewRig';
@@ -155,9 +155,8 @@ export default function StudioContent() {
     if (!player || !root || !bounds || !playback) return;
     const { introFromStart, introGate } = useStudio.getState();
     const gated = introGate === 'waiting' && !introFromStart;
-    const startTime = introFromStart ? 0 : playback.time;
-    // Pressing Play on the welcome card always ends in playing, whatever ?t= said.
-    const play = introFromStart || gated ? true : playback.playing;
+    // The start is the intended one, not the clock; whether it plays at the end is decided with it.
+    const { startTime, playAtEnd } = introPlan({ ...playback.opening, gated, fromStart: introFromStart });
     // The camera the recording opens on: a shared link's owner chose it (and how it is viewed), else the main camera.
     const { share, cameraMode } = useStudio.getState();
     const opening = share ? resolveCameraTarget(cameras, share.camera.target.value) : (cameras[0] ?? null);
@@ -179,7 +178,7 @@ export default function StudioContent() {
           const pose = opening ? introPose(opening.id, mode) : null;
           if (pose) useStage.getState().setCameraPose({ ...pose, fov: fov() }, durationMs);
         },
-        play: () => playback.setPlaying(play),
+        play: () => playback.setPlaying(playAtEnd),
       },
       (running) => useStudio.getState().setIntroRunning(running),
     );

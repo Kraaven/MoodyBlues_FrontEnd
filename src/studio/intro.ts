@@ -14,6 +14,20 @@ export interface IntroActions {
   play: () => void;
 }
 
+/**
+ * Where the opening seeks to and whether the recording plays when it ends. The start is the intended one (a
+ * `?t=` wins, else the share settings' start time), never the clock, which holds still until the intro plays.
+ * "Replay intro" (`fromStart`) and Play on a shared link's welcome card (`gated`) always end in playing; an
+ * owner's page opened with a `?t=` ends paused there, and any other opening plays.
+ */
+export function introPlan({ urlStart, shareStart, gated, fromStart }: { urlStart: number; shareStart: number; gated: boolean; fromStart: boolean }): {
+  startTime: number;
+  playAtEnd: boolean;
+} {
+  if (fromStart) return { startTime: 0, playAtEnd: true };
+  return { startTime: urlStart > 0 ? urlStart : shareStart, playAtEnd: gated || urlStart <= 0 };
+}
+
 export type IntroPhase = 'idle' | 'waiting' | 'overview' | 'flying' | 'done';
 
 /**

@@ -17,7 +17,10 @@ export class Playback {
   player: ReplayPlayer | null = null;
   duration = 0;
   time = 0;
-  playing = true;
+  /** Paused until the opening intro plays it, so the clock never runs while a recording loads or the camera moves. */
+  playing = false;
+  /** Where the opening starts: the link's `?t=` and the share settings' start time (0 for none); see `introPlan`. */
+  opening = { urlStart: 0, shareStart: 0 };
   speed = 1;
   private readonly listeners = new Set<FrameListener>();
   private readonly stateListeners = new Set<() => void>();

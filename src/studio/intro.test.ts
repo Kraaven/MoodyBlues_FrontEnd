@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Intro, INTRO_FLY_MS, INTRO_HOLD_MS } from './intro';
+import { Intro, introPlan, INTRO_FLY_MS, INTRO_HOLD_MS } from './intro';
 
 function setup() {
   const calls: string[] = [];
@@ -154,5 +154,26 @@ describe('Intro', () => {
       w.intro.go();
       expect(w.calls.at(-1)).toBe('idle');
     });
+  });
+});
+
+describe('introPlan', () => {
+  const base = { urlStart: 0, shareStart: 0, gated: false, fromStart: false };
+
+  it('plays from 0 for a plain opening', () => {
+    expect(introPlan(base)).toEqual({ startTime: 0, playAtEnd: true });
+  });
+
+  it('ends paused at an owner page ?t=', () => {
+    expect(introPlan({ ...base, urlStart: 12 })).toEqual({ startTime: 12, playAtEnd: false });
+  });
+
+  it('uses the share start time unless ?t= wins, and always plays after the welcome card', () => {
+    expect(introPlan({ ...base, shareStart: 5, gated: true })).toEqual({ startTime: 5, playAtEnd: true });
+    expect(introPlan({ ...base, urlStart: 9, shareStart: 5, gated: true })).toEqual({ startTime: 9, playAtEnd: true });
+  });
+
+  it('replays the intro from 0 and plays, whatever the link said', () => {
+    expect(introPlan({ urlStart: 9, shareStart: 5, gated: false, fromStart: true })).toEqual({ startTime: 0, playAtEnd: true });
   });
 });

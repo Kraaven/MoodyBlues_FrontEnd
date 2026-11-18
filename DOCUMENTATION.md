@@ -241,7 +241,12 @@ directly. React re-renders on user actions and, for the current log row, about 8
   Unity's forward, the replay's rotations include the turn, and the `<name>-flipped` child is not
   used. The gizmos are lines in the Stage scene beside the loaded one (never in the shared graph),
   copying each camera node's world pose every frame. Opening a recording runs the intro: paused,
-  the whole scene, a 0.7 s hold, a 1.6 s flight to the main camera, then play. Any pointer, wheel or
+  the whole scene, a 0.7 s hold, a 1.6 s flight to the main camera, then play. The clock
+  (`Playback`) is paused from load and only the intro's play action starts it, so it holds still at
+  the start time through the hold and the flight; the start is the intended one (`introPlan`: a `?t=`,
+  else the share settings' start time, else 0), never the clock. It ends playing, except on an owner
+  page opened with `?t=` > 0, which ends paused there; Play on a share link's welcome card and
+  Replay intro always play. Any pointer, wheel or
   key input, or reduced motion, jumps to the end; a scene without cameras is framed and played.
   Scenes exported before the camera extras show no cameras (re-export from Unity).
 
@@ -295,7 +300,7 @@ directly. React re-renders on user actions and, for the current log row, about 8
 Each recording is **Private** (the default) or **Public**. The ShareDialog
 (`share/ShareDialog.tsx`, opened from the studio's share button and the recordings table) has a
 Public toggle, the link in a copy field, **Reset link**, which replaces the token so the old link
-stops working at once, and, while the link is public, the **Viewer settings** (below). A Public badge marks public recordings in the recordings table and the Recordings window.
+stops working at once, and, while the link is public, the **Viewer settings** (below), a collapsible section that starts collapsed each time the dialog opens and shows a one-line summary (opening camera, number of locked values) beside the chevron. A Public badge marks public recordings in the recordings table and the Recordings window.
 
 - `PUT /api/sessions/{id}/sharing` (`{ isPublic }`) and `POST /api/sessions/{id}/sharing/reset`
   both answer `{ isPublic, shareToken }`, which is written into the cached session detail.
