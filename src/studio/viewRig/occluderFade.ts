@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { adoptSurface, originalOfMaterial } from '../../viewer/core/mbSurface';
 
 /** How see-through a blocking mesh gets (its opacity share) and how long it takes to get there and back, in seconds. */
 export const FADE_OPACITY = 0.2;
@@ -12,10 +13,13 @@ type Materials = THREE.Material | THREE.Material[];
 /** The file's materials of meshes that currently wear a fading copy, for the inspector and the debug toggles. */
 const originals = new WeakMap<THREE.Mesh, Materials>();
 
-/** A mesh's own materials: never the temporary copies used while it fades. */
+/**
+ * A mesh's own materials as the GLB described them: never the temporary copies used while it fades
+ * or is highlighted, nor the game look's lightmap variants (`originalOfMaterial`).
+ */
 export function originalMaterials(mesh: THREE.Mesh): THREE.Material[] {
   const materials = originals.get(mesh) ?? mesh.material;
-  return Array.isArray(materials) ? materials : [materials];
+  return (Array.isArray(materials) ? materials : [materials]).map((m) => (m ? originalOfMaterial(m) : m));
 }
 
 interface Faded {
@@ -79,6 +83,7 @@ export class OccluderFade {
     const list = Array.isArray(original) ? original : [original];
     const copies = list.map((m) => {
       const copy = m.clone();
+      adoptSurface(m, copy);
       copy.transparent = true;
       copy.depthWrite = false;
       copy.needsUpdate = true;

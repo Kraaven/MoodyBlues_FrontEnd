@@ -1,6 +1,8 @@
 import { useMemo, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Grid3x3, Lightbulb, Lock, Navigation, ScanEye, SunMedium, Video } from 'lucide-react';
+import { useStage } from '../../stage/store';
+import { LOOKS, type Look } from '../../viewer/core/look';
 import { Tooltip } from '../../ui/Tooltip';
 import { cn } from '../../ui/cn';
 import { ReplayPlayer } from '../../viewer/replay/ReplayPlayer';
@@ -29,6 +31,11 @@ const MODES: { mode: CameraMode; label: string; tip: string; icon: LucideIcon }[
   { mode: 'firstPerson', label: '1st person', tip: '1st person (P)', icon: ScanEye },
   { mode: 'follow', label: 'Follow', tip: 'Follow', icon: Navigation },
 ];
+
+const LOOK_LABELS: Record<Look, { label: string; hint: string }> = {
+  game: { label: 'Game', hint: "The scene's own sky, light, fog and baked lighting, as the game drew it." },
+  studio: { label: 'Studio', hint: 'A neutral studio light, whatever the scene had.' },
+};
 
 const FOLLOW_STYLES: { style: FollowStyle; label: string; hint: string }[] = [
   { style: 'behind', label: 'Behind', hint: 'Chases from behind and above.' },
@@ -134,6 +141,44 @@ export function CameraTargets({ playback, roomy = false }: { playback: Playback;
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * How the scene is lit: the game's own look or the neutral studio. Where the export carries no game
+ * lighting (an older export) both draw the studio, and the caption says so.
+ */
+export function LookPicker({ roomy = false }: { roomy?: boolean }) {
+  const look = useStudio((s) => s.settings.look);
+  const setSetting = useStudio((s) => s.setSetting);
+  const locked = useLocked('look');
+  const hasGame = useStage((s) => s.game !== null);
+  return (
+    <div className="mb-1.5">
+      <div className={cn('flex items-center justify-between gap-3 px-1', roomy ? 'h-11' : 'h-9')}>
+        <span className="flex items-center gap-2 text-[13px] text-fg-2">
+          Look
+          {locked && <LockBadge />}
+        </span>
+        <div role="radiogroup" aria-label="Look" className="flex w-40 gap-0.5 rounded-[8px] bg-ink-1/70 p-0.5">
+          {LOOKS.map((l) => (
+            <Tooltip key={l} content={LOOK_LABELS[l].hint}>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={look === l}
+                disabled={locked}
+                onClick={() => setSetting('look', l)}
+                className={cn('flex-1 rounded-[6px] text-[13px] transition-colors disabled:cursor-default', roomy ? 'h-9' : 'h-7', look === l ? 'bg-accent/18 text-accent' : 'text-fg-2 hover:bg-ink-4 hover:text-fg')}
+              >
+                {LOOK_LABELS[l].label}
+              </button>
+            </Tooltip>
+          ))}
+        </div>
+      </div>
+      {look === 'game' && !hasGame && <p className="px-1 text-[12px] leading-4 text-fg-3">This export has no game lighting, so it is drawn in the studio look. Re-export from Unity.</p>}
+    </div>
   );
 }
 

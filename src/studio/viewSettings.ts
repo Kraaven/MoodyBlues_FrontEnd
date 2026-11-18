@@ -1,3 +1,5 @@
+import { DEFAULT_LOOK, type Look } from '../viewer/core/look';
+
 /** How the view stays on a focused camera: through its lens, or chasing the player it belongs to. */
 export type CameraMode = 'firstPerson' | 'follow';
 export type FollowStyle = 'behind' | 'front';
@@ -7,7 +9,9 @@ export interface ViewSettings {
   grid: boolean;
   shadows: boolean;
   fov: number;
-  /** The lights the Unity scene exported. Off by default: the viewer's own lighting reads better and costs less. */
+  /** How the scene is lit and shaded: the game's own (`game`), or a neutral studio. A scene without game lighting data is always drawn as the studio. */
+  look: Look;
+  /** The lights the Unity scene exported. The game look needs them (they are its direct light); on in the studio look they are an extra. */
   sceneLights: boolean;
   /** A small frustum drawn at each camera the Unity scene exported. */
   cameraGizmos: boolean;
@@ -21,7 +25,8 @@ export const DEFAULT_VIEW_SETTINGS: ViewSettings = {
   grid: true,
   shadows: true,
   fov: 45,
-  sceneLights: false,
+  look: DEFAULT_LOOK,
+  sceneLights: true,
   cameraGizmos: true,
   followStyle: 'behind',
   firstPersonNear: null,

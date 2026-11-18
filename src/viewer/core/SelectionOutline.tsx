@@ -3,6 +3,7 @@ import { useThree } from '@react-three/fiber';
 import { EffectComposer, Outline, ToneMapping } from '@react-three/postprocessing';
 import { ToneMappingMode } from 'postprocessing';
 import type * as THREE from 'three';
+import type { ToneMapper } from './look';
 import { ACCENT_DIM, hex, PALETTE } from './palette';
 
 /**
@@ -13,9 +14,12 @@ import { ACCENT_DIM, hex, PALETTE } from './palette';
  * multisample. Trade-off: the composer's buffer replaces the canvas's own antialiasing, so while
  * something is selected the scene's own edges are not antialiased (the outline's are soft anyway);
  * 4x MSAA on the full-size buffers roughly doubled the cost of every frame. The tone mapping is the
- * same ACES Filmic at the renderer's exposure that the canvas applies without the composer.
+ * same one, at the renderer's exposure, that the canvas applies without the composer (`mapper`).
+ *
+ * Only the full tier mounts this; the simple tier (phones) never creates a composer and tints the
+ * selection instead (SelectionTint).
  */
-export function SelectionOutline({ object }: { object: THREE.Object3D | null }) {
+export function SelectionOutline({ object, mapper = 'neutral' }: { object: THREE.Object3D | null; mapper?: ToneMapper }) {
   const invalidate = useThree((s) => s.invalidate);
   const selection = useMemo(() => {
     const meshes: THREE.Object3D[] = [];
@@ -34,7 +38,7 @@ export function SelectionOutline({ object }: { object: THREE.Object3D | null }) 
   return (
     <EffectComposer multisampling={0} autoClear={false}>
       <Outline selection={selection} visibleEdgeColor={hex(PALETTE.accent)} hiddenEdgeColor={hex(ACCENT_DIM)} edgeStrength={4} blur xRay resolutionScale={0.5} />
-      <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+      <ToneMapping mode={mapper === 'aces' ? ToneMappingMode.ACES_FILMIC : ToneMappingMode.NEUTRAL} />
     </EffectComposer>
   );
 }

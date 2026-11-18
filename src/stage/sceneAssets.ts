@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { clone as cloneWithSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { buildBoundsTrees } from '../viewer/core/bvh';
 import { disposeObject3D } from '../viewer/core/gltf';
+import { MbSurface } from '../viewer/core/mbSurface';
+import { loadedMoodySceneOf, type LoadedMoodyScene } from '../viewer/core/sceneExtensionPlugin';
 import { flattenTransmission } from '../viewer/core/transmission';
 import { loadSceneGltf } from './sceneSource';
 import type { SceneRef } from './store';
@@ -14,8 +16,18 @@ import type { SceneRef } from './store';
  * consumer holds a lease while it uses the scene; a scene nobody holds is kept for a moment in case
  * the user comes back, and freed once more than MAX_IDLE are waiting.
  *
- * Consumers must not change the master graph (beyond display settings: shadows, lights). A replay takes `cloneScene(master)` and animates that.
+ * Consumers must not change the master graph (beyond display settings: shadows, lights, and the game look's materials, which `MbSurface` switches). A replay takes `cloneScene(master)` and animates that.
  */
+
+/**
+ * A scene that has the game look: the parsed `MOODYBLUES_scene` extension with its lightmaps, the
+ * materials converted for it, and the master graph they belong to.
+ */
+export interface GameScene {
+  moody: LoadedMoodyScene;
+  surface: MbSurface;
+  master: THREE.Object3D;
+}
 
 /** What the glTF file itself says, kept for the inspector. */
 interface SceneInfo {
@@ -30,6 +42,8 @@ interface Entry {
   info: SceneInfo | null;
   refs: number;
   root: THREE.Object3D | null;
+  /** The game look's data and materials, when the file has the `MOODYBLUES_scene` extension. */
+  game: GameScene | null;
   promise: Promise<THREE.Object3D>;
   controller: AbortController;
   usedAt: number;
@@ -51,6 +65,7 @@ function prune(): void {
   while (idle.length > MAX_IDLE) {
     const oldest = idle.shift()!;
     entries.delete(oldest.key);
+    oldest.game?.surface.dispose();
     disposeObject3D(oldest.root!);
   }
 }
@@ -70,6 +85,7 @@ export function acquireScene(
       info: null,
       refs: 0,
       root: null,
+      game: null,
       controller,
       usedAt: Date.now(),
       listeners: new Set(),
@@ -87,8 +103,11 @@ export function acquireScene(
     ).then(
       (gltf) => {
         // Display-only changes, made once on the master: replays clone it and share its geometry and materials.
-        buildBoundsTrees(gltf.scene);
         flattenTransmission(gltf.scene);
+        // Before the bounds trees: a lightmapped mesh may be given a geometry with moved UVs.
+        const moody = loadedMoodySceneOf(gltf);
+        if (moody) created.game = { moody, surface: MbSurface.create(gltf.scene, moody), master: gltf.scene };
+        buildBoundsTrees(gltf.scene);
         created.root = gltf.scene;
         created.info = {
           json: (gltf.parser.json ?? {}) as Record<string, unknown>,
@@ -140,6 +159,11 @@ export function acquireScene(
 /** A copy a replay can animate without touching the shared master. Geometry and materials are shared. */
 export function cloneScene(master: THREE.Object3D): THREE.Object3D {
   return cloneWithSkeleton(master);
+}
+
+/** The game-look data of a cached, loaded scene; null when the file has none or has not loaded. */
+export function gameSceneOf(url: string): GameScene | null {
+  return entries.get(url)?.game ?? null;
 }
 
 /** The glTF file's own description of a cached scene, or null if it has not loaded. */

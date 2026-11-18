@@ -71,9 +71,9 @@ describe('ReplayPlayer static nodes', () => {
   it('leaves unrecorded visibility alone and lets scene lights be switched', () => {
     const s = scene();
     const player = new ReplayPlayer(s.root, replay());
-    player.setSceneLights(false);
+    player.setSceneLights(false, 'studio');
     expect(s.lamp.visible).toBe(false);
-    player.setSceneLights(true);
+    player.setSceneLights(true, 'studio');
     expect(s.lamp.visible).toBe(true);
     player.dispose();
   });

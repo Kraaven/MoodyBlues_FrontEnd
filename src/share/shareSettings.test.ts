@@ -31,6 +31,7 @@ function custom(): ShareSettings {
   s.camera.followStyle = { value: 'front', locked: false };
   s.camera.firstPersonNear = { value: 0.2, locked: true };
   s.camera.fov = { value: 70, locked: true };
+  s.display.look = { value: 'studio', locked: true };
   s.display.grid = { value: false, locked: true };
   s.display.shadows = { value: false, locked: false };
   s.display.sceneLights = { value: true, locked: false };
@@ -51,7 +52,7 @@ describe('DEFAULT_SHARE_SETTINGS', () => {
     expect(d.camera.firstPersonNear.value).toBeNull();
     expect(d.playback).toEqual({ startTime: 0, speed: { value: 1, locked: false }, seeking: { locked: false } });
     expect(d.interaction.selectObjects).toBe(true);
-    for (const key of ['cameraTarget', 'cameraMode', 'followStyle', 'firstPersonNear', 'fov', 'grid', 'shadows', 'sceneLights', 'cameraGizmos', 'speed', 'seeking'] as const) {
+    for (const key of ['cameraTarget', 'cameraMode', 'followStyle', 'firstPersonNear', 'fov', 'look', 'grid', 'shadows', 'sceneLights', 'cameraGizmos', 'speed', 'seeking'] as const) {
       expect(isLocked(d, key)).toBe(false);
     }
   });
@@ -140,8 +141,18 @@ describe('parseShareSettings', () => {
     expect(parsed.panels.logs).toEqual({ available: false, openAtStart: false });
   });
 
+  it('reads the look defensively and defaults to game', () => {
+    const look = (value: unknown) => parseShareSettings({ display: { look: { value } } }).display.look.value;
+    expect(look('studio')).toBe('studio');
+    expect(look('game')).toBe('game');
+    expect(look('analysis')).toBe('game');
+    expect(look(3)).toBe('game');
+    expect(parseShareSettings({}).display.look).toEqual({ value: 'game', locked: false });
+    expect(parseShareSettings({ display: { look: { value: 'studio', locked: true } } }).display.look).toEqual({ value: 'studio', locked: true });
+  });
+
   it('does not throw on hostile input', () => {
-    const hostile = [{ camera: null }, { camera: [] }, { panels: 3 }, { panels: { logs: null } }, { playback: { seeking: 'yes' } }, { display: { grid: { value: 'on', locked: 'yes' } } }];
+    const hostile = [{ display: { look: [] } }, { camera: null }, { camera: [] }, { panels: 3 }, { panels: { logs: null } }, { playback: { seeking: 'yes' } }, { display: { grid: { value: 'on', locked: 'yes' } } }];
     for (const raw of hostile) expect(() => parseShareSettings(raw)).not.toThrow();
     expect(parseShareSettings({ display: { grid: { value: 'on', locked: 'yes' } } }).display.grid).toEqual({ value: true, locked: false });
   });
@@ -229,6 +240,7 @@ describe('what a visitor may do', () => {
     expect(isLocked(s, 'followStyle')).toBe(false);
     expect(isLocked(s, 'firstPersonNear')).toBe(true);
     expect(isLocked(s, 'fov')).toBe(true);
+    expect(isLocked(s, 'look')).toBe(true);
     expect(isLocked(s, 'grid')).toBe(true);
     expect(isLocked(s, 'shadows')).toBe(false);
     expect(isLocked(s, 'sceneLights')).toBe(false);
@@ -247,7 +259,7 @@ describe('what a visitor may do', () => {
   });
 
   it('turns the settings into the studio\'s starting view settings', () => {
-    expect(viewSettingsOf(custom())).toEqual({ grid: false, shadows: false, fov: 70, sceneLights: true, cameraGizmos: false, followStyle: 'front', firstPersonNear: 0.2 });
+    expect(viewSettingsOf(custom())).toEqual({ look: 'studio', grid: false, shadows: false, fov: 70, sceneLights: true, cameraGizmos: false, followStyle: 'front', firstPersonNear: 0.2 });
   });
 });
 

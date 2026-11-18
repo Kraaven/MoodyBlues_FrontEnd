@@ -5,6 +5,7 @@ import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { disposeBoundsTree } from './bvh';
+import { MoodyBluesScenePlugin } from './sceneExtensionPlugin';
 
 const DRACO_DECODER_PATH = '/decoders/draco/';
 const BASIS_TRANSCODER_PATH = '/decoders/basis/';
@@ -25,6 +26,8 @@ function loaderFor(renderer: THREE.WebGLRenderer): GLTFLoader {
     loader.setDRACOLoader(new DRACOLoader().setDecoderPath(DRACO_DECODER_PATH));
     loader.setKTX2Loader(new KTX2Loader().setTranscoderPath(BASIS_TRANSCODER_PATH).detectSupport(renderer));
     loader.setMeshoptDecoder(MeshoptDecoder);
+    // Reads the root MOODYBLUES_scene extension (the game's lighting) and its lightmap textures; absent in other files.
+    loader.register((parser) => new MoodyBluesScenePlugin(parser));
     loaders.set(renderer, loader);
   }
   return loader;

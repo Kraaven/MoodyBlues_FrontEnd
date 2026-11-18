@@ -3,13 +3,13 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerformanceMonitor } from '@react-three/drei';
 import * as THREE from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import { Atmosphere } from '../viewer/core/Atmosphere';
-import { StudioEnvironment } from '../viewer/core/StudioEnvironment';
 import { useToast } from '../ui/Toast';
 import { cn } from '../ui/cn';
 import { CameraRig } from './CameraRig';
 import { DemoScene } from './DemoScene';
+import { LookRig } from './LookRig';
 import { SceneContent } from './SceneContent';
+import { STUDIO_EXPOSURE } from '../viewer/core/look';
 import { DEFAULT_CAMERA, useStage } from './store';
 import { reducedMotion, webglSupported } from './support';
 
@@ -191,7 +191,6 @@ export default function StageHost() {
   const content = useStage((s) => s.view.content);
   const dim = useStage((s) => s.pose.dim);
   const debugOn = useStage((s) => s.debugOpen && s.view.content === 'studio');
-  const sceneRadius = useStage((s) => s.sceneRadius);
   const active = content !== 'none';
   const notify = useToast();
   const supported = useRef(webglSupported());
@@ -222,8 +221,9 @@ export default function StageHost() {
             camera={{ position: DEFAULT_CAMERA.position, fov: DEFAULT_CAMERA.fov, near: 0.1, far: 2000 }}
             gl={{ antialias: true, alpha: false, powerPreference: 'high-performance', preserveDrawingBuffer: false }}
             onCreated={({ gl, invalidate }) => {
-              gl.toneMapping = THREE.ACESFilmicToneMapping;
-              gl.toneMappingExposure = 1.05;
+              // Khronos PBR Neutral keeps base colours; LookRig sets the mapper and exposure for the look in force.
+              gl.toneMapping = THREE.NeutralToneMapping;
+              gl.toneMappingExposure = STUDIO_EXPOSURE;
               const element = gl.domElement;
               element.addEventListener('webglcontextlost', (event) => {
                 event.preventDefault();
@@ -238,8 +238,7 @@ export default function StageHost() {
           >
             <Wake active={active} />
             <AdaptiveQuality onDpr={setDpr} />
-            <Atmosphere sceneRadius={sceneRadius} />
-            <StudioEnvironment />
+            <LookRig />
             <CameraRig />
             <StageControls />
             <Content />

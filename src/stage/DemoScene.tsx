@@ -6,7 +6,8 @@ import type { Line2 } from 'three-stdlib';
 import { Ground } from '../viewer/core/Ground';
 import type { GroundPlan } from '../viewer/core/floor';
 import { PALETTE } from '../viewer/core/palette';
-import { SceneLights } from './SceneContent';
+import { useQualityTier } from './lookState';
+import { StudioLights } from './SceneLights';
 import { reducedMotion } from './support';
 
 /**
@@ -171,9 +172,11 @@ export function DemoScene() {
     place(demoClock.time);
   });
 
+  const tier = useQualityTier();
+
   return (
     <>
-      <SceneLights bounds={BOUNDS} />
+      <StudioLights bounds={BOUNDS} shadows tier={tier} />
       <Boxes boxes={CONCRETE} material={materials.concrete} />
       <Boxes boxes={DARK} material={materials.dark} />
       <Boxes boxes={PANELS} material={materials.panel} />

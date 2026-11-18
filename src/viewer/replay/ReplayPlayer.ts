@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { lightBakeOf, lightEnabled } from '../core/lightRules';
+import type { Look } from '../core/look';
 import { ReplayObjectKind, type Replay, type ReplayObject, type ReplayTrack } from './replayFile';
 import { quaternionTrack, vectorTrack, visibilityTrack } from './replayTracks';
 
@@ -58,6 +60,7 @@ export class ReplayPlayer {
   private readonly lights: THREE.Object3D[] = [];
   private readonly drivenLights: THREE.Object3D[] = [];
   private showSceneLights = true;
+  private lightLook: Look = 'studio';
 
   constructor(gltfScene: THREE.Object3D, replay: Replay) {
     this.root = gltfScene;
@@ -172,9 +175,10 @@ export class ReplayPlayer {
    * Show or hide the scene's own lights. A light the replay switches on and off is put back by the
    * mixer on every frame, so those are held off after it has run.
    */
-  setSceneLights(on: boolean): void {
+  setSceneLights(on: boolean, look: Look): void {
     this.showSceneLights = on;
-    for (const light of this.lights) light.visible = on && light.userData?.isHidden !== true;
+    this.lightLook = look;
+    for (const light of this.lights) light.visible = lightEnabled(light, on, look);
     if (this.drivenLights.length > 0) this.apply(this.currentTime);
   }
 
@@ -240,7 +244,8 @@ export class ReplayPlayer {
     this.updateSpawns(t);
     this.updateParents(t);
     this.mixer.setTime(t);
-    if (!this.showSceneLights) for (const light of this.drivenLights) light.visible = false;
+    // The mixer turned them back on; the scene-lights setting and (game look) a baked light keep them off.
+    for (const light of this.drivenLights) if (!this.showSceneLights || (this.lightLook === 'game' && lightBakeOf(light) === 'baked')) light.visible = false;
   }
 
   private updateSpawns(t: number): void {

@@ -1,4 +1,5 @@
 import { SPEEDS } from '../studio/playback';
+import { readLook, type Look } from '../viewer/core/look';
 import type { CameraInfo } from '../studio/cameras';
 import { DEFAULT_VIEW_SETTINGS, FOV_RANGE, NEAR_RANGE, type CameraMode, type FollowStyle, type ViewSettings } from '../studio/viewSettings';
 
@@ -37,6 +38,8 @@ export interface ShareSettings {
     fov: Lockable<number>;
   };
   display: {
+    /** How the scene is lit: the game's own look or the neutral studio. */
+    look: Lockable<Look>;
     grid: Lockable<boolean>;
     shadows: Lockable<boolean>;
     sceneLights: Lockable<boolean>;
@@ -61,6 +64,7 @@ export type LockKey =
   | 'followStyle'
   | 'firstPersonNear'
   | 'fov'
+  | 'look'
   | 'grid'
   | 'shadows'
   | 'sceneLights'
@@ -87,6 +91,7 @@ export const DEFAULT_SHARE_SETTINGS: ShareSettings = {
     fov: unlocked(DEFAULT_VIEW_SETTINGS.fov),
   },
   display: {
+    look: unlocked(DEFAULT_VIEW_SETTINGS.look),
     grid: unlocked(DEFAULT_VIEW_SETTINGS.grid),
     shadows: unlocked(DEFAULT_VIEW_SETTINGS.shadows),
     sceneLights: unlocked(DEFAULT_VIEW_SETTINGS.sceneLights),
@@ -185,6 +190,7 @@ export function parseShareSettings(raw: unknown): ShareSettings {
       fov: lockable(camera.fov, d.camera.fov, readFov),
     },
     display: {
+      look: lockable(display.look, d.display.look, readLook),
       grid: lockable(display.grid, d.display.grid, bool),
       shadows: lockable(display.shadows, d.display.shadows, bool),
       sceneLights: lockable(display.sceneLights, d.display.sceneLights, bool),
@@ -249,6 +255,7 @@ export function viewSettingsOf(share: ShareSettings): ViewSettings {
     grid: share.display.grid.value,
     shadows: share.display.shadows.value,
     fov: share.camera.fov.value,
+    look: share.display.look.value,
     sceneLights: share.display.sceneLights.value,
     cameraGizmos: share.display.cameraGizmos.value,
     followStyle: share.camera.followStyle.value,
@@ -263,7 +270,7 @@ export function shareSummary(share: ShareSettings): string {
   const target = share.camera.target.value;
   const camera = target.kind === 'main' ? 'Main camera' : target.kind === 'free' ? 'Free camera' : target.name;
   const { camera: c, display: d, playback: p } = share;
-  const locks = [c.target, c.mode, c.followStyle, c.firstPersonNear, c.fov, d.grid, d.shadows, d.sceneLights, d.cameraGizmos, p.speed, p.seeking].filter((l) => l.locked).length;
+  const locks = [c.target, c.mode, c.followStyle, c.firstPersonNear, c.fov, d.look, d.grid, d.shadows, d.sceneLights, d.cameraGizmos, p.speed, p.seeking].filter((l) => l.locked).length;
   return locks === 0 ? `${camera} · nothing locked` : `${camera} · ${locks} locked`;
 }
 
@@ -281,6 +288,7 @@ export function isLocked(share: ShareSettings | null, key: LockKey): boolean {
       return share.camera.firstPersonNear.locked;
     case 'fov':
       return share.camera.fov.locked;
+    case 'look':
     case 'grid':
     case 'shadows':
     case 'sceneLights':

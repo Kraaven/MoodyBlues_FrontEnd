@@ -30,7 +30,8 @@ export default function DebugEffects() {
       scene.traverse((node) => {
         const mesh = node as THREE.Mesh;
         if (!mesh.isMesh || mesh.userData.__debug) return;
-        for (const m of originalMaterials(mesh)) {
+        // The file's materials, and what is drawn now (a lightmapped mesh wears a variant of its own).
+        for (const m of [...originalMaterials(mesh), ...(Array.isArray(mesh.material) ? mesh.material : [mesh.material])]) {
           const material = m as THREE.Material & { wireframe?: boolean };
           if (typeof material.wireframe === 'boolean' && !touched.has(material as never)) {
             touched.add(material as never);

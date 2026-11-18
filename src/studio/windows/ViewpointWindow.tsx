@@ -6,7 +6,7 @@ import { FOV_RANGE, NEAR_RANGE } from '../viewSettings';
 import { useLocked, useStudio } from '../studioStore';
 import { windowActions } from './windowStore';
 import { LockBadge, SectionTitle, WindowBody, WindowFooter } from './parts';
-import { CameraTargets, DisplayToggles } from './viewpointControls';
+import { CameraTargets, DisplayToggles, LookPicker } from './viewpointControls';
 
 /**
  * Where the view looks from, and how the scene is drawn. A camera the Unity scene exported can be
@@ -71,6 +71,7 @@ export function ViewpointWindow({ scope, playback }: { scope: string; playback: 
         </div>
 
         <SectionTitle className="mb-1.5 mt-3">Display</SectionTitle>
+        <LookPicker />
         <DisplayToggles />
         <div className="mt-1 flex h-8 items-center gap-3 px-1">
           <label htmlFor="fov" className="shrink-0 text-[13px] text-fg-2">

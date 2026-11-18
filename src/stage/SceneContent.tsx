@@ -1,13 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useEffect, useState } from 'react';
+import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { FRAME_DIRECTION, framePose, visibleBox } from '../viewer/core/gltf';
 import { planGround, sampleFloor, type GroundPlan } from '../viewer/core/floor';
 import { Ground } from '../viewer/core/Ground';
+import { lightEnabled } from '../viewer/core/lightRules';
+import type { Look } from '../viewer/core/look';
 import { warmUp } from '../viewer/core/warmup';
 import { inspectScene } from '../inspector/inspection';
 import { useStudio } from '../studio/studioStore';
-import { acquireScene, isAbortError } from './sceneAssets';
+import { acquireScene, gameSceneOf, isAbortError } from './sceneAssets';
+import { LookLights } from './SceneLights';
+import { applyGameSun, currentQualityTier, effectiveLook, shadowsOn, useEffectiveLook, useShadowsOn } from './lookState';
 import { useRedraw } from './redraw';
 import { captureSnapshot } from './snapshotCapture';
 import { needsFraming, regionFill, useStage, type SceneRef } from './store';
@@ -44,117 +48,30 @@ export function applyShadows(root: THREE.Object3D, on: boolean): void {
 }
 
 /**
- * Show or hide the lights the Unity scene exported. Off by default: the viewer lights the scene
- * itself, and every visible light is paid for by every material. An invisible light is left out of
- * the shaders altogether, yet stays in the graph for the inspector. Lights the scene marks inactive
- * stay off.
+ * Show or hide the lights the Unity scene exported. A visible light is paid for by every material,
+ * so an invisible one is left out of the shaders altogether, yet stays in the graph for the inspector.
+ * Lights the scene marks inactive stay off, and in the game look so do baked lights (their light is in
+ * the lightmaps; see `lightEnabled`).
  */
-export function applySceneLights(root: THREE.Object3D, on: boolean): void {
+export function applySceneLights(root: THREE.Object3D, on: boolean, look: Look): void {
   root.traverse((node) => {
-    if ((node as THREE.Light).isLight) node.visible = on && node.userData?.isHidden !== true;
+    if ((node as THREE.Light).isLight) node.visible = lightEnabled(node, on, look);
   });
 }
-
-/** What a scene needs before its first frame: the display settings that change which shaders it uses. */
-export function prepareScene(root: THREE.Object3D, shadows: boolean): void {
-  applyShadows(root, shadows);
-  applySceneLights(root, useStudio.getState().settings.sceneLights);
-}
-
-const LIGHT_DIRECTION = new THREE.Vector3(-0.9, 1.6, 0.7).normalize();
-const SHADOW_MAP_SIZE = 2048;
-/** Zoom steps of the shadow region: it changes in steps, so the map is not redrawn on every wheel notch. */
-const SHADOW_STEP = 1.25;
-const PLACEHOLDER_BOUNDS = { center: new THREE.Vector3(), radius: 10 };
-
-const lightAxes = { x: new THREE.Vector3(), y: new THREE.Vector3(), z: new THREE.Vector3() };
-const lightBasis = new THREE.Matrix4();
-const snapped = new THREE.Vector3();
 
 /**
- * The lights a scene is seen under (the environment map comes from the host): a warm key from the
- * front left, high, casting soft shadows, and a cool sky fill.
- *
- * The shadow map covers the part of the scene being looked at, not all of it: centred on the orbit
- * target, as wide as the view is deep, in steps, and snapped to whole shadow texels so the edges do
- * not shimmer while the camera moves. The map is drawn again only when that region changes or
- * something that casts shadows does (see `useRedraw`). The lights exist before the scene does
- * (`bounds` null), so the scene's shaders are built against them.
+ * What a scene needs before its first frame: the display settings that change which shaders it uses
+ * (shadows, which lights are on, the game look's materials and the sun's shadow). `shadows` is the
+ * user's Shadows setting; the tier and look can turn realtime shadows off.
  */
-export function SceneLights({ bounds, shadows = true }: { bounds: Pick<SceneBounds, 'center' | 'radius'> | null; shadows?: boolean }) {
-  const camera = useThree((s) => s.camera);
-  const controls = useThree((s) => s.controls) as { target: THREE.Vector3 } | null;
-  const gl = useThree((s) => s.gl);
-  const { shadowsChanged } = useRedraw();
-  const light = useMemo(() => new THREE.DirectionalLight('#fff3e2', 2.1), []);
-  const fitted = useRef('');
-  const { center, radius } = bounds ?? PLACEHOLDER_BOUNDS;
-
-  useEffect(() => {
-    light.castShadow = shadows;
-    light.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
-    light.shadow.bias = -0.0004;
-    light.shadow.radius = 4;
-    fitted.current = '';
-    shadowsChanged();
-  }, [light, center, radius, shadows, shadowsChanged]);
-
-  useFrame(() => {
-    if (!shadows) return;
-    // Without orbit controls (a preview) the whole scene is the region.
-    const target = controls?.target ?? center;
-    const widest = radius * 1.2;
-    const smallest = Math.max(radius * 0.05, 1);
-    let half = widest;
-    if (controls) {
-      const wanted = Math.max(camera.position.distanceTo(target) * 0.9, smallest);
-      half = Math.min(widest, smallest * SHADOW_STEP ** Math.ceil(Math.log(wanted / smallest) / Math.log(SHADOW_STEP)));
-    }
-    const whole = half >= widest;
-    const focus = whole ? center : target;
-
-    // Snap the focus to the shadow map's texel grid, on the axes the light looks across.
-    const texel = (2 * half) / SHADOW_MAP_SIZE;
-    lightBasis.lookAt(LIGHT_DIRECTION, ORIGIN, UP).extractBasis(lightAxes.x, lightAxes.y, lightAxes.z);
-    const x = Math.round(focus.dot(lightAxes.x) / texel) * texel - focus.dot(lightAxes.x);
-    const y = Math.round(focus.dot(lightAxes.y) / texel) * texel - focus.dot(lightAxes.y);
-    snapped.copy(focus).addScaledVector(lightAxes.x, x).addScaledVector(lightAxes.y, y);
-
-    const key = `${half.toFixed(4)}|${snapped.x.toFixed(4)}|${snapped.y.toFixed(4)}|${snapped.z.toFixed(4)}`;
-    if (key === fitted.current) return;
-    fitted.current = key;
-
-    const distance = radius * 2.4;
-    light.position.copy(snapped).addScaledVector(LIGHT_DIRECTION, distance);
-    light.target.position.copy(snapped);
-    light.target.updateMatrixWorld();
-    const cam = light.shadow.camera;
-    cam.left = -half;
-    cam.right = half;
-    cam.top = half;
-    cam.bottom = -half;
-    // Deep enough to hold the whole scene along the light's direction, wherever the focus is in it.
-    cam.near = Math.max(0.1, distance - radius * 2);
-    cam.far = distance + radius * 2;
-    cam.updateProjectionMatrix();
-    light.shadow.normalBias = texel * 1.5;
-    // This frame is being drawn already; it only has to draw the shadow map too.
-    gl.shadowMap.needsUpdate = true;
-  });
-
-  useEffect(() => () => light.dispose(), [light]);
-
-  return (
-    <>
-      <hemisphereLight args={['#dfe6f0', '#3a3530', 0.55]} />
-      <primitive object={light} />
-      <primitive object={light.target} />
-    </>
-  );
+export function prepareScene(root: THREE.Object3D, shadows: boolean): void {
+  const look = effectiveLook();
+  const on = shadowsOn(shadows);
+  applyShadows(root, on);
+  applySceneLights(root, useStudio.getState().settings.sceneLights, look);
+  const game = useStage.getState().game;
+  if (game && look === 'game') applyGameSun(root, game, on, look, currentQualityTier());
 }
-
-const ORIGIN = new THREE.Vector3();
-const UP = new THREE.Vector3(0, 1, 0);
 
 /** Options for {@link useStagedScene}. */
 interface StagedSceneOptions {
@@ -165,6 +82,17 @@ interface StagedSceneOptions {
   onReady?: (root: THREE.Object3D, master: THREE.Object3D) => (() => void) | void;
   /** Changing this rebuilds what was picked (the replay a copy is made for) without downloading the scene again. */
   variant?: unknown;
+}
+
+/** Resolves after the next frame, or 100 ms (a hidden tab draws none), whichever is first. */
+function nextFrame(): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(resolve, 100);
+    requestAnimationFrame(() => {
+      window.clearTimeout(timer);
+      resolve();
+    });
+  });
 }
 
 const identity = (master: THREE.Object3D) => master;
@@ -231,6 +159,7 @@ export function useStagedScene(
     return () => {
       alive = false;
       lease?.release();
+      useStage.getState().setGame(null);
       setLoaded(null);
       useStage.getState().setLoading('scene', null);
     };
@@ -248,6 +177,15 @@ export function useStagedScene(
     const perspective = camera as THREE.PerspectiveCamera;
 
     const show = async () => {
+      // The game look: shown through the scene's materials and backdrop. Set before the shaders are built,
+      // and given a frame so the backdrop (fog, environment) exists when they are.
+      const game = gameSceneOf(url);
+      useStage.getState().setGame(game);
+      if (game) {
+        game.surface.setLook(effectiveLook());
+        await nextFrame();
+        if (!alive) return;
+      }
       const root = pick(masterRoot);
       prepare?.(root);
       useStage.getState().setLoading('scene', { label: 'Preparing the scene', received: 0, total: null });
@@ -313,14 +251,17 @@ export function SceneContent() {
   const scene = useThree((s) => s.scene);
   const ref = useStage((s) => s.view.scene ?? null);
   const sceneLights = useStudio((s) => s.settings.sceneLights);
-  const { redraw, shadowsChanged } = useRedraw();
+  const look = useEffectiveLook();
+  const shadows = useShadowsOn(true);
+  const { shadowsChanged } = useRedraw();
   const { root, bounds } = useStagedScene(ref, { prepare: prepareForPreview });
 
   useEffect(() => {
     if (!root) return;
-    applySceneLights(root, sceneLights);
-    redraw();
-  }, [root, sceneLights, redraw]);
+    applySceneLights(root, sceneLights, look);
+    applyShadows(root, shadows);
+    shadowsChanged();
+  }, [root, sceneLights, look, shadows, shadowsChanged]);
 
   useEffect(() => {
     if (!root || !ref) return;
@@ -335,7 +276,7 @@ export function SceneContent() {
 
   return (
     <>
-      <SceneLights bounds={bounds} />
+      <LookLights root={root} bounds={bounds} shadows={shadows} />
       {bounds && <Ground plan={bounds.ground} fadeDistance={Math.max(40, bounds.radius * 5)} cellSize={gridCell(bounds.radius)} />}
     </>
   );

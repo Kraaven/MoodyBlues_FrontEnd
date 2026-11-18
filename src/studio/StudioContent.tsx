@@ -3,11 +3,15 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { FRAME_DIRECTION, framePose } from '../viewer/core/gltf';
 import { Ground } from '../viewer/core/Ground';
+import { toneMappingFor } from '../viewer/core/look';
 import { SelectionOutline } from '../viewer/core/SelectionOutline';
+import { SelectionTint } from '../viewer/core/SelectionTint';
 import { ReplayPlayer } from '../viewer/replay/ReplayPlayer';
 import { useReplayBinding } from './binding';
 import { cloneScene } from '../stage/sceneAssets';
-import { applySceneLights, applyShadows, gridCell, prepareScene, SceneLights, useStagedScene } from '../stage/SceneContent';
+import { applySceneLights, applyShadows, gridCell, prepareScene, useStagedScene } from '../stage/SceneContent';
+import { LookLights } from '../stage/SceneLights';
+import { effectiveLook, useEffectiveLook, useQualityTier, useShadowsOn } from '../stage/lookState';
 import { reducedMotion } from '../stage/support';
 import { useRedraw } from '../stage/redraw';
 import { captureSnapshot } from '../stage/snapshotCapture';
@@ -53,6 +57,10 @@ export default function StudioContent() {
   const introRequest = useStudio((s) => s.introRequest);
   const [player, setPlayer] = useState<ReplayPlayer | null>(null);
   const { redraw, shadowsChanged } = useRedraw();
+  const look = useEffectiveLook();
+  const tier = useQualityTier();
+  const shadows = useShadowsOn(settings.shadows);
+  const mapper = toneMappingFor(look, useStage((s) => s.game?.moody.scene.post ?? null)).mapper;
 
   const replaying = Boolean(replay && playback);
   const pick = useCallback((master: THREE.Object3D) => (replaying ? cloneScene(master) : master), [replaying]);
@@ -60,7 +68,7 @@ export default function StudioContent() {
     (root: THREE.Object3D, master: THREE.Object3D) => {
       if (replay && playback) {
         const created = new ReplayPlayer(root, replay);
-        created.setSceneLights(useStudio.getState().settings.sceneLights);
+        created.setSceneLights(useStudio.getState().settings.sceneLights, effectiveLook());
         playback.attach(created);
         setPlayer(created);
         useStudio.getState().attach({ root, master, renderer: gl, player: created });
@@ -107,16 +115,16 @@ export default function StudioContent() {
   // Display settings. None of them change the scene's data.
   useEffect(() => {
     if (!root) return;
-    applyShadows(root, settings.shadows);
+    applyShadows(root, shadows);
     shadowsChanged();
-  }, [root, settings.shadows, shadowsChanged]);
+  }, [root, shadows, shadowsChanged]);
 
   useEffect(() => {
     if (!root) return;
-    if (player) player.setSceneLights(settings.sceneLights);
-    else applySceneLights(root, settings.sceneLights);
-    redraw();
-  }, [root, player, settings.sceneLights, redraw]);
+    if (player) player.setSceneLights(settings.sceneLights, look);
+    else applySceneLights(root, settings.sceneLights, look);
+    shadowsChanged();
+  }, [root, player, settings.sceneLights, look, shadowsChanged]);
 
   useEffect(() => {
     camera.fov = settings.fov;
@@ -252,13 +260,13 @@ export default function StudioContent() {
 
   return (
     <>
-      <SceneLights bounds={bounds} shadows={settings.shadows} />
+      <LookLights root={root} bounds={bounds} shadows={shadows} />
       {bounds && (
         <>
-          <Ground plan={bounds.ground} fadeDistance={Math.max(40, bounds.radius * 5)} cellSize={gridCell(bounds.radius)} grid={settings.grid} shadows={settings.shadows} />
+          <Ground plan={bounds.ground} fadeDistance={Math.max(40, bounds.radius * 5)} cellSize={gridCell(bounds.radius)} grid={settings.grid} shadows={shadows} />
           {settings.cameraGizmos && cameras.length > 0 && <CameraGizmos cameras={cameras} focusId={focusCameraId} hiddenId={cameraMode === 'firstPerson' ? focusCameraId : null} depth={gizmoSize} />}
-          {/* The outline pass renders the scene through a buffer every frame, so it exists only while something is selected. */}
-          {selected && <SelectionOutline object={selected} />}
+          {/* The outline pass renders the scene through a buffer every frame, so it exists only while something is selected, and never on the simple tier, which tints the selection instead. */}
+          {selected && (tier === 'simple' ? <SelectionTint object={selected} /> : <SelectionOutline object={selected} mapper={mapper} />)}
         </>
       )}
     </>

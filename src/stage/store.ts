@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Pose } from './transition';
+import type { GameScene } from './sceneAssets';
 
 /** What the Stage is drawing. */
 type StageContent = 'none' | 'demo' | 'scene' | 'studio';
@@ -134,6 +135,9 @@ interface StageState {
   framedKey: string | null;
   /** The share of the canvas the scene was framed for (see regionFill). A big change re-frames. */
   framedFill: number;
+  /** The game look's data of the scene on screen, null when it has none (or none is shown). */
+  game: GameScene | null;
+  setGame: (game: GameScene | null) => void;
   /** Radius of the scene on screen (0 with none): the camera's far plane keeps all of it in view. */
   sceneRadius: number;
   setSceneRadius: (radius: number) => void;
@@ -205,6 +209,8 @@ export const useStage = create<StageState>((set, get) => ({
   setSummary: (summary) => set({ summaries: { ...get().summaries, [summary.key]: summary } }),
   framedKey: null,
   framedFill: 1,
+  game: null,
+  setGame: (game) => set({ game }),
   sceneRadius: 0,
   setSceneRadius: (sceneRadius) => set({ sceneRadius }),
   surface: null,

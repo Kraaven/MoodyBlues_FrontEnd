@@ -10,7 +10,7 @@ import { setSpeedByUser } from './userActions';
 import { buildLogRows } from './logRows';
 import { LogList } from './windows/LogsWindow';
 import { LockBadge, SectionTitle } from './windows/parts';
-import { CameraTargets, DisplayToggles } from './windows/viewpointControls';
+import { CameraTargets, DisplayToggles, LookPicker } from './windows/viewpointControls';
 
 /** How far the sheet is dragged down before letting go closes it. */
 const CLOSE_DRAG = 80;
@@ -88,6 +88,7 @@ export function PhoneSettings({
             <SpeedPicker playback={playback} />
 
             <SectionTitle className="mb-1.5 mt-4">Display</SectionTitle>
+            <LookPicker roomy />
             <DisplayToggles roomy />
 
             {logsAvailable && <PhoneLogs playback={playback} replay={replay} />}

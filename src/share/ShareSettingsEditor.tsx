@@ -27,7 +27,7 @@ const PANEL_TITLES: Record<PanelId, string> = {
   raw: 'Raw data',
 };
 
-const DISPLAY: { key: keyof ShareSettings['display']; label: string }[] = [
+const DISPLAY: { key: Exclude<keyof ShareSettings['display'], 'look'>; label: string }[] = [
   { key: 'grid', label: 'Grid' },
   { key: 'shadows', label: 'Shadows' },
   { key: 'sceneLights', label: 'Scene lights' },
@@ -128,6 +128,17 @@ export function ShareSettingsEditor({ value, onChange, cameras, template = false
       </Section>
 
       <Section title="Display">
+        <Row label="Look" hint="Game uses the scene's own sky, light and fog when the export has them." lock={lock(display.look, (l) => edit((d) => (d.display.look.locked = l)))}>
+          <Segmented
+            label="Look"
+            value={display.look.value}
+            options={[
+              { value: 'game', label: 'Game' },
+              { value: 'studio', label: 'Studio' },
+            ]}
+            onChange={(v) => edit((d) => (d.display.look.value = v))}
+          />
+        </Row>
         {DISPLAY.map(({ key, label }) => (
           <Row key={key} label={label} lock={lock(display[key], (l) => edit((d) => (d.display[key].locked = l)))}>
             <Toggle label={label} checked={display[key].value} onChange={(v) => edit((d) => (d.display[key].value = v))} />

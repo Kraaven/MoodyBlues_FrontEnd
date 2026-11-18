@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type * as THREE from 'three';
 import type { ReplayPlayer } from '../viewer/replay/ReplayPlayer';
 import { canSelect, isLocked, viewSettingsOf, type LockKey, type ShareSettings } from '../share/shareSettings';
+import { readLook } from '../viewer/core/look';
 import { DEFAULT_VIEW_SETTINGS, type CameraMode, type ViewSettings } from './viewSettings';
 
 /**
@@ -25,7 +26,7 @@ function readSettings(): ViewSettings {
     // Only the keys that still exist: a stored `wireframe` or `axes` from an older version is dropped.
     const stored = JSON.parse(raw) as Record<string, unknown>;
     const known = Object.fromEntries(Object.entries(stored).filter(([k]) => k in DEFAULT_VIEW_SETTINGS));
-    return { ...DEFAULT_VIEW_SETTINGS, ...known };
+    return { ...DEFAULT_VIEW_SETTINGS, ...known, look: readLook(known.look) };
   } catch {
     return DEFAULT_VIEW_SETTINGS;
   }

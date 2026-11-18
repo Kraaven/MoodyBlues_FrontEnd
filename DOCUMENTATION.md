@@ -116,6 +116,63 @@ it) and is never unmounted. A view directs it with `useStageView(view)`, where a
 - Without WebGL, or after a lost context, the app shows a gradient and `StageNotice` in the
   studio; lists and panels keep working. `?stage=off` forces this, `?motion=reduce` forces reduced
   motion.
+- **Look and quality tier** (`stage/lookState.ts`, `stage/LookRig.tsx`, `viewer/core/look.ts`). Two
+  independent choices decide how the canvas draws a scene.
+  - *Look*: `game` (the default) or `studio` (the type is open for a later `analysis`). The owner's
+    choice is a view setting (`moodyblues.view.v1`, Viewpoint window and phone Settings sheet); on a
+    share link it is `display.look` and can be locked. **Studio** is the neutral viewer: environment
+    panels, one key light with shadows, the charcoal gradient and fog that follows the camera.
+    **Game** draws the scene the way Unity did, from the GLB's `MOODYBLUES_scene` extension (below). A
+    GLB without the extension has nothing to draw the game look from, so it falls back to Studio
+    (`useEffectiveLook`), and the Viewpoint window says so. `LookRig` is the one place that applies the
+    look: it mounts the Studio backdrop (`Atmosphere`, `StudioEnvironment`) or the game backdrop
+    (`GameBackdrop`), sets the renderer's tone mapping and exposure, and switches the scene's materials.
+    Changing look reloads nothing.
+  - *Tone mapping*: **Khronos PBR Neutral** everywhere (it keeps base colours; ACES shifts hues),
+    except a game scene whose own post-processing says `aces`. Exposure: Studio 1.3 (about as bright as
+    the ACES 1.05 it replaced); Game `2^postExposure`. The selection outline's composer uses the same
+    mapper.
+  - *Tier*: `simple` or `full`. Simple is `usePhoneLayout()` (a coarse-pointer phone); `?quality=simple`
+    or `?quality=full` in the address forces either. Simple never mounts a post-processing composer
+    (the selection is an emissive tint on the selected meshes, `SelectionTint`, restored on deselect),
+    uses a 1024 px shadow map (Full 2048), draws no realtime shadows in a lightmapped game scene (the
+    lightmaps hold them), and builds the sky cube map at 256 px (Full 512).
+- **The game look** (`viewer/core/sceneExtension*.ts`, `mbSurface.ts`, `mbShader.ts`, `sky.ts`,
+  `lightmapUv.ts`, `lightRules.ts`). The GLB's root extension `MOODYBLUES_scene` (never required)
+  carries the Unity scene's ambient cube, fog, sky, sun, mixed-lighting mode, post-processing and
+  lightmaps; each node may carry `extras.lightmap` and `extras.lightBake`. A `GLTFLoader` plugin
+  (`MoodyBluesScenePlugin`, registered in `gltf.ts`) parses it defensively (`parseSceneExtension` never
+  throws; a bad member takes a default) and resolves the lightmap textures through the parser (KTX2
+  after optimization; linear, unflipped, UV channel 1). The result rides on `gltf.userData` through the
+  scene cache (`GameScene` in `sceneAssets.ts`: the data, the `MbSurface` and the master graph; the
+  stage store's `game` holds the one on screen).
+  - *Materials* (`MbSurface`). three.js's own physical shader is patched through `onBeforeCompile`;
+    there is no custom BRDF. The standard and physical materials are patched in place (so the inspector
+    still reads the GLB's values, and every replay clone and spawned object shares the patch). A
+    lightmapped mesh gets a variant of its material, cloned once per (material, lightmap); the original
+    stays reachable through `originalOfMaterial`, and the inspector, the debug toggles and the occluder
+    fade use it. What a material does is its `defines`: `MB_GAME`, `MB_AMBIENT_CUBE`,
+    `MB_LIGHTMAP_RGBM`, `MB_SKIP_DIRECTIONAL`, `MB_FOG_LINEAR`, `MB_FOG_EXP`; `customProgramCacheKey` is
+    derived from them, and `dithering` is on in the game look. Switching look changes the defines (and
+    the variants' `lightMap`) and marks only the materials whose program changed; three.js keeps the
+    program of the look not shown, so switching back compiles nothing.
+  - *Shader changes* (`mbShader.ts`, tested against the real three.js chunks, every replacement is
+    checked and a miss is reported): the sky's diffuse light is the ambient cube (Valve cube evaluation
+    in glTF space, times PI, fed into `iblIrradiance` so energy conservation still applies) instead of
+    the environment map's irradiance (its specular stays); a lightmap is RGBM (`rgb * a * range * PI`)
+    and replaces the cube; lightmapped surfaces skip the directional-light loop when every directional
+    light is `baked`, or `mixed` in a Subtractive scene; fog is Unity's (linear, exp, exp2).
+  - *Lights* (`lightRules.ts`): the file's lights (`KHR_lights_punctual`, used as-is) obey the Scene
+    lights setting, which is now on by default because they are the game's direct light; baked lights
+    stay off in the game look. The sun (`sun` in the extension) is the one light that casts a realtime
+    shadow, with the same fitted shadow map as the Studio key light (`SceneLights.tsx`).
+  - *Sky* (`sky.ts`, `GameBackdrop.tsx`): one cheap shader approximating Unity's procedural skybox (not
+    exact), a solid colour, or a gradient from the ambient cube's +Y and -Y, drawn once into a PMREM cube
+    map that is both the background and the environment (specular reflections match what is seen).
+  - *Lightmaps*: each node's `scaleOffset` is applied to its `uv1` once at load (`lightmapUv.ts`; a
+    geometry shared by different scaleOffsets gets a derived geometry that shares every buffer but
+    `uv1`). Done before the bounds trees are built. The surface frees its variants and textures with the
+    cached scene.
 - **Scene thumbnails** (`snapshots.ts`, `snapshotCapture.ts`, `ui/SnapshotImage.tsx`) are rendered
   offscreen once per scene version and kept in the browser's IndexedDB (database
   `moodyblues-snapshots`) keyed by the version's hash. The backend stores none, so a scene nobody
@@ -206,9 +263,10 @@ directly. React re-renders on user actions and, for the current log row, about 8
 `studio/binding.ts` hands the parsed replay and the clock from the page to the Stage's content;
 `studio/studioStore.ts` holds the selection and the view settings.
 
-- **Viewport**: the root Stage (gradient sky, distance fog that follows the camera, fading grid,
-  selection outline via `@react-three/postprocessing`, only while something is selected), frame
-  all / frame selected, follow camera.
+- **Viewport**: the root Stage (the look's sky and fog, a fading grid, the selection outline via
+  `@react-three/postprocessing` while something is selected on the full tier, an emissive tint on the
+  simple tier), frame all / frame selected, follow camera. Studio look: gradient sky and distance fog
+  that follows the camera; Game look: the scene's own sky and fog (see the Stage).
 - **Windows** (`src/studio/windows/`): each tool is a window that is closed, floating over the 3D
   view, or a tab in the dock at the right edge; the rail of icons opens them (Alt+1 to Alt+9, and
   Alt+0 for the tenth). A phone has none of this (see Phone mode below). Where each floating
@@ -218,7 +276,7 @@ directly. React re-renders on user actions and, for the current log row, about 8
   (`windowLayout.ts`): horizontally the window is anchored to the nearer edge, `offset` being the
   gap to that edge, and `toFrame` / `fromFrame` convert to and from pixels. A right-anchored
   window therefore follows the rail when the dock opens. The layout rules are pure functions, with
-  tests. The owner's view settings (grid, shadows,
+  tests. The owner's view settings (look, grid, shadows,
   scene lights, camera lines, field of view, follow style, near clip) are kept under
   `moodyblues.view.v1`; a share page neither reads nor writes them.
 
@@ -230,7 +288,7 @@ directly. React re-renders on user actions and, for the current log row, about 8
   | Hierarchy | The scene's tree, searchable; during a replay the recorded objects as they are now |
   | Inspector | The selected object: name, ObjectID, live local and world transform, Unity path |
   | Materials, Textures, Geometry | Read from the loaded GLB by `inspector/inspection.ts`: materials with every texture channel, de-duplicated textures with estimated GPU memory, geometries and what shares them, vertex statistics |
-  | Viewpoint (`ViewpointWindow.tsx`) | The cameras the Unity scene exported (a node's `extras.camera` = `{ index, tag }`, index 0 the MainCamera) with a 1st person / Follow pair per camera (Follow has a Behind / Front style), Free camera, Frame the scene, Replay intro (with a recording), and the display toggles and field of view; display only |
+  | Viewpoint (`ViewpointWindow.tsx`) | The cameras the Unity scene exported (a node's `extras.camera` = `{ index, tag }`, index 0 the MainCamera) with a 1st person / Follow pair per camera (Follow has a Behind / Front style), Free camera, Frame the scene, Replay intro (with a recording), the Look (Game or Studio), the display toggles and field of view; display only |
   | Raw data | The selection, the session record from the server, or the file's glTF JSON, as collapsible JSON |
 
 - **Cameras** (`studio/cameras.ts`, `CameraGizmos.tsx`, `intro.ts`): focusing a camera
@@ -325,7 +383,8 @@ and the tooltip "Set by the owner". The owner's own studio is never restricted; 
 applies only on `/share/:token`.
 
 - **Schema** (`ShareSettings`, `version: 1`): `camera` (target, mode, follow style, first-person
-  near clip, field of view), `display` (grid, shadows, scene lights, camera lines), `playback`
+  near clip, field of view), `display` (look, grid, shadows, scene lights, camera lines; `look` is
+  `game` or `studio`, default `game`, anything else is read as `game`), `playback`
   (start time, speed, `seeking.locked`), `panels` (per panel: `available` and `openAtStart`) and
   `interaction.selectObjects`. A camera target is `main` (the camera tagged MainCamera, else the
   free camera), `free`, `named` (the first exported camera with that node name) or `id` (one
@@ -352,7 +411,7 @@ applies only on `/share/:token`.
   camera already chosen.
 - **Enforcement** is in the studio store, not in the buttons. `useStudio().share` holds the
   settings on a share page (null for an owner), `isLocked(share, key)` is the one test, and the
-  store's actions (`setFocusCamera`, `setCameraMode`, `setFollow`, `setSetting`, `select`,
+  store's actions (`setFocusCamera`, `setCameraMode`, `setFollow`, `setSetting` (including `look`), `select`,
   `selectId`, `frameAll`, `frameSelected`, `replayIntro`) do nothing for a locked value, so
   shortcuts and windows cannot bypass them. The clock's user-facing moves (`studio/userActions.ts`:
   `seekByUser`, `setSpeedByUser`) check the speed and seeking locks; the page's own moves (the
@@ -392,8 +451,9 @@ src/
   shell/        WorkspaceLayout and TopBar (page frame), ConnectionDialog, SetupGuide
   pages/        auth/, lobby, new project, project, scene/ (page, recordings table, versions dialog)
   debug/        the studio's Debug window and its scene effects (lazy)
-  viewer/       core/ (gltf, palette, atmosphere, outline; imports nothing from the app, which
-                boundary.test.ts checks), replay/ (parser, tracks, player)
+  viewer/       core/ (gltf, palette, atmosphere, outline, look and tier rules, the game look: scene
+                extension, MbSurface and its shader patch, sky, lightmap UVs, light rules; imports
+                nothing from the app, which boundary.test.ts checks), replay/ (parser, tracks, player)
   lib/          formatting and small hooks (usePhoneLayout, useMediaQuery, useElementHeight, useWindowWidth)
   styles/       tokens.css (the design tokens)
 public/decoders/  self-hosted Draco and Basis decoders, copied from three's examples/jsm/libs
@@ -407,7 +467,7 @@ Node 20+.
 ```bash
 npm install
 npm run dev        # http://localhost:5173, talks to VITE_API_BASE_URL (default http://localhost:8765)
-npm test           # Vitest: replay parser, palette, Unity paths, window layout, stage transition, inspection, viewer boundary
+npm test           # Vitest: replay parser, palette, Unity paths, window layout, stage transition, inspection, viewer boundary, game look (extension parser, ambient cube, lightmap UVs, shader patch, MbSurface, light rules, tiers)
 npm run lint       # oxlint
 npm run build      # type-check (strict) + production build
 ```
@@ -426,6 +486,13 @@ the same headers. After upgrading `three`, re-copy the decoders from
 `node_modules/three/examples/jsm/libs/{draco/gltf,basis}/` into `public/decoders/`.
 
 ## 6. Known limits
+
+- **Game look.** Dynamic shadows on lightmapped surfaces in a Subtractive-mode scene are not shown
+  (those surfaces skip the directional lights, whose baked shadow is in the lightmap, so a moving object
+  casts none onto them). Directional lightmaps and the shadowmask are not supported: the lightmap is
+  the RGBM colour map only. The sky approximates Unity's procedural skybox and does not match it
+  exactly; the extension's bloom is parsed but not drawn. Only the sun casts a realtime shadow. The
+  first frame of a game scene may compile a shader once more if the sky or fog is not ready.
 
 - **Whole-file loading.** The replay is downloaded and parsed in full before playback.
 - **No instancing.** Spawned objects are full clones, so very spawn-heavy sessions cost what they
