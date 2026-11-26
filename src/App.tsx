@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { AuthPage } from './pages/auth/AuthPage';
+import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
 import { LobbyPage } from './pages/LobbyPage';
 import { NewProjectPage } from './pages/NewProjectPage';
 import { ProjectPage } from './pages/ProjectPage';
@@ -33,8 +34,9 @@ export default function App() {
       <PrefetchHost />
       <Suspense fallback={<RouteFallback />}>
         <Routes>
-          <Route path="/login" element={<AuthPage mode="login" />} />
-          <Route path="/register" element={<AuthPage mode="register" />} />
+          <Route path="/login" element={<AuthPage key="login" mode="login" />} />
+          <Route path="/register" element={<AuthPage key="register" mode="register" />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           {/* Public and anonymous: one shared session in the studio, read only. */}
           <Route path="/share/:token" element={<StudioPage />} />
 

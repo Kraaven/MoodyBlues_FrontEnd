@@ -19,9 +19,11 @@ interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
   aside?: ReactNode;
   hint?: ReactNode;
   error?: string | null;
+  /** Classes for the input itself; `className` styles the wrapper. */
+  inputClassName?: string;
 }
 
-export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field({ label, aside, hint, error, id, type, className, ...props }, ref) {
+export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field({ label, aside, hint, error, id, type, className, inputClassName, ...props }, ref) {
   const autoId = useId();
   const inputId = id ?? autoId;
   const [reveal, setReveal] = useState(false);
@@ -43,7 +45,7 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field({ l
           type={password && reveal ? 'text' : type}
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
-          className={password ? 'pr-12' : undefined}
+          className={cn(password && 'pr-12', inputClassName)}
           {...props}
         />
         {password && (

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ApiError, apiJson, refreshSession, setUnauthorizedHandler } from '../api/client';
 import { queryClient } from '../api/queries';
-import type { UserResponse } from '../api/types';
+import type { PendingVerificationResponse, UserResponse } from '../api/types';
 import { prefetcher } from '../prefetch/prefetcher';
 import { sceneCache } from '../prefetch/sceneCache';
 import { AuthContext, type AuthUser } from './context';
@@ -60,8 +60,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const register = useCallback(
-    async (email: string, password: string) =>
-      accept(await apiJson<UserResponse>('/auth/register', { method: 'POST', body: { email, password }, auth: false })),
+    (email: string, password: string) =>
+      apiJson<PendingVerificationResponse>('/auth/register', { method: 'POST', body: { email, password }, auth: false }),
+    [],
+  );
+
+  const verifyRegistration = useCallback(
+    async (email: string, code: string) =>
+      accept(await apiJson<UserResponse>('/auth/register/verify', { method: 'POST', body: { email, code }, auth: false })),
+    [accept],
+  );
+
+  const requestPasswordReset = useCallback(
+    (email: string) => apiJson<PendingVerificationResponse>('/auth/password/forgot', { method: 'POST', body: { email }, auth: false }),
+    [],
+  );
+
+  const resetPassword = useCallback(
+    async (email: string, code: string, newPassword: string) =>
+      accept(await apiJson<UserResponse>('/auth/password/reset', { method: 'POST', body: { email, code, newPassword }, auth: false })),
     [accept],
   );
 
@@ -72,8 +89,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [signOut]);
 
   const value = useMemo(
-    () => ({ user, isLoading, expired, login, register, logout }),
-    [user, isLoading, expired, login, register, logout],
+    () => ({ user, isLoading, expired, login, register, verifyRegistration, requestPasswordReset, resetPassword, logout }),
+    [user, isLoading, expired, login, register, verifyRegistration, requestPasswordReset, resetPassword, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

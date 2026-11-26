@@ -6,6 +6,13 @@ export interface UserResponse {
   email: string;
 }
 
+/** A code was emailed (registration or password reset); the account is not signed in yet. */
+export interface PendingVerificationResponse {
+  email: string;
+  /** The server's resend cooldown: another code cannot be requested before this many seconds pass. */
+  resendAfterSeconds: number;
+}
+
 export interface ProjectSummary {
   id: string;
   name: string;

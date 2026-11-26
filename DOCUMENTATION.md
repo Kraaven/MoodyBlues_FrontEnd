@@ -46,7 +46,14 @@ README "Dashboard sign-in"). Script cannot read them, and nothing about the sess
 - Every request is sent with `credentials: 'include'` and the header `X-MoodyBlues-Client:
   dashboard`, which the backend requires on every state-changing request as its CSRF check.
 - On load, `GET /auth/me` tells whether a session exists (after one refresh if the access cookie
-  has lapsed). It returns `{ userId, email }`, as do sign-in, registration and refresh.
+  has lapsed). It returns `{ userId, email }`, as do sign-in, registration verification, password
+  reset and refresh.
+- **Email sign-up takes a code.** `POST /auth/register` only emails a 6-digit code (202 with
+  `{ email, resendAfterSeconds }`) and does not sign in; `POST /auth/register/verify` with the code
+  creates the session. "Resend code" calls register again with the same details, disabled while
+  the server's cooldown counts down. The code field (`ui/CodeField.tsx`) keeps digits only.
+- **Password reset** (`/forgot-password`): `POST /auth/password/forgot` emails a code, then
+  `POST /auth/password/reset` with the code and new password signs the user in.
 - A 401 on any other request triggers one `POST /auth/refresh`, shared by every request that
   failed at the same moment (the backend rotates the refresh token on each use, so parallel
   refreshes would sign the user out), then retries once. If the refresh fails, the user is signed
@@ -67,13 +74,14 @@ Everything is keyed by the project's ID (a GUID): scene and session routes are
 
 ## 2. Pages
 
-The routes are those in `src/App.tsx`. Everything except sign-in and registration is behind
+The routes are those in `src/App.tsx`. Everything except sign-in, registration and password reset is behind
 `ProtectedRoute`, which sends a signed-out visitor to `/login` and back afterwards. Any other URL
 redirects to `/projects`.
 
 | Route | Page |
 |---|---|
-| `/login`, `/register` | Sign in, create account (`pages/auth/AuthPage.tsx`) |
+| `/login`, `/register` | Sign in, create account with an emailed code (`pages/auth/AuthPage.tsx`) |
+| `/forgot-password` | Reset a forgotten password with an emailed code (`pages/auth/ForgotPasswordPage.tsx`) |
 | `/projects` | The lobby: projects, with anything recording or broken above them (`LobbyPage`) |
 | `/projects/new` | Create a project (`NewProjectPage`) |
 | `/projects/:projectId` | A project's scenes; **Unity connection** opens the connection string dialog, and an empty project shows the setup steps. `?connect=1` opens the dialog on arrival (`ProjectPage`) |
